@@ -25,29 +25,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/yourusername/sewpat.git
 cd sewpat
 
-# Create a virtual environment and activate it
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
 # Install the package in development mode
 uv sync --extra dev
-```
-
-### Alternative Installation with pip
-
-```bash
-# Create a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install in development mode
-pip install -e .
-```
-
-For development, install additional dependencies:
-
-```bash
-pip install -e ".[dev]"  # or: pip install -e ".[dev]"
 ```
 
 ## Usage Examples
@@ -95,7 +74,7 @@ python examples/geometry_example.py
 ### Running Tests
 
 ```bash
-pytest
+uv run pytest
 ```
 
 ### Code Formatting
@@ -112,27 +91,6 @@ isort src tests
 
 ```bash
 flake8 src tests
-```
-
-## Project Structure
-
-```
-sewpat/
-│
-├── src/                # Source code
-│   ├── __init__.py
-│   ├── geometry.py     # 2D geometry primitives
-│   └── main.py         # Main module
-│
-├── tests/              # Test files
-│   ├── __init__.py
-│   └── test_geometry.py
-│
-├── examples/           # Example scripts
-│   └── geometry_example.py
-│
-├── pyproject.toml      # Project configuration
-└── README.md           # This file
 ```
 
 ## License
