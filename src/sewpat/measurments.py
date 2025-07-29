@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Person:
-    Körperhöhe: float
+    KöH: float
     BrU: float
     TaU: float
     HüU: float
@@ -19,5 +19,11 @@ class Person:
     VL: float
 
 @dataclass
-class Passform:
-    pass
+class Allowance:
+    RüB: float
+    ArD: float
+    BrB: float
+    Alt: float
+    TaU: float
+    HüU: float
+
