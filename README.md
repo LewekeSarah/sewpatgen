@@ -1,4 +1,4 @@
-# Sewpat
+# SewPatGen
 
 A Python library for automatically creating sewing patterns based on 2D CAD primitives.
 Sewing patterns are exported to vector graphics for customization in editors like Inkscape.

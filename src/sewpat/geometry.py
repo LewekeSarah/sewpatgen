@@ -102,18 +102,22 @@ class Point:
 
     Attributes:
         coords: NumPy array containing [x, y] coordinates.
+        name: Optional, name of the point.
     """
     coords: np.ndarray
+    name: Optional[str] = None
 
-    def __init__(self, x: float, y: float):
+    def __init__(self, x: float, y: float, name: Optional[str] = None):
         """Initialize a point with x and y coordinates.
 
         Args:
             x: The x-coordinate of the point.
             y: The y-coordinate of the point.
+            name: Optional, name of the point.
         """
         # Use object.__setattr__ to set values in a frozen dataclass
         object.__setattr__(self, 'coords', np.array([x, y], dtype=float))
+        object.__setattr__(self, 'name', name)
 
     @property
     def x(self) -> float:
@@ -134,7 +138,10 @@ class Point:
         return self.coords[1]
 
     def __str__(self) -> str:
-        return f"Point({self.coords[0]:.6g}, {self.coords[1]:.6g})"
+        if self.name:
+            return f"Point(name={self.name}, x={self.coords[0]:.6g}, y={self.coords[1]:.6g})"
+        else:
+            return f"Point(x={self.coords[0]:.6g}, y={self.coords[1]:.6g})"
 
     def distance_to(self, other: Union['Point', np.ndarray]) -> float:
         """Calculate the Euclidean distance between this point and another.
@@ -190,19 +197,30 @@ class Point:
 
 
 class Segment:
-    """A line segment between two points (from p1 to p2)."""
-    def __init__(self, p1: Point, p2: Point):
+    """A line segment between two points (from p1 to p2).
+
+    Attributes:
+        p1: Start point of the line segment.
+        p2: End point of the line segment.
+        name: Optional, name of the line segment.
+    """
+    def __init__(self, p1: Point, p2: Point, name: Optional[str] = None):
         """Initialize a line with two points.
 
         Args:
             p1: First endpoint of the line segment.
             p2: Second endpoint of the line segment.
+            name: Optional, name of the line segment.
         """
         self.p1 = p1
         self.p2 = p2
+        self.name = name
 
     def __str__(self) -> str:
-        return f"Line({self.p1}, {self.p2})"
+        if self.name:
+            return f"Segment(name={self.name}; p1={self.p1}, p2={self.p2})"
+        else:
+            return f"Segment(p1={self.p1}, p2={self.p2})"
 
     @property
     def length(self) -> float:
@@ -335,13 +353,15 @@ class Ray:
     Attributes:
         origin: The starting point of the ray.
         direction: Normalized direction vector of the ray.
+        name: Optional, name of the ray.
     """
-    def __init__(self, origin: Point, direction: Union[Tuple[float, float], List[float], np.ndarray]):
+    def __init__(self, origin: Point, direction: Union[Tuple[float, float], List[float], np.ndarray], name: Optional[str] = None):
         """Initialize a ray with an origin point and direction vector.
 
         Args:
             origin: The starting point of the ray.
             direction: Direction vector as tuple, list or numpy array.
+            name: Optional, name of the ray.
 
         Raises:
             ValueError: If the direction vector is zero (has no magnitude).
@@ -358,9 +378,13 @@ class Ray:
             raise ValueError("Direction vector cannot be zero")
 
         self.direction = direction / magnitude
+        self.name = name
 
     def __str__(self) -> str:
-        return f"Ray(origin={self.origin}, direction={self.direction})"
+        if self.name:
+            return f"Ray(name={self.name}, origin={self.origin}, direction={self.direction})"
+        else:
+            return f"Ray(origin={self.origin}, direction={self.direction})"
 
     @property
     def unit_direction(self) -> np.ndarray:
@@ -449,13 +473,15 @@ class Line:
     Attributes:
         point: A point on the line.
         direction: Normalized direction vector of the line.
+        name: Optional, name of the line.
     """
-    def __init__(self, point: Point, direction: Union[Tuple[float, float], List[float], np.ndarray]):
+    def __init__(self, point: Point, direction: Union[Tuple[float, float], List[float], np.ndarray], name: Optional[str] = None):
         """Initialize a line with a point and direction vector.
 
         Args:
             point: A point on the line.
             direction: Direction vector as tuple, list or numpy array.
+            name: Optional, name of the line.
 
         Raises:
             ValueError: If the direction vector is zero (has no magnitude).
@@ -472,9 +498,13 @@ class Line:
             raise ValueError("Direction vector cannot be zero")
 
         self.direction = direction / magnitude
+        self.name = name
 
     def __str__(self) -> str:
-        return f"Line(point={self.point}, direction={self.direction})"
+        if self.name:
+            return f"Line(name={self.name}, point={self.point}, direction={self.direction})"
+        else:
+            return f"Line(point={self.point}, direction={self.direction})"
 
     @property
     def unit_direction(self) -> np.ndarray:
@@ -561,13 +591,15 @@ class Circle:
     Attributes:
         center: The center point of the circle.
         radius: The radius of the circle.
+        name: Optional, name of the circle.
     """
-    def __init__(self, center: Point, radius: float):
+    def __init__(self, center: Point, radius: float, name: Optional[str] = None):
         """Initialize a circle with center point and radius.
 
         Args:
             center: The center point of the circle.
             radius: The radius of the circle (must be positive).
+            name: Optional, name of the circle.
 
         Raises:
             ValueError: If the radius is not positive.
@@ -577,9 +609,13 @@ class Circle:
 
         self.center = center
         self.radius = radius
+        self.name = name
 
     def __str__(self) -> str:
-        return f"Circle(center={self.center}, radius={self.radius:.6g})"
+        if self.name:
+            return f"Circle(name={self.name}, center={self.center}, radius={self.radius:.6g})"
+        else:
+            return f"Circle(center={self.center}, radius={self.radius:.6g})"
 
     @property
     def area(self) -> float:
