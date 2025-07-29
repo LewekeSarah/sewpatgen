@@ -30,7 +30,7 @@ uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install the package in development mode
-uv pip install -e .
+uv sync --extra dev
 ```
 
 ### Alternative Installation with pip
@@ -47,7 +47,7 @@ pip install -e .
 For development, install additional dependencies:
 
 ```bash
-uv pip install -e ".[dev]"  # or: pip install -e ".[dev]"
+pip install -e ".[dev]"  # or: pip install -e ".[dev]"
 ```
 
 ## Usage Examples
