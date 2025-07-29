@@ -8,26 +8,60 @@ import numpy as np
 from sewpat.geometry import Point, Segment, Line, Ray, Circle
 from sewpat.part import PatternPart
 from sewpat.render import save_pattern_part_svg, render_pattern_part
-from sewpat.person import Person
+from sewpat.measurments import Person, Allowance, ConstructionMeasurments, ModelConfig
 
 
 def make_person() -> Person:
     return Person(
-        Körperhöhe = 0.0,
-        BrU = 0.0,
-        TaU = 0.0,
-        HüU = 0.0,
-        AlT = 0.0,
-        HüT = 0.0,
-        BrT = 0.0,
-        HlB = 0.0,
-        RüB = 0.0,
-        ArD = 0.0,
-        BrB = 0.0,
-        BrPA = 0.0,
-        SuB = 0.0,
-        RüL = 0.0,
-        VL = 0.0,
+        KöH = 159,
+        BrU = 83.5,
+        TaU = 69.5,
+        HüU = 93,
+        AlT = 19.4,
+        HüT = 24,
+        BrT = 27.5,
+        HlB = 6.5,
+        RüB = 16,
+        ArD = 8.9,
+        BrB = 16.8,
+        BrPA = 8.3,
+        SuB = 12.1,
+        RüL = 39,
+        VL = 43.4,
+    )
+
+
+def make_allowance() -> Allowance:
+    return Allowance(
+        RüB = 1.0,
+        ArD = 2.0,
+        BrB = 1.5,
+        AlT = 1.5,
+        TaU = 8.0,
+        HüU = 6.0,
+    )
+
+
+def make_measurements(
+    person: Person, allowance: Allowance,
+) -> ConstructionMeasurments:
+    person
+    measurements = {
+        key: val for key, val in person.__dict__.items()
+    }
+    for key, val in allowance.__dict__.items():
+        if key not in ["TaU", "BrU", "HüU"]:
+            measurements[key] += val
+    for perimeter, width in zip(["TaU", "BrU", "HüU"],["TaW", "BrW", "HüW"]):
+        measurements[width] = measurements[perimeter] + allowance.__getattribute__(perimeter)
+    measurements.pop("KöH")
+    return ConstructionMeasurments(**measurements)
+
+
+def make_model_config() -> ModelConfig:
+    return ModelConfig(
+        MoL=55.,
+        BeckenAdjustment=1.
     )
 
 
@@ -36,6 +70,10 @@ def make_blouse(person: Person) -> PatternPart:
 
     return PatternPart(name = "Blouse", elements=elems)
 
+
 if __name__ == "__main__":
     person = make_person()
-    part = make_blouse(person)
+    allowance = make_allowance()
+    measurements = make_measurements(person, allowance)
+    model_config = make_model_config()
+    part = make_blouse(measurements, model_config)
