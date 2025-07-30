@@ -86,13 +86,21 @@ def render_geometric_element(
         )
 
     elif isinstance(element, Segment):
-        drawing.append(
-            draw.Line(
-                element.p1.x, element.p1.y,
-                element.p2.x, element.p2.y,
-                **style_dict
-            )
+        p = draw.Line(
+            element.p1.x, element.p1.y,
+            element.p2.x, element.p2.y,
+            **style_dict
         )
+        drawing.append(p)
+        if element.name:
+            drawing.append(
+                draw.Text(
+                    element.name,
+                    12,
+                    fill='black',
+                    path=p,
+                )
+            )
 
     elif isinstance(element, Circle):
         drawing.append(
