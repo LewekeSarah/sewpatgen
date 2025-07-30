@@ -15,6 +15,7 @@ from sewpat.geometry import (
     CM,
     MM,
 )
+from sewpat.measurments import BalanceAdjustements, make_measurements
 from sewpat.part import PatternPart
 from sewpat.render import render_pattern_part
 from sewpat.measurments import Person, Allowance, ConstructionMeasurments, ModelConfig
@@ -51,24 +52,14 @@ def make_allowance() -> Allowance:
     )
 
 
-def make_measurements(
-    person: Person,
-    allowance: Allowance,
-) -> ConstructionMeasurments:
-    measurements = {key: val for key, val in person.__dict__.items()}
-    for key, val in allowance.__dict__.items():
-        if key not in ["TaU", "BrU", "HüU"]:
-            measurements[key] += val
-    for perimeter, width in zip(["TaU", "BrU", "HüU"], ["TaW", "BrW", "HüW"]):
-        measurements[width] = measurements[perimeter] + allowance.__getattribute__(
-            perimeter
-        )
-    measurements.pop("KöH")
-    return ConstructionMeasurments(**measurements)
-
-
 def make_model_config() -> ModelConfig:
     return ModelConfig(MoL=55 * CM, BeckenAdjustment=1 * CM)
+
+
+def make_balance() -> BalanceAdjustements:
+    return BalanceAdjustements(
+        VL=-0.9 * CM
+    )
 
 
 def make_blouse(meas: ConstructionMeasurments, model: ModelConfig) -> PatternPart:
@@ -124,7 +115,8 @@ def make_blouse(meas: ConstructionMeasurments, model: ModelConfig) -> PatternPar
 if __name__ == "__main__":
     person = make_person()
     allowance = make_allowance()
-    measurements = make_measurements(person, allowance)
+    balance = make_balance()
+    measurements = make_measurements(person, allowance, balance)
     model_config = make_model_config()
     part = make_blouse(measurements, model_config)
 
