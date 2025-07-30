@@ -10,6 +10,8 @@ import numpy as np
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
+CM = 10.0
+MM = 1.0
 
 def _solve_quadratic(a: float, b: float, c: float) -> List[float]:
     """Solve a quadratic equation ax^2 + bx + c = 0 in a numerically stable way.
@@ -915,3 +917,19 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> List[Point]:
             return _intersect_circle_circle(a, b)
 
     raise TypeError(f"Intersection not implemented for {type(a)} and {type(b)}")
+
+
+def segment_to_intersection(start: Point, dir: np.ndarray, obj: GEOMETRIC_TYPE) -> Tuple[Point, Segment]:
+    """Creates a Segment from the given start point to the intersection with an object in given direction.
+
+    Args:
+        start: Start point of the new segment.
+        dir: Direction for finding intersection.
+        obj: Other object that is intersected by a ray from start in direction dir.
+
+    Returns:
+        Point: Intersection point with obj.
+        Segment: Segment from start to intersection with obj in direction dir.
+    """
+    pt = intersect(Ray(start, dir), obj)[0]
+    return pt, Segment(start, pt)
