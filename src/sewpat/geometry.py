@@ -13,6 +13,7 @@ from typing import List, Optional, Tuple, Union
 CM = 10.0
 MM = 1.0
 
+
 def _solve_quadratic(a: float, b: float, c: float) -> List[float]:
     """Solve a quadratic equation ax^2 + bx + c = 0 in a numerically stable way.
 
@@ -44,7 +45,7 @@ def _solve_quadratic(a: float, b: float, c: float) -> List[float]:
 
     # One real solution (repeated root)
     if abs(discriminant) < 1e-14:
-        return [-b / (2*a)]
+        return [-b / (2 * a)]
 
     # Two real solutions - use numerically stable algorithm
     # Instead of the standard formula x = (-b ± sqrt(discriminant)) / (2*a)
@@ -67,7 +68,9 @@ def _solve_quadratic(a: float, b: float, c: float) -> List[float]:
         return [x2, x1]
 
 
-def _intersect_lines(pt1: np.ndarray, n1: np.ndarray, pt2: np.ndarray, n2: np.ndarray) -> Optional[np.ndarray]:
+def _intersect_lines(
+    pt1: np.ndarray, n1: np.ndarray, pt2: np.ndarray, n2: np.ndarray
+) -> Optional[np.ndarray]:
     """Find intersection of two lines represented by a point on the line and the unit normal.
 
     Args:
@@ -106,6 +109,7 @@ class Point:
         coords: NumPy array containing [x, y] coordinates.
         name: Optional, name of the point.
     """
+
     coords: np.ndarray
     name: Optional[str] = None
 
@@ -118,8 +122,8 @@ class Point:
             name: Optional, name of the point.
         """
         # Use object.__setattr__ to set values in a frozen dataclass
-        object.__setattr__(self, 'coords', np.array([x, y], dtype=float))
-        object.__setattr__(self, 'name', name)
+        object.__setattr__(self, "coords", np.array([x, y], dtype=float))
+        object.__setattr__(self, "name", name)
 
     @property
     def x(self) -> float:
@@ -145,7 +149,7 @@ class Point:
         else:
             return f"Point(x={self.coords[0]:.6g}, y={self.coords[1]:.6g})"
 
-    def distance_to(self, other: Union['Point', np.ndarray]) -> float:
+    def distance_to(self, other: Union["Point", np.ndarray]) -> float:
         """Calculate the Euclidean distance between this point and another.
 
         Args:
@@ -159,7 +163,7 @@ class Point:
         else:
             return np.linalg.norm(self.coords - other)
 
-    def translate(self, dx: float, dy: float) -> 'Point':
+    def translate(self, dx: float, dy: float) -> "Point":
         """Return a new point translated by the given vector.
 
         Args:
@@ -172,7 +176,7 @@ class Point:
         translation = np.array([dx, dy])
         return Point(*(self.coords + translation))
 
-    def rotate(self, center: 'Point', angle_rad: float) -> 'Point':
+    def rotate(self, center: "Point", angle_rad: float) -> "Point":
         """Rotate the point around a specified center.
 
         Args:
@@ -185,10 +189,7 @@ class Point:
         # Create rotation matrix
         cos_a = math.cos(angle_rad)
         sin_a = math.sin(angle_rad)
-        rotation_matrix = np.array([
-            [cos_a, -sin_a],
-            [sin_a, cos_a]
-        ])
+        rotation_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
 
         # Translate to origin, rotate, and translate back
         translated = self.coords - center.coords
@@ -206,6 +207,7 @@ class Segment:
         p2: End point of the line segment.
         name: Optional, name of the line segment.
     """
+
     def __init__(self, p1: Point, p2: Point, name: Optional[str] = None):
         """Initialize a line with two points.
 
@@ -285,9 +287,14 @@ class Segment:
             Point: Position on the line segment.
         """
         assert (0 <= rel_pos) and (rel_pos <= 1), f"{rel_pos = } expected in [0, 1]"
-        return Point(*( (1.0 - rel_pos) * self.p1.coords + rel_pos * self.p2.coords) )
+        return Point(*((1.0 - rel_pos) * self.p1.coords + rel_pos * self.p2.coords))
 
-    def point_perpendicular(self, distance_to_obj: float, distance_on_obj: Optional[float] = None, rel_pos_on_obj: Optional[float] = None) -> Point:
+    def point_perpendicular(
+        self,
+        distance_to_obj: float,
+        distance_on_obj: Optional[float] = None,
+        rel_pos_on_obj: Optional[float] = None,
+    ) -> Point:
         """Calculates a point at a given perpendicular distance from the line segment.
 
         This method finds a point that is perpendicular to the line segment at a specified
@@ -315,15 +322,23 @@ class Segment:
             >>> print(point)
             Point(5, 5)
         """
-        if ((distance_on_obj is None) and (rel_pos_on_obj is None)) or ((distance_on_obj is not None) and (rel_pos_on_obj is not None)):
-            raise ValueError("exactly one of distance_on_obj and rel_pos_on_obj has to be set")
+        if ((distance_on_obj is None) and (rel_pos_on_obj is None)) or (
+            (distance_on_obj is not None) and (rel_pos_on_obj is not None)
+        ):
+            raise ValueError(
+                "exactly one of distance_on_obj and rel_pos_on_obj has to be set"
+            )
 
         if distance_on_obj:
             dir = self.unit_direction
             base = self.p1.coords + distance_on_obj * dir
         else:
-            assert ((0 <= rel_pos_on_obj) and (rel_pos_on_obj <= 1.0)), f"rel_pos_on_obj = {rel_pos_on_obj} required in [0, 1]"
-            base = (1.0 - rel_pos_on_obj) * self.p1.coords + rel_pos_on_obj * self.p2.coords
+            assert (0 <= rel_pos_on_obj) and (
+                rel_pos_on_obj <= 1.0
+            ), f"rel_pos_on_obj = {rel_pos_on_obj} required in [0, 1]"
+            base = (
+                1.0 - rel_pos_on_obj
+            ) * self.p1.coords + rel_pos_on_obj * self.p2.coords
 
         return Point(*(base + self.unit_normal * distance_to_obj))
 
@@ -357,7 +372,13 @@ class Ray:
         direction: Normalized direction vector of the ray.
         name: Optional, name of the ray.
     """
-    def __init__(self, origin: Point, direction: Union[Tuple[float, float], List[float], np.ndarray], name: Optional[str] = None):
+
+    def __init__(
+        self,
+        origin: Point,
+        direction: Union[Tuple[float, float], List[float], np.ndarray],
+        name: Optional[str] = None,
+    ):
         """Initialize a ray with an origin point and direction vector.
 
         Args:
@@ -450,7 +471,9 @@ class Ray:
         # and point is in the right direction
         return abs(dot_product - 1.0) < tolerance
 
-    def point_perpendicular(self, distance_to_obj: float, distance_on_obj: float) -> Point:
+    def point_perpendicular(
+        self, distance_to_obj: float, distance_on_obj: float
+    ) -> Point:
         """Calculates a point at a given perpendicular distance from the ray.
 
         This method finds a point that is perpendicular to the ray at a specified position
@@ -477,7 +500,13 @@ class Line:
         direction: Normalized direction vector of the line.
         name: Optional, name of the line.
     """
-    def __init__(self, point: Point, direction: Union[Tuple[float, float], List[float], np.ndarray], name: Optional[str] = None):
+
+    def __init__(
+        self,
+        point: Point,
+        direction: Union[Tuple[float, float], List[float], np.ndarray],
+        name: Optional[str] = None,
+    ):
         """Initialize a line with a point and direction vector.
 
         Args:
@@ -568,7 +597,9 @@ class Line:
         # Check if vectors are parallel (dot product near 1)
         return abs(abs(dot_product) - 1.0) < tolerance
 
-    def point_perpendicular(self, distance_to_obj: float, distance_on_obj: float) -> Point:
+    def point_perpendicular(
+        self, distance_to_obj: float, distance_on_obj: float
+    ) -> Point:
         """Calculates a point at a given perpendicular distance from the line.
 
         This method finds a point that is perpendicular to the line at a specified position
@@ -595,6 +626,7 @@ class Circle:
         radius: The radius of the circle.
         name: Optional, name of the circle.
     """
+
     def __init__(self, center: Point, radius: float, name: Optional[str] = None):
         """Initialize a circle with center point and radius.
 
@@ -659,7 +691,9 @@ class Circle:
         distance = self.center.distance_to(point)
         return abs(distance - self.radius) < tolerance
 
-    def contains_point_inside(self, point: Point, include_boundary: bool = True) -> bool:
+    def contains_point_inside(
+        self, point: Point, include_boundary: bool = True
+    ) -> bool:
         """Check if a point is inside the circle.
 
         Args:
@@ -685,13 +719,12 @@ class Circle:
         Returns:
             Point: A point on the circle at the specified angle.
         """
-        point_coords = self.center.coords + self.radius * np.array([
-            math.cos(angle_rad),
-            math.sin(angle_rad)
-        ])
+        point_coords = self.center.coords + self.radius * np.array(
+            [math.cos(angle_rad), math.sin(angle_rad)]
+        )
         return Point(*point_coords)
 
-    def _intersect_with_circle(self, other: 'Circle') -> List[Point]:
+    def _intersect_with_circle(self, other: "Circle") -> List[Point]:
         """Find intersection points with another circle.
 
         Args:
@@ -718,7 +751,9 @@ class Circle:
         if abs(d - (self.radius + other.radius)) < 1e-14:  # External touch
             # Calculate the point of tangency
             t = self.radius / (self.radius + other.radius)
-            point_coords = self.center.coords + t * (other.center.coords - self.center.coords)
+            point_coords = self.center.coords + t * (
+                other.center.coords - self.center.coords
+            )
             return [Point(*point_coords)]
 
         if abs(d - abs(self.radius - other.radius)) < 1e-14:  # Internal touch
@@ -728,7 +763,9 @@ class Circle:
             else:
                 t = -self.radius / (other.radius - self.radius)
 
-            point_coords = self.center.coords + t * (other.center.coords - self.center.coords)
+            point_coords = self.center.coords + t * (
+                other.center.coords - self.center.coords
+            )
             return [Point(*point_coords)]
 
         # Calculate intersection points
@@ -752,7 +789,14 @@ class Circle:
         return [Point(*p3), Point(*p4)]
 
 
-def _intersect_linear_linear(p1: np.ndarray, p2: np.ndarray, a: Union[Segment, Ray, Line], b: Union[Segment, Ray, Line], check1: bool, check2: bool) -> List[Point]:
+def _intersect_linear_linear(
+    p1: np.ndarray,
+    p2: np.ndarray,
+    a: Union[Segment, Ray, Line],
+    b: Union[Segment, Ray, Line],
+    check1: bool,
+    check2: bool,
+) -> List[Point]:
     """Find the intersection point between two linear objects (i.e., segments, lines, rays).
 
     Args:
@@ -772,13 +816,17 @@ def _intersect_linear_linear(p1: np.ndarray, p2: np.ndarray, a: Union[Segment, R
         return []
 
     intersection = Point(*pt)
-    if ((check1 and not a.contains_point(intersection)) or
-            (check2 and not b.contains_point(intersection))):
+    if (check1 and not a.contains_point(intersection)) or (
+        check2 and not b.contains_point(intersection)
+    ):
         return []
 
     return [intersection]
 
-def _intersect_linear_circle(lin_pt: np.ndarray, dir: np.ndarray, circle: Circle) -> List[float]:
+
+def _intersect_linear_circle(
+    lin_pt: np.ndarray, dir: np.ndarray, circle: Circle
+) -> List[float]:
     """Find the intersection point between a linear object (i.e., segments, lines, rays) and a circle.
 
     Args:
@@ -877,29 +925,49 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> List[Point]:
         if isinstance(b, Segment):
             return _intersect_linear_linear(a.p1.coords, b.p1.coords, a, b, True, True)
         elif isinstance(b, Ray):
-            return _intersect_linear_linear(a.p1.coords, b.origin.coords, a, b, True, True)
+            return _intersect_linear_linear(
+                a.p1.coords, b.origin.coords, a, b, True, True
+            )
         elif isinstance(b, Line):
-            return _intersect_linear_linear(a.p1.coords, b.point.coords, a, b, True, False)
+            return _intersect_linear_linear(
+                a.p1.coords, b.point.coords, a, b, True, False
+            )
         elif isinstance(b, Circle):
             t = _intersect_linear_circle(a.p1.coords, a.p2.coords - a.p1.coords, b)
             return [a.point_at_rel_dist(ct) for ct in t if (0 <= ct) and (ct <= 1)]
     elif isinstance(a, Ray):
         if isinstance(b, Segment):
-            return _intersect_linear_linear(b.p1.coords, a.origin.coords, b, a, True, True)
+            return _intersect_linear_linear(
+                b.p1.coords, a.origin.coords, b, a, True, True
+            )
         elif isinstance(b, Ray):
-            return _intersect_linear_linear(a.origin.coords, b.origin.coords, a, b, True, True)
+            return _intersect_linear_linear(
+                a.origin.coords, b.origin.coords, a, b, True, True
+            )
         elif isinstance(b, Line):
-            return _intersect_linear_linear(a.origin.coords, b.point.coords, a, b, True, False)
+            return _intersect_linear_linear(
+                a.origin.coords, b.point.coords, a, b, True, False
+            )
         elif isinstance(b, Circle):
             t = _intersect_linear_circle(a.origin.coords, a.unit_direction, b)
-            return [Point(*(a.origin.coords + ct * a.unit_direction)) for ct in t if (0 <= ct)]
+            return [
+                Point(*(a.origin.coords + ct * a.unit_direction))
+                for ct in t
+                if (0 <= ct)
+            ]
     elif isinstance(a, Line):
         if isinstance(b, Segment):
-            return _intersect_linear_linear(b.p1.coords, a.point.coords, b, a, True, False)
+            return _intersect_linear_linear(
+                b.p1.coords, a.point.coords, b, a, True, False
+            )
         elif isinstance(b, Ray):
-            return _intersect_linear_linear(b.origin.coords, a.point.coords, b, a, True, False)
+            return _intersect_linear_linear(
+                b.origin.coords, a.point.coords, b, a, True, False
+            )
         elif isinstance(b, Line):
-            return _intersect_linear_linear(a.point.coords, b.point.coords, a, b, False, False)
+            return _intersect_linear_linear(
+                a.point.coords, b.point.coords, a, b, False, False
+            )
         elif isinstance(b, Circle):
             t = _intersect_linear_circle(a.point.coords, a.unit_direction, b)
             return [Point(*(a.point.coords + ct * a.unit_direction)) for ct in t]
@@ -909,17 +977,27 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> List[Point]:
             return [b.point_at_rel_dist(ct) for ct in t if (0 <= ct) and (ct <= 1)]
         elif isinstance(b, Ray):
             t = _intersect_linear_circle(b.origin.coords, b.unit_direction, a)
-            return [Point(*(b.origin.coords + ct * b.unit_direction)) for ct in t if (0 <= ct)]
+            return [
+                Point(*(b.origin.coords + ct * b.unit_direction))
+                for ct in t
+                if (0 <= ct)
+            ]
         elif isinstance(b, Line):
             t = _intersect_linear_circle(b.point.coords, b.unit_direction, a)
-            return [Point(*(b.point.coords + ct * b.unit_direction)) for ct in t if (0 <= ct)]
+            return [
+                Point(*(b.point.coords + ct * b.unit_direction))
+                for ct in t
+                if (0 <= ct)
+            ]
         elif isinstance(b, Circle):
             return _intersect_circle_circle(a, b)
 
     raise TypeError(f"Intersection not implemented for {type(a)} and {type(b)}")
 
 
-def segment_to_intersection(start: Point, dir: np.ndarray, obj: GEOMETRIC_TYPE) -> Tuple[Point, Segment]:
+def segment_to_intersection(
+    start: Point, dir: np.ndarray, obj: GEOMETRIC_TYPE
+) -> Tuple[Point, Segment]:
     """Creates a Segment from the given start point to the intersection with an object in given direction.
 
     Args:

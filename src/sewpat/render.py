@@ -22,7 +22,7 @@ class StyleOptions:
         stroke_width: float = 1.0,
         fill_color: str = "none",
         dash_array: Optional[List[float]] = None,
-        opacity: float = 1.0
+        opacity: float = 1.0,
     ):
         """Initialize style options.
 
@@ -49,7 +49,7 @@ class StyleOptions:
             "stroke": self.stroke_color,
             "stroke-width": self.stroke_width,
             "fill": self.fill_color,
-            "opacity": self.opacity
+            "opacity": self.opacity,
         }
 
         if self.dash_array:
@@ -63,7 +63,7 @@ def render_geometric_element(
     drawing: draw.Drawing,
     style: StyleOptions = StyleOptions(),
     viewport_bounds: Optional[Tuple[float, float, float, float]] = None,
-    point_radius: float = 2.0
+    point_radius: float = 2.0,
 ) -> None:
     """Render a geometric element to the SVG drawing.
 
@@ -77,19 +77,11 @@ def render_geometric_element(
     style_dict = style.as_dict()
 
     if isinstance(element, Point):
-        drawing.append(
-            draw.Circle(
-                element.x, element.y,
-                point_radius,
-                **style_dict
-            )
-        )
+        drawing.append(draw.Circle(element.x, element.y, point_radius, **style_dict))
 
     elif isinstance(element, Segment):
         p = draw.Line(
-            element.p1.x, element.p1.y,
-            element.p2.x, element.p2.y,
-            **style_dict
+            element.p1.x, element.p1.y, element.p2.x, element.p2.y, **style_dict
         )
         drawing.append(p)
         if element.name:
@@ -97,7 +89,7 @@ def render_geometric_element(
                 draw.Text(
                     element.name,
                     12,
-                    fill='black',
+                    fill="black",
                     path=p,
                 )
             )
@@ -105,9 +97,7 @@ def render_geometric_element(
     elif isinstance(element, Circle):
         drawing.append(
             draw.Circle(
-                element.center.x, element.center.y,
-                element.radius,
-                **style_dict
+                element.center.x, element.center.y, element.radius, **style_dict
             )
         )
 
@@ -115,8 +105,8 @@ def render_geometric_element(
         # For infinite or semi-infinite lines, we need to clip to viewport
         if viewport_bounds is None:
             # Use drawing dimensions as default viewport
-            min_x, min_y = -drawing.width/2, -drawing.height/2
-            max_x, max_y = drawing.width/2, drawing.height/2
+            min_x, min_y = -drawing.width / 2, -drawing.height / 2
+            max_x, max_y = drawing.width / 2, drawing.height / 2
         else:
             min_x, min_y, max_x, max_y = viewport_bounds
 
@@ -136,7 +126,7 @@ def render_geometric_element(
                 Segment(Point(min_x, min_y), Point(max_x, min_y)),  # bottom
                 Segment(Point(max_x, min_y), Point(max_x, max_y)),  # right
                 Segment(Point(max_x, max_y), Point(min_x, max_y)),  # top
-                Segment(Point(min_x, max_y), Point(min_x, min_y))   # left
+                Segment(Point(min_x, max_y), Point(min_x, min_y)),  # left
             ]
 
             # Find intersections with each edge
@@ -149,9 +139,7 @@ def render_geometric_element(
             if len(points) >= 2:
                 drawing.append(
                     draw.Line(
-                        points[0].x, points[0].y,
-                        points[1].x, points[1].y,
-                        **style_dict
+                        points[0].x, points[0].y, points[1].x, points[1].y, **style_dict
                     )
                 )
 
@@ -164,7 +152,7 @@ def render_geometric_element(
                 Segment(Point(min_x, min_y), Point(max_x, min_y)),  # bottom
                 Segment(Point(max_x, min_y), Point(max_x, max_y)),  # right
                 Segment(Point(max_x, max_y), Point(min_x, max_y)),  # top
-                Segment(Point(min_x, max_y), Point(min_x, min_y))   # left
+                Segment(Point(min_x, max_y), Point(min_x, min_y)),  # left
             ]
 
             # Find the first intersection
@@ -173,9 +161,11 @@ def render_geometric_element(
                 if len(intersection) > 0:
                     drawing.append(
                         draw.Line(
-                            origin.x, origin.y,
-                            intersection[0].x, intersection[0].y,
-                            **style_dict
+                            origin.x,
+                            origin.y,
+                            intersection[0].x,
+                            intersection[0].y,
+                            **style_dict,
                         )
                     )
                     break
@@ -187,7 +177,7 @@ def render_pattern_part(
     height: float = 500,
     margin: float = 20,
     show_points: bool = True,
-    style_map: Optional[Dict[str, StyleOptions]] = None
+    style_map: Optional[Dict[str, StyleOptions]] = None,
 ) -> draw.Drawing:
     """Render a pattern part to an SVG drawing.
 
@@ -203,15 +193,17 @@ def render_pattern_part(
         A drawSvg Drawing object with the rendered pattern.
     """
     # Create a new drawing with origin at center
-    drawing = draw.Drawing(width, height, origin='center')
+    drawing = draw.Drawing(width, height, origin="center")
 
     # Default styles if not provided
     default_styles = {
-        'segment': StyleOptions(stroke_color="black", stroke_width=1.5),
-        'point': StyleOptions(stroke_color="black", fill_color="black", stroke_width=0.5),
-        'circle': StyleOptions(stroke_color="black", stroke_width=1.0),
-        'line': StyleOptions(stroke_color="gray", stroke_width=0.75, dash_array=[5, 5]),
-        'ray': StyleOptions(stroke_color="gray", stroke_width=0.75, dash_array=[5, 5]),
+        "segment": StyleOptions(stroke_color="black", stroke_width=1.5),
+        "point": StyleOptions(
+            stroke_color="black", fill_color="black", stroke_width=0.5
+        ),
+        "circle": StyleOptions(stroke_color="black", stroke_width=1.0),
+        "line": StyleOptions(stroke_color="gray", stroke_width=0.75, dash_array=[5, 5]),
+        "ray": StyleOptions(stroke_color="gray", stroke_width=0.75, dash_array=[5, 5]),
     }
 
     # Override with provided styles
@@ -222,12 +214,17 @@ def render_pattern_part(
 
     # Calculate viewport bounds
     # In a real implementation, you'd calculate this based on the actual pattern elements
-    viewport_bounds = (-width/2 + margin, -height/2 + margin, width/2 - margin, height/2 - margin)
+    viewport_bounds = (
+        -width / 2 + margin,
+        -height / 2 + margin,
+        width / 2 - margin,
+        height / 2 - margin,
+    )
 
     # Render each element with appropriate style
     for element in pattern_part.elements:
         element_type = element.__class__.__name__.lower()
-        style = default_styles.get(element_type, default_styles['segment'])
+        style = default_styles.get(element_type, default_styles["segment"])
 
         render_geometric_element(element, drawing, style, viewport_bounds)
 
@@ -236,20 +233,16 @@ def render_pattern_part(
         draw.Text(
             pattern_part.name,
             24,
-            -width/2 + margin,
-            height/2 - margin,
-            fill='black'
+            -width / 2 + margin,
+            height / 2 - margin,
+            fill="black",
         )
     )
 
     return drawing
 
 
-def save_pattern_part_svg(
-    pattern_part: PatternPart,
-    filename: str,
-    **kwargs
-) -> None:
+def save_pattern_part_svg(pattern_part: PatternPart, filename: str, **kwargs) -> None:
     """Render a pattern part and save it to an SVG file.
 
     Args:
@@ -259,6 +252,7 @@ def save_pattern_part_svg(
     """
     drawing = render_pattern_part(pattern_part, **kwargs)
     drawing.save_svg(filename)
+
 
 if __name__ == "__main__":
     # Example usage
@@ -322,7 +316,6 @@ if __name__ == "__main__":
         part.elements.extend(intersect(c, L2))
 
         return part
-
 
     sample_part = create_sample_pattern()
     save_pattern_part_svg(sample_part, "sample_pattern.svg")

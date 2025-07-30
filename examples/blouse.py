@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
-"""Blouse without arms
-"""
+"""Blouse without arms"""
 
 import math
 import numpy as np
 
-from sewpat.geometry import Point, Segment, Line, Ray, Circle, intersect, segment_to_intersection, CM, MM
+from sewpat.geometry import (
+    Point,
+    Segment,
+    Line,
+    Ray,
+    Circle,
+    intersect,
+    segment_to_intersection,
+    CM,
+    MM,
+)
 from sewpat.part import PatternPart
 from sewpat.render import render_pattern_part
 from sewpat.measurments import Person, Allowance, ConstructionMeasurments, ModelConfig
@@ -43,14 +52,17 @@ def make_allowance() -> Allowance:
 
 
 def make_measurements(
-    person: Person, allowance: Allowance,
+    person: Person,
+    allowance: Allowance,
 ) -> ConstructionMeasurments:
     measurements = {key: val for key, val in person.__dict__.items()}
     for key, val in allowance.__dict__.items():
         if key not in ["TaU", "BrU", "HüU"]:
             measurements[key] += val
     for perimeter, width in zip(["TaU", "BrU", "HüU"], ["TaW", "BrW", "HüW"]):
-        measurements[width] = measurements[perimeter] + allowance.__getattribute__(perimeter)
+        measurements[width] = measurements[perimeter] + allowance.__getattribute__(
+            perimeter
+        )
     measurements.pop("KöH")
     return ConstructionMeasurments(**measurements)
 
@@ -106,7 +118,7 @@ def make_blouse(meas: ConstructionMeasurments, model: ModelConfig) -> PatternPar
     _, s = segment_to_intersection(pt10, -segBrustlinie.unit_normal, segSaumlinie)
     elems.append(s)
 
-    return PatternPart(name = "Blouse", elements=elems)
+    return PatternPart(name="Blouse", elements=elems)
 
 
 if __name__ == "__main__":

@@ -62,7 +62,7 @@ class TestPoint(unittest.TestCase):
         p = Point(1, 0)
 
         # Rotate 90 degrees counterclockwise
-        rotated = p.rotate(center, math.pi/2)
+        rotated = p.rotate(center, math.pi / 2)
         self.assertAlmostEqual(rotated.x, 0, places=10)
         self.assertAlmostEqual(rotated.y, 1, places=10)
 
@@ -77,7 +77,7 @@ class TestPoint(unittest.TestCase):
         # Rotation around non-origin center
         center = Point(1, 1)
         p = Point(2, 1)
-        rotated = p.rotate(center, math.pi/2)
+        rotated = p.rotate(center, math.pi / 2)
         self.assertAlmostEqual(rotated.x, 1, places=10)
         self.assertAlmostEqual(rotated.y, 2, places=10)
 
@@ -191,8 +191,8 @@ class TestRay(unittest.TestCase):
         self.assertEqual(ray.origin, origin)
 
         # Direction should be normalized
-        magnitude = math.sqrt(3*3 + 4*4)
-        expected = np.array([3/magnitude, 4/magnitude])
+        magnitude = math.sqrt(3 * 3 + 4 * 4)
+        expected = np.array([3 / magnitude, 4 / magnitude])
         np.testing.assert_almost_equal(ray.direction, expected)
 
         # Test with zero vector
@@ -361,8 +361,12 @@ class TestCircle(unittest.TestCase):
         self.assertTrue(circle.contains_point_inside(Point(3, 0)))  # Inside
 
         # Boundary
-        self.assertTrue(circle.contains_point_inside(Point(5, 0), include_boundary=True))
-        self.assertFalse(circle.contains_point_inside(Point(5, 0), include_boundary=False))
+        self.assertTrue(
+            circle.contains_point_inside(Point(5, 0), include_boundary=True)
+        )
+        self.assertFalse(
+            circle.contains_point_inside(Point(5, 0), include_boundary=False)
+        )
 
         # Outside
         self.assertFalse(circle.contains_point_inside(Point(10, 0)))
@@ -380,7 +384,7 @@ class TestCircle(unittest.TestCase):
         self.assertAlmostEqual(point.x, 1.0)
         self.assertAlmostEqual(point.y, 0.0)
 
-        point = circle.point_at_angle(math.pi/2)  # Top
+        point = circle.point_at_angle(math.pi / 2)  # Top
         self.assertAlmostEqual(point.x, 0.0)
         self.assertAlmostEqual(point.y, 1.0)
 
@@ -388,7 +392,7 @@ class TestCircle(unittest.TestCase):
         self.assertAlmostEqual(point.x, -1.0)
         self.assertAlmostEqual(point.y, 0.0)
 
-        point = circle.point_at_angle(3*math.pi/2)  # Bottom
+        point = circle.point_at_angle(3 * math.pi / 2)  # Bottom
         self.assertAlmostEqual(point.x, 0.0)
         self.assertAlmostEqual(point.y, -1.0)
 
@@ -483,5 +487,5 @@ class TestCircle(unittest.TestCase):
         self.assertEqual(intersect(circle1, circle5), [])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
