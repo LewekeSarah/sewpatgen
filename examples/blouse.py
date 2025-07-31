@@ -27,13 +27,9 @@ def make_person() -> Person:
         BrU=83.5 * CM,
         TaU=69.5 * CM,
         HüU=93 * CM,
-        AlT=19.4 * CM,
         HüT=24 * CM,
         BrT=27.5 * CM,
         HlB=6.5 * CM,
-        RüB=16 * CM,
-        ArD=8.9 * CM,
-        BrB=16.8 * CM,
         BrPA=8.3 * CM,
         SuB=12.1 * CM,
         RüL=39 * CM,
@@ -57,9 +53,7 @@ def make_model_config() -> ModelConfig:
 
 
 def make_balance() -> BalanceAdjustements:
-    return BalanceAdjustements(
-        VL=-0.9 * CM
-    )
+    return BalanceAdjustements(VL=-0.9 * CM)
 
 
 def make_blouse(meas: ConstructionMeasurments, model: ModelConfig) -> PatternPart:
@@ -103,11 +97,40 @@ def make_blouse(meas: ConstructionMeasurments, model: ModelConfig) -> PatternPar
 
     ## STEP 3.1
     pt10 = pt7.translate(-meas.RüB, 0)
-    pt16, s = segment_to_intersection(pt10, segBrustlinie.unit_normal, segSchulterlinie)
+    _, s = segment_to_intersection(pt10, segBrustlinie.unit_normal, segSchulterlinie)
     s.name = "hintere Armlinie"
     elems.append(s)
-    _, s = segment_to_intersection(pt10, -segBrustlinie.unit_normal, segSaumlinie)
+    _, s = segment_to_intersection(pt10, -segBrustlinie.unit_normal, segHüftlinie)
     elems.append(s)
+
+    ## STEP 3.2
+    pt11 = pt10.translate(-meas.ArD * 2 / 3, 0)
+    _, s = segment_to_intersection(pt11, -segSaumlinie.unit_normal, segHüftlinie)
+    s.name = "Seitenlinie RT"
+    elems.append(s)
+
+    ## STEP 3.3
+    pt12 = pt11.translate(-10 * CM, 0)
+    _, s = segment_to_intersection(pt12, -segBrustlinie.unit_normal, segHüftlinie)
+    s.name = "Seitenline VT"
+    elems.append(s)
+
+    ## STEP 3.4
+    pt13 = pt12.translate(-meas.ArD / 3, 0)
+    elems.append(Segment(pt13, pt13.translate(0, -25 * CM)))
+    _, s = segment_to_intersection(pt13, -segBrustlinie.unit_normal, segTaillenlinie)
+    s.name = "vordere Armlinie"
+    elems.append(s)
+
+    ## STEP 3.5
+    pt14 = pt13.translate(-meas.BrB, 0)
+    _, s = segment_to_intersection(pt14, -segBrustlinie.unit_normal, segHüftlinie)
+    s.name = "vordere Mitte (vM)"
+    elems.append(s)
+    elems.append(Segment(pt14, pt14.translate(0, -30 * CM)))
+
+    if not (pt14.coords == pt7.translate(-(meas.BrW / 2 + 10 * CM), 0).coords).all():
+        raise ValueError("BrW is plotted incorrect.")
 
     return PatternPart(name="Blouse", elements=elems)
 
