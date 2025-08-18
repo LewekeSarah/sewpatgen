@@ -64,6 +64,7 @@ def render_geometric_element(
     style: StyleOptions = StyleOptions(),
     viewport_bounds: Optional[Tuple[float, float, float, float]] = None,
     point_radius: float = 2.0,
+    font_size: int = 12,
 ) -> None:
     """Render a geometric element to the SVG drawing.
 
@@ -73,6 +74,7 @@ def render_geometric_element(
         style: Style options for rendering.
         viewport_bounds: Optional (min_x, min_y, max_x, max_y) defining the visible area.
         point_radius: Radius to use when rendering points.
+        font_size: Font size to use when rendering points.
     """
     style_dict = style.as_dict()
 
@@ -88,7 +90,7 @@ def render_geometric_element(
             drawing.append(
                 draw.Text(
                     element.name,
-                    12,
+                    font_size,
                     fill="black",
                     path=p,
                 )
@@ -178,6 +180,7 @@ def render_pattern_part(
     margin: float = 20,
     show_points: bool = True,
     style_map: Optional[Dict[str, StyleOptions]] = None,
+    font_size: int = 24,
 ) -> draw.Drawing:
     """Render a pattern part to an SVG drawing.
 
@@ -188,6 +191,7 @@ def render_pattern_part(
         margin: Margin around the pattern in units.
         show_points: Whether to show control points.
         style_map: Dictionary mapping element types to style options.
+        font_size: Font size to use.
 
     Returns:
         A drawSvg Drawing object with the rendered pattern.
@@ -232,13 +236,13 @@ def render_pattern_part(
         else:
             style = default_styles.get(element_type, default_styles["segment"])
 
-        render_geometric_element(element, drawing, style, viewport_bounds)
+        render_geometric_element(element, drawing, style, viewport_bounds, font_size)
 
     # Add title/name
     drawing.append(
         draw.Text(
             pattern_part.name,
-            24,
+            font_size,
             -width / 2 + margin,
             height / 2 - margin,
             fill="black",
