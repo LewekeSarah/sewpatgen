@@ -224,7 +224,13 @@ def render_pattern_part(
     # Render each element with appropriate style
     for element in pattern_part.elements:
         element_type = element.__class__.__name__.lower()
-        style = default_styles.get(element_type, default_styles["segment"])
+        if isinstance(element, Segment):
+            if element.style is not None:
+                style = element.style
+            else:
+                style = default_styles.get(element_type, default_styles["segment"])
+        else:
+            style = default_styles.get(element_type, default_styles["segment"])
 
         render_geometric_element(element, drawing, style, viewport_bounds)
 

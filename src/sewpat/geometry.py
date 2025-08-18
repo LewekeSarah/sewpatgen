@@ -4,11 +4,15 @@
 This module provides classes for fundamental 2D geometric primitives such as
 points, lines, segments, rays, and circles for use in CAD applications.
 """
+from __future__ import annotations
 
 import math
 import numpy as np
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sewpat.render import StyleOptions
 
 CM = 10.0
 MM = 1.0
@@ -208,17 +212,19 @@ class Segment:
         name: Optional, name of the line segment.
     """
 
-    def __init__(self, p1: Point, p2: Point, name: Optional[str] = None):
+    def __init__(self, p1: Point, p2: Point, name: Optional[str] = None, style: Optional[StyleOptions] = None):
         """Initialize a line with two points.
 
         Args:
             p1: First endpoint of the line segment.
             p2: Second endpoint of the line segment.
             name: Optional, name of the line segment.
+            style: Optional, style of the line segment.
         """
         self.p1 = p1
         self.p2 = p2
         self.name = name
+        self.style = style
 
     def __str__(self) -> str:
         if self.name:
