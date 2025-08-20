@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from sewpat import PatternPart, Point
 from sewpat.geometry import CM, Segment, MM
+from sewpat.line_styles import get_grainline_style, get_fold_style
 from sewpat.render import render_pattern_part, StyleOptions
 
 
@@ -20,7 +21,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
 
     ## STEP 1.1
     # Anchor: top left
-    bottom_left = Point(-model.width, model.height, "p1")
+    bottom_left = Point(-0.5 * model.width, model.height, "p1")
 
     ## STEP 1.2
     # Basic Rectangle
@@ -39,7 +40,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
                 (model.drawstring_margin + model.drawstring_height)
             ),
             name="grainline",
-            style=StyleOptions(stroke_color="grey", stroke_width=0.8)
+            style=get_grainline_style()
         )
     )
     elems.append(Segment(top_left, top_right))
@@ -49,8 +50,8 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
         Segment(
             bottom_right.translate(0, -model.height),
             bottom_left.translate(0, -model.height),
-            name="fold",
-            style=StyleOptions(stroke_color="grey", stroke_width=0.8)
+            name="fold of fabric",
+            style=get_fold_style()
         )
     )
 
@@ -110,12 +111,12 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
 
 if __name__ == "__main__":
     drawstring_pouch = DrawstringPouchConfig(
-        height=12 * CM,
-        width=8 * CM,
-        drawstring_height=2 * CM,
-        drawstring_margin=2.5 * CM,
+        height=21 * CM,
+        width=21 * CM,
+        drawstring_height=2.5 * CM,
+        drawstring_margin=1.5 * CM,
     )
     part = make_drawstring_pouch(drawstring_pouch)
 
-    d = render_pattern_part(part, 210 * MM, 297 * MM, font_size=10)
+    d = render_pattern_part(part, 420 * MM, 595 * MM,font_size=10)
     d.save_svg("drawstring_pouch.svg")

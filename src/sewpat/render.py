@@ -4,7 +4,7 @@ SVG Rendering module for sewing patterns.
 This module provides functions to render pattern parts and geometric elements
 using the drawSvg library.
 """
-
+from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union, Any
 
 import drawsvg as draw
@@ -12,6 +12,8 @@ import drawsvg as draw
 from sewpat.geometry import Point, Line, Segment, Ray, Circle, intersect
 from sewpat.part import PatternPart
 
+class LineEndStyle(Enum):
+    arrow = "arrow"
 
 class StyleOptions:
     """Style options for rendering pattern elements."""
@@ -23,6 +25,7 @@ class StyleOptions:
         fill_color: str = "none",
         dash_array: Optional[List[float]] = None,
         opacity: float = 1.0,
+        marker_end: str = None
     ):
         """Initialize style options.
 
@@ -32,12 +35,14 @@ class StyleOptions:
             fill_color: Fill color for closed shapes.
             dash_array: List of values defining the dash pattern, or None for solid line.
             opacity: Opacity value between 0.0 (transparent) and 1.0 (opaque).
+            marker_end: Line end style
         """
         self.stroke_color = stroke_color
         self.stroke_width = stroke_width
         self.fill_color = fill_color
         self.dash_array = dash_array
         self.opacity = opacity
+        self.marker_end = LineEndStyle(marker_end).value if marker_end else None
 
     def as_dict(self) -> Dict[str, Any]:
         """Convert style options to a dictionary for drawSvg.
@@ -50,6 +55,7 @@ class StyleOptions:
             "stroke-width": self.stroke_width,
             "fill": self.fill_color,
             "opacity": self.opacity,
+            "marker_end": self.marker_end,
         }
 
         if self.dash_array:
@@ -82,6 +88,11 @@ def render_geometric_element(
         drawing.append(draw.Circle(element.x, element.y, point_radius, **style_dict))
 
     elif isinstance(element, Segment):
+        if style_dict["marker_end"] == LineEndStyle.arrow.value:
+            arrow = draw.Marker(-0.1, -0.51, 1.8 , 1, scale=4, orient='auto')
+            arrow.append(draw.Lines(-0.1 , 1, -0.1 , -1, 1.8 , 0, fill=style_dict["stroke"], close=True))
+            style_dict["marker_end"] = arrow
+
         p = draw.Line(
             element.p1.x, element.p1.y, element.p2.x, element.p2.y, **style_dict
         )
