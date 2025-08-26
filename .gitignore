@@ -39,3 +39,5 @@ env
 # Thumbnails
 ._*
 
+*.pdf
+*.png
