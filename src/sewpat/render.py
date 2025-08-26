@@ -21,11 +21,13 @@ class StyleOptions:
     def __init__(
         self,
         stroke_color: str = "black",
-        stroke_width: float = 1.0,
+        stroke_width: float = 0.5,
         fill_color: str = "none",
         dash_array: Optional[List[float]] = None,
         opacity: float = 1.0,
-        marker_end: str = None
+        marker_end: str = None,
+        text_anchor: str = "start",
+        font_size: float = 10,
     ):
         """Initialize style options.
 
@@ -36,6 +38,8 @@ class StyleOptions:
             dash_array: List of values defining the dash pattern, or None for solid line.
             opacity: Opacity value between 0.0 (transparent) and 1.0 (opaque).
             marker_end: Line end style
+            text_anchor: Anchor style
+            font_size: Font size
         """
         self.stroke_color = stroke_color
         self.stroke_width = stroke_width
@@ -43,6 +47,8 @@ class StyleOptions:
         self.dash_array = dash_array
         self.opacity = opacity
         self.marker_end = LineEndStyle(marker_end).value if marker_end else None
+        self.font_size = font_size
+        self.text_anchor = text_anchor
 
     def as_dict(self) -> Dict[str, Any]:
         """Convert style options to a dictionary for drawSvg.
@@ -56,6 +62,8 @@ class StyleOptions:
             "fill": self.fill_color,
             "opacity": self.opacity,
             "marker_end": self.marker_end,
+            "font_size": self.font_size,
+            "text_anchor": self.text_anchor,
         }
 
         if self.dash_array:
@@ -101,7 +109,8 @@ def render_geometric_element(
             drawing.append(
                 draw.Text(
                     element.name,
-                    font_size,
+                    style_dict["font_size"],
+                    text_anchor=style_dict["text_anchor"],
                     fill="black",
                     path=p,
                 )
