@@ -1,6 +1,6 @@
 from sewpat import PatternPart, Point
-from sewpat.basic_shapes import get_square
-from sewpat.geometry import Segment, MM, CM
+from sewpat.basic_shapes import get_square, get_precision_point
+from sewpat.geometry import Segment, MM, CM, segment_to_intersection
 from sewpat.line_styles import (
     get_grainline_style,
     get_fold_style,
@@ -8,7 +8,7 @@ from sewpat.line_styles import (
     get_seam_style,
 )
 from sewpat.pages import DinA4
-from sewpat.render import render_pattern_part
+from sewpat.render import render_pattern_part, StyleOptions
 
 
 def make_legend():
@@ -20,7 +20,19 @@ def make_legend():
 
     size_box_start = Point(-0.5 * DinA4.width + sep, - 4.5 * CM)
     size_box = get_square(size_box_start)
+    precision_point = get_precision_point(left_p1.translate(6 * CM, - 3 * CM))
     elems = [
+        Segment(
+            left_p1.translate(6.5 * CM, -4.5 * CM).translate(0, 1.5 * CM),
+            left_p1.translate(6.5 * CM, -4.5 * CM).translate(5 * CM, 1.5 * CM),
+            style=StyleOptions(
+                stroke_color="white",
+                stroke_width=0.8,
+                font_size=6,
+                text_anchor="middle",
+            ),
+            name="precision point",
+        ),
         Segment(left_p1, right_p1, name="grainline", style=get_grainline_style()),
         Segment(
             left_p1.translate(0, 1.5 * CM),
@@ -42,7 +54,17 @@ def make_legend():
         ),
     ]
 
-    return PatternPart(name="Legend", elements=size_box + elems)
+    s = Segment(
+            left_p1.translate(0, 6 * CM),
+            right_p1.translate(0, 6 * CM),
+            name="nips",
+        )
+    _, s1 = segment_to_intersection(
+            left_p1.translate(0.4 * DinA4.width, 6.5 * CM), -s.unit_normal, s
+        )
+    elems.append(s)
+    elems.append(s1)
+    return PatternPart(name="Legend", elements=size_box + precision_point + elems)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ def get_grainline_style() -> StyleOptions:
         stroke_color="grey",
         stroke_width=0.8,
         marker_end=LineEndStyle.arrow.name,
-        font_size=9,
+        font_size=12,
         text_anchor="middle",
     )
 
@@ -26,7 +26,7 @@ def get_hem_style() -> StyleOptions:
     return StyleOptions(
         stroke_color="black",
         stroke_width=3,
-        font_size=9,
+        font_size=12,
         text_anchor="middle",
     )
 

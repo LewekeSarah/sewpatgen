@@ -1,16 +1,23 @@
 from typing import List
 
-from sewpat import Point
-from sewpat.geometry import CM, Segment
+from sewpat import Point, Circle
+from sewpat.geometry import CM, Segment, MM
 from sewpat.render import StyleOptions
 
+
+def get_precision_point(center: Point) -> List[Circle]:
+    elems = [
+        Circle(center, radius=5 * MM),
+        Circle(center, radius=0.5 * MM),
+    ]
+    return elems
 
 def get_square(box_start: Point, edge_length: float = 3 * CM) -> List[Segment]:
     def get_size_box_style() -> StyleOptions:
         return StyleOptions(
             stroke_color="black",
             stroke_width=0.8,
-            font_size=5,
+            font_size=10,
             text_anchor="middle",
         )
     style = get_size_box_style()
@@ -25,7 +32,7 @@ def get_square(box_start: Point, edge_length: float = 3 * CM) -> List[Segment]:
             style=StyleOptions(
                 stroke_color="white",
                 stroke_width=0.8,
-                font_size=6,
+                font_size=10,
                 text_anchor="middle",
             ),
             name=f"{edge_length / CM :.0f}cm x {edge_length / CM :.0f}cm",
@@ -41,7 +48,7 @@ def get_square(box_start: Point, edge_length: float = 3 * CM) -> List[Segment]:
             style=style,
         ),
         Segment(
-            box_start.translate(0, 3 * CM),
+            box_start.translate(0, edge_length),
             box_start.translate(0, 0),
             style=style,
         ),

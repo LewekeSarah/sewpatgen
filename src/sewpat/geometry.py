@@ -14,8 +14,9 @@ from typing import List, Optional, Tuple, Union, TYPE_CHECKING
 if TYPE_CHECKING:
     from sewpat.render import StyleOptions
 
-CM = 10.0
-MM = 1.0
+
+MM = 1.0 * 3.75
+CM = 10.0 * MM
 
 
 def _solve_quadratic(a: float, b: float, c: float) -> List[float]:
