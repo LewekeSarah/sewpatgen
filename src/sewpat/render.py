@@ -27,7 +27,7 @@ class StyleOptions:
         opacity: float = 1.0,
         marker_end: str = None,
         text_anchor: str = "start",
-        font_size: float = 10,
+        font_size: float = 12,
     ):
         """Initialize style options.
 

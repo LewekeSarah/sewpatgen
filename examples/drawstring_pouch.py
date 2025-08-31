@@ -36,10 +36,10 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
     top_left = bottom_left.translate(0, -1 * model.height)
     top_right = top_left.translate(model.width, 0)
     bottom_right = bottom_left.translate(model.width, 0)
-    elems.append(Segment(bottom_left, top_left, style=get_seam_style()))
-    elems.append(Segment(top_left, top_right, style=get_hem_style()))
+    elems.append(Segment(bottom_left, top_left, style=get_seam_style(), name=f"Höhe {model.height / CM:.0f} cm"))
+    elems.append(Segment(top_left, top_right, style=get_hem_style(), name=f"Breite {model.width / CM:.0f} cm"))
     elems.append(Segment(top_right, bottom_right, style=get_seam_style()))
-    elems.append(Segment(bottom_right, bottom_left, style=get_seam_style()))
+    elems.append(Segment(bottom_right, bottom_left, style=get_seam_style(), name="Wendeöffnung"))
     precision_points = get_precision_point(bottom_left) + get_precision_point(bottom_right)
     elems = elems + precision_points
 
@@ -66,7 +66,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
             ds1_bottom_right,
             name="drawstring / Tunnelzug",
             style=StyleOptions(
-                dash_array=[5.0, 2.0], stroke_width=1, text_anchor="middle"
+                dash_array=[5.0, 2.0], stroke_width=1, text_anchor="middle", font_size=12
             ),
         )
     )
@@ -155,7 +155,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
 
 if __name__ == "__main__":
     drawstring_pouch = DrawstringPouchConfig(
-        height=19 * CM,
+        height=18.5 * CM,
         width=20 * CM,
         drawstring_height=2.5 * CM,
         drawstring_margin=1.5 * CM,
