@@ -1,6 +1,13 @@
 from dataclasses import dataclass
+from enum import Enum
 
 from sewpat.geometry import CM
+
+
+
+class Gender(Enum):
+    male = "m"
+    female = "f"
 
 
 @dataclass
@@ -16,13 +23,23 @@ class Person:
     SuB: float
     RüL: float
     VL: float
+    SiH: float = 0. * CM
+    SrH: float = 0. * CM
     RüB: float = None
     AlT: float = None
     ArD: float = None
     BrB: float = None
+    gender: Gender = Gender.female
 
     def __post_init__(self):
-        if (self.BrU > 80 * CM) and (self.BrU <= 89 * CM):
+        if (self.BrU > 60 * CM) and (self.BrU < 70 * CM):
+            self.AlT = 0 if self.AlT is None else self.AlT
+            self.ArD = 0 if self.ArD is None else self.ArD
+            self.BrB = 0 if self.BrB is None else self.BrB
+            self.RüB = 0 if self.RüB is None else self.RüB
+            self.BrU = (self.RüB + self.ArD + self.BrB) * 2
+            print("Warning: Only for Trousers, no tops")
+        elif (self.BrU > 80 * CM) and (self.BrU <= 89 * CM):
             self.AlT = self.BrU / 10 + 11 * CM if self.AlT is None else self.AlT
             self.ArD = self.BrU / 8 - 1.5 * CM if self.ArD is None else self.ArD
             self.BrB = self.BrU / 4 - 4.0 * CM if self.BrB is None else self.BrB
@@ -44,6 +61,8 @@ class Allowance:
     TaU: float
     HüU: float
     BrU: float = 0.0
+    SiH: float = 0.
+    SrH: float = 0.
 
     def __post_init__(self):
         self.BrU = 2 * (self.RüB + self.ArD + self.BrB)
@@ -51,6 +70,8 @@ class Allowance:
 
 def get_optimal_balance(BrU: float) -> float:
     if (BrU > 80 * CM) and (BrU <= 89 * CM):
+        return 3.5 * CM
+    elif (BrU > 60 * CM) and (BrU < 70 * CM):
         return 3.5 * CM
     else:
         raise NotImplementedError(
@@ -77,11 +98,17 @@ class ConstructionMeasurments:
     BrW: float
     TaW: float
     HüW: float
+    SiH: float
+    SrH: float
+    vHoB: float = None  # Vorderhosenbreite
+    gender: Gender = Gender.female
 
     def __post_init__(self):
-        if (self.VL - self.RüL) > get_optimal_balance(self.BrU):
-            raise ValueError("VL and RüB are not properly balanced")
+        if self.gender == Gender.female:
+            if (self.VL - self.RüL) > get_optimal_balance(self.BrU):
+                raise ValueError("VL and RüB are not properly balanced")
 
+        self.vHoB = -0.25 * self.HüW if self.vHoB is None else self.vHoB
 
 @dataclass
 class BalanceAdjustements:
@@ -92,7 +119,8 @@ class BalanceAdjustements:
 @dataclass
 class ModelConfig:
     MoL: float
-    BeckenAdjustment: float
+    BeckenAdjustment: float = None
+    ZuvHoB: float = None
 
 
 def make_measurements(
