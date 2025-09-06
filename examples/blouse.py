@@ -15,11 +15,11 @@ from sewpat.geometry import (
     CM,
     MM,
 )
-from sewpat.measurments import BalanceAdjustements, make_measurements
+from sewpat.measurments import make_blouse_measurements
 from sewpat.part import PatternPart
 from sewpat.render import render_pattern_part
 from sewpat.measurments import Allowance, BlouseMeasurements, ModelConfig
-from sewpat.person import Person
+from sewpat.person import Person, BalanceAdjustments
 
 
 def make_person() -> Person:
@@ -53,8 +53,8 @@ def make_model_config() -> ModelConfig:
     return ModelConfig(MoL=55 * CM, BeckenAdjustment=1 * CM)
 
 
-def make_balance() -> BalanceAdjustements:
-    return BalanceAdjustements(VL=-0.9 * CM)
+def make_balance() -> BalanceAdjustments:
+    return BalanceAdjustments(VL=-0.9 * CM)
 
 
 def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> PatternPart:
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     person = make_person()
     allowance = make_allowance()
     balance = make_balance()
-    measurements = make_measurements(person, allowance, balance)
+    measurements = make_blouse_measurements(person, allowance, balance)
     model_config = make_model_config()
     part = make_blouse(measurements, model_config)
 

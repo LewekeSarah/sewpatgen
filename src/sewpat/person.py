@@ -1,4 +1,5 @@
 """ Person related information required for pattern construction """
+import copy
 from dataclasses import dataclass
 from enum import Enum
 
@@ -7,8 +8,11 @@ from sewpat.geometry import CM
 
 class Gender(Enum):
     """ Some pattern have gender-specific adjustments"""
-    male = "m"
-    female = "f"
+    male = "male"
+    female = "female"
+    boy = "boy"
+    girl = "girl"
+    baby = "baby"
 
 
 @dataclass
@@ -32,20 +36,80 @@ class Person:
     KöH: float = None  # Körperhöhe
     gender: Gender = Gender.female  # Geschlecht
 
-    def __post_init__(self):
-        if (self.BrU > 60 * CM) and (self.BrU < 70 * CM):
-            if (self.RüB is not None) & (self.ArD is not None) & (self.BrB is not None):
-                self.BrU = (self.RüB + self.ArD + self.BrB) * 2
-                print("Warning: Only for Trousers, no tops")
-        elif (self.BrU > 80 * CM) and (self.BrU <= 89 * CM):
-            self.AlT = self.BrU / 10 + 11 * CM if self.AlT is None else self.AlT
-            self.ArD = self.BrU / 8 - 1.5 * CM if self.ArD is None else self.ArD
-            self.BrB = self.BrU / 4 - 4.0 * CM if self.BrB is None else self.BrB
-            self.RüB = self.BrU / 8 + 5.5 * CM if self.RüB is None else self.RüB
-        elif self.AlT is None or self.ArD is None or self.BrB is None:
+
+@dataclass
+class BalanceAdjustments:
+    RüL: float = 0.0
+    VL: float = 0.0
+
+
+class PersonAnalyser:
+    def __init__(self, person: Person, balance_adjustments: BalanceAdjustments = None):
+        self.person = person
+        self.person_balanced: Person = None
+        self.balance = balance_adjustments
+        self.optimal_balance = self.get_optimal_balance()
+        self.calculate_measurements()
+        self.balance_person()
+
+    def _set_alt(self):
+        if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
+            self.person.AlT = self.person.BrU / 10 + 11 * CM if self.person.AlT is None else self.person.AlT
+        if self.person.AlT is None:
+            raise NotImplementedError(
+                "Matching AlT formula for given bustline is not yet implemented."
+            )
+
+    def _set_ard(self):
+        if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
+            self.person.ArD = self.person.BrU / 8 - 1.5 * CM if self.person.ArD is None else self.person.ArD
+        if self.person.ArD is None:
+            raise NotImplementedError(
+                "Matching ArD formula for given bustline is not yet implemented."
+            )
+
+    def _set_brb(self):
+        if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
+            self.person.BrB = self.person.BrU / 4 - 4.0 * CM if self.person.BrB is None else self.person.BrB
+        if self.person.BrB is None:
+            raise NotImplementedError(
+                "Matching BrB formula for given bustline is not yet implemented."
+            )
+
+    def _set_rüb(self):
+        if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
+            self.person.RüB = self.person.BrU / 8 + 5.5 * CM if self.person.RüB is None else self.person.RüB
+        if self.person.RüB is None:
             raise NotImplementedError(
                 "Matching formula for given bustline is not yet implemented."
             )
-        if (self.BrU is not None) & (self.RüB is not None) & (self.ArD is not None) & (self.BrB is not None):
-            if self.BrU / 2 != (self.RüB + self.ArD + self.BrB):
-                raise ValueError("Brustline measurements are not matching.")
+
+    def calculate_measurements(self):
+        if self.person.BrU is not None:
+            self._set_alt()
+            self._set_ard()
+            self._set_brb()
+            self._set_rüb()
+
+    def balance_person(self):
+        person_balanced = copy.deepcopy(self.person)
+        if self.balance is not None:
+            for key, val in self.balance.__dict__.items():
+                person_balanced.__setattr__(key, person_balanced.__getattribute__(key) + val)
+        if person_balanced.gender == Gender.female:
+            if (person_balanced.VL - person_balanced.RüL) > self.get_optimal_balance():
+                raise ValueError("VL and RüB are not properly balanced")
+            else:
+                self.person_balanced = person_balanced
+
+    def get_balanced_person(self) -> Person:
+        return self.person_balanced
+
+    def get_optimal_balance(self) -> float:
+        if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
+            return 3.5 * CM
+        else:
+            raise NotImplementedError(
+                "Matching balance for given bustline is not yet implemented."
+            )
+

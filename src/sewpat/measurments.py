@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from sewpat.geometry import CM
-from sewpat.person import Gender, Person
+from sewpat.person import Gender, Person, BalanceAdjustments, PersonAnalyser
 
 
 @dataclass
@@ -19,17 +19,6 @@ class Allowance:
     def __post_init__(self):
         if (self.RüB is not None) & (self.ArD is not None) & (self.BrB is not None):
             self.BrU = 2 * (self.RüB + self.ArD + self.BrB)
-
-
-def get_optimal_balance(BrU: float) -> float:
-    if (BrU > 80 * CM) and (BrU <= 89 * CM):
-        return 3.5 * CM
-    elif (BrU > 60 * CM) and (BrU < 70 * CM):
-        return 3.5 * CM
-    else:
-        raise NotImplementedError(
-            "Matching balance for given bustline is not yet implemented."
-        )
 
 
 @dataclass
@@ -53,13 +42,9 @@ class BlouseMeasurements:
     BrU: float  # bustline
     TaU: float
     HüU: float
-    AlT: float
     HüT: float
     BrT: float
     HlB: float
-    RüB: float
-    ArD: float
-    BrB: float
     BrPA: float
     SuB: float
     RüL: float
@@ -67,18 +52,15 @@ class BlouseMeasurements:
     BrW: float
     TaW: float
     HüW: float
+    AlT: float
+    RüB: float
+    ArD: float
+    BrB: float
     gender: Gender = Gender.female
 
     def __post_init__(self):
-        if self.gender == Gender.female:
-            if (self.VL - self.RüL) > get_optimal_balance(self.BrU):
-                raise ValueError("VL and RüB are not properly balanced")
-
-
-@dataclass
-class BalanceAdjustements:
-    RüL: float = 0.0
-    VL: float = 0.0
+        if self.BrW / 2 != (self.RüB + self.ArD + self.BrB):
+            raise ValueError("Brustline measurements are not matching.")
 
 
 @dataclass
@@ -88,28 +70,27 @@ class ModelConfig:
     ZuvHoB: float = None
 
 
-def make_measurements(
-    person: Person, allowance: Allowance, balance: BalanceAdjustements = None
+def make_blouse_measurements(
+    person: Person, allowance: Allowance, balance: BalanceAdjustments
 ) -> BlouseMeasurements:
+    person = PersonAnalyser(person, balance).get_balanced_person()
+
     measurements = {key: val for key, val in person.__dict__.items() if val is not None}
-    for key, val in allowance.__dict__.items():
-        if (val is not None) and (key not in ["TaU", "BrU", "HüU"]):
-            measurements[key] += val
+    allowances = {key: val for key, val in allowance.__dict__.items() if val is not None}
+    width_instead_update = {"TaU", "BrU", "HüU"}
+    for key in set(measurements.keys()).intersection(allowances.keys()).difference(width_instead_update):
+        measurements[key] += allowances[key]
     for perimeter, width in zip(["TaU", "BrU", "HüU"], ["TaW", "BrW", "HüW"]):
         measurements[width] = measurements[perimeter] + allowance.__getattribute__(
             perimeter
         )
     measurements.pop("KöH")
 
-    if balance is not None:
-        for key, val in balance.__dict__.items():
-            measurements[key] += balance.__getattribute__(key)
-
     return BlouseMeasurements(**measurements)
 
 
 def make_measurements_trouser(
-    person: Person, allowance: Allowance, balance: BalanceAdjustements = None
+    person: Person, allowance: Allowance, balance: BalanceAdjustments = None
 ) -> TrouserMeasurements:
     measurements = {key: val for key, val in person.__dict__.items() if val is not None}
     allowances = {key: val for key, val in allowance.__dict__.items() if val is not None}
