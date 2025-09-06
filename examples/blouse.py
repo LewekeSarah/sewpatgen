@@ -18,7 +18,8 @@ from sewpat.geometry import (
 from sewpat.measurments import BalanceAdjustements, make_measurements
 from sewpat.part import PatternPart
 from sewpat.render import render_pattern_part
-from sewpat.measurments import Person, Allowance, ConstructionMeasurments, ModelConfig
+from sewpat.measurments import Allowance, BlouseMeasurements, ModelConfig
+from sewpat.person import Person
 
 
 def make_person() -> Person:
@@ -56,7 +57,7 @@ def make_balance() -> BalanceAdjustements:
     return BalanceAdjustements(VL=-0.9 * CM)
 
 
-def make_blouse(meas: ConstructionMeasurments, model: ModelConfig) -> PatternPart:
+def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> PatternPart:
     elems = []
 
     # SVG coordinates: x increases right, y increases down

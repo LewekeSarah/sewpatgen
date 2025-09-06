@@ -1,6 +1,8 @@
 from sewpat import Segment, PatternPart
 from sewpat.geometry import CM, Point, segment_to_intersection, intersect, Ray, Circle
-from sewpat.measurments import Person, ModelConfig, make_measurements, ConstructionMeasurments, Allowance, Gender
+from sewpat.measurments import ModelConfig, BlouseMeasurements, Allowance, make_measurements_trouser, \
+    TrouserMeasurements
+from sewpat.person import Gender, Person
 from sewpat.render import render_pattern_part
 
 
@@ -12,11 +14,7 @@ def make_person() -> Person:
         HüU=68 * CM,
         HüT=0 * CM,
         BrT=15.6 * CM,
-        HlB=0 * CM,
-        BrPA=0 * CM,
-        SuB=0 * CM,
         RüL=29.2 * CM,
-        VL=0 * CM,
         SiH=20.4 * CM, # SiH = body_rise / Sitzhöhe
         SrH=55 * CM, # SrH = inside leg / Schritthöhe
         gender=Gender.male
@@ -28,11 +26,6 @@ def make_allowance() -> Allowance:
         SiH=4.5 * CM,
         SrH=- 2 * CM,
         HüU=5 * CM,
-        RüB= 0 * CM,
-        ArD= 0 * CM,
-        BrB= 0 * CM,
-        AlT= 0 * CM,
-        TaU= 0 * CM,
     )
 
 
@@ -40,7 +33,7 @@ def make_model_config() -> ModelConfig:
     return ModelConfig(MoL=55 * CM, ZuvHoB=1 * CM)
 
 
-def shorts(meas: ConstructionMeasurments, config: ModelConfig) -> PatternPart:
+def shorts(meas: TrouserMeasurements, config: ModelConfig) -> PatternPart:
     ## Front Section
     # Anchor: top right
     pt0 = Point(20 * CM, -40 * CM, "p1")
@@ -95,7 +88,7 @@ def shorts(meas: ConstructionMeasurments, config: ModelConfig) -> PatternPart:
 if __name__ == "__main__":
     person = make_person()
     allowance = make_allowance()
-    measurements = make_measurements(person, allowance)
+    measurements = make_measurements_trouser(person, allowance)
     model_config = make_model_config()
     part = shorts(measurements, model_config)
 
