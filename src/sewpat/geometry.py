@@ -831,6 +831,246 @@ def _intersect_linear_linear(
     return [intersection]
 
 
+def _solve_cubic(a: float, b: float, c: float, d: float) -> List[float]:
+    """Solve a cubic equation ax³ + bx² + cx + d = 0.
+
+    Args:
+        a, b, c, d: Coefficients of the cubic equation.
+
+    Returns:
+        List of real roots.
+    """
+    eps = 1e-10
+
+    if abs(a) < eps:
+        # Degenerate to quadratic
+        return _solve_quadratic(b, c, d)
+
+    # Normalize coefficients
+    b /= a
+    c /= a
+    d /= a
+
+    # Substitute x = t - b/3 to eliminate quadratic term
+    # Results in t³ + pt + q = 0
+    p = c - b * b / 3
+    q = d - b * c / 3 + 2 * b * b * b / 27
+
+    # Use Cardano's formula
+    discriminant = (q / 2) ** 2 + (p / 3) ** 3
+
+    roots = []
+
+    if discriminant > eps:
+        # One real root
+        sqrt_disc = math.sqrt(discriminant)
+        u = (-q / 2 + sqrt_disc) ** (1/3) if (-q / 2 + sqrt_disc) >= 0 else -(abs(-q / 2 + sqrt_disc) ** (1/3))
+        v = (-q / 2 - sqrt_disc) ** (1/3) if (-q / 2 - sqrt_disc) >= 0 else -(abs(-q / 2 - sqrt_disc) ** (1/3))
+        roots.append(u + v - b / 3)
+    elif abs(discriminant) < eps:
+        # Two or three real roots
+        if abs(q) < eps:
+            # Triple root
+            roots.append(-b / 3)
+        else:
+            # One single and one double root
+            u = (-q / 2) ** (1/3) if (-q / 2) >= 0 else -(abs(-q / 2) ** (1/3))
+            roots.extend([2 * u - b / 3, -u - b / 3])
+    else:
+        # Three distinct real roots
+        rho = math.sqrt(-(p / 3) ** 3)
+        theta = math.acos(-q / 2 / rho)
+
+        for k in range(3):
+            root = 2 * (rho ** (1/3)) * math.cos((theta + 2 * math.pi * k) / 3) - b / 3
+            roots.append(root)
+
+    return roots
+
+
+def _intersect_bezier_line(bezier: "CubicBezier", line_point: np.ndarray, line_dir: np.ndarray) -> List[float]:
+    """Find intersection parameters t where a cubic Bezier intersects a line.
+
+    Args:
+        bezier: The cubic Bezier curve.
+        line_point: A point on the line.
+        line_dir: Direction vector of the line (should be normalized).
+
+    Returns:
+        List of t parameters where intersections occur.
+    """
+    # Line equation: P = line_point + s * line_dir
+    # Bezier equation: B(t) = (1-t)³P₀ + 3(1-t)²tP₁ + 3(1-t)t²P₂ + t³P₃
+    #
+    # For intersection: B(t) lies on the line
+    # We can use the implicit line equation: (P - line_point) × line_dir = 0
+    # where × is the 2D cross product (determinant)
+
+    # Get perpendicular to line direction for implicit form
+    line_perp = np.array([-line_dir[1], line_dir[0]])
+
+    # Coefficients for the cubic equation in t
+    # B(t) = a₃t³ + a₂t² + a₁t + a₀ where:
+    a0 = bezier.p0.coords
+    a1 = 3 * (bezier.p1.coords - bezier.p0.coords)
+    a2 = 3 * (bezier.p2.coords - 2 * bezier.p1.coords + bezier.p0.coords)
+    a3 = bezier.p3.coords - 3 * bezier.p2.coords + 3 * bezier.p1.coords - bezier.p0.coords
+
+    # Distance from line_point to each coefficient projected onto line_perp
+    d0 = np.dot(a0 - line_point, line_perp)
+    d1 = np.dot(a1, line_perp)
+    d2 = np.dot(a2, line_perp)
+    d3 = np.dot(a3, line_perp)
+
+    # Solve cubic equation: d₃t³ + d₂t² + d₁t + d₀ = 0
+    return _solve_cubic(d3, d2, d1, d0)
+
+
+class CubicBezier:
+    """A 2D cubic Bezier curve defined by four control points.
+
+    The curve starts at p0, is influenced by control points p1 and p2,
+    and ends at p3. The parameter t varies from 0 to 1.
+
+    Attributes:
+        p0: Start point of the curve.
+        p1: First control point.
+        p2: Second control point.
+        p3: End point of the curve.
+    """
+
+    def __init__(self, p0: Point, p1: Point, p2: Point, p3: Point):
+        """Initialize a cubic Bezier curve with four control points.
+
+        Args:
+            p0: Start point of the curve.
+            p1: First control point.
+            p2: Second control point.
+            p3: End point of the curve.
+        """
+        self.p0 = p0
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
+
+    def __str__(self) -> str:
+        return f"CubicBezier(p0={self.p0}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
+
+    def point_at_t(self, t: float) -> Point:
+        """Evaluate the Bezier curve at parameter t.
+
+        Args:
+            t: Parameter value, typically between 0 and 1.
+
+        Returns:
+            Point on the curve at parameter t.
+        """
+        # Cubic Bezier formula: B(t) = (1-t)³P₀ + 3(1-t)²tP₁ + 3(1-t)t²P₂ + t³P₃
+        t2 = t * t
+        t3 = t2 * t
+        mt = 1.0 - t
+        mt2 = mt * mt
+        mt3 = mt2 * mt
+
+        x = (mt3 * self.p0.x +
+             3 * mt2 * t * self.p1.x +
+             3 * mt * t2 * self.p2.x +
+             t3 * self.p3.x)
+
+        y = (mt3 * self.p0.y +
+             3 * mt2 * t * self.p1.y +
+             3 * mt * t2 * self.p2.y +
+             t3 * self.p3.y)
+
+        return Point(x, y)
+
+    def tangent_at_t(self, t: float) -> np.ndarray:
+        """Compute the tangent vector at parameter t.
+
+        Args:
+            t: Parameter value, typically between 0 and 1.
+
+        Returns:
+            Tangent vector as numpy array.
+        """
+        # Derivative of cubic Bezier: B'(t) = 3(1-t)²(P₁-P₀) + 6(1-t)t(P₂-P₁) + 3t²(P₃-P₂)
+        t2 = t * t
+        mt = 1.0 - t
+        mt2 = mt * mt
+
+        dx = (3 * mt2 * (self.p1.x - self.p0.x) +
+              6 * mt * t * (self.p2.x - self.p1.x) +
+              3 * t2 * (self.p3.x - self.p2.x))
+
+        dy = (3 * mt2 * (self.p1.y - self.p0.y) +
+              6 * mt * t * (self.p2.y - self.p1.y) +
+              3 * t2 * (self.p3.y - self.p2.y))
+
+        return np.array([dx, dy])
+
+    def length_approx(self, num_segments: int = 100) -> float:
+        """Approximate the length of the Bezier curve using line segments.
+
+        Args:
+            num_segments: Number of line segments to use for approximation.
+
+        Returns:
+            Approximate length of the curve.
+        """
+        total_length = 0.0
+        prev_point = self.point_at_t(0.0)
+
+        for i in range(1, num_segments + 1):
+            t = i / num_segments
+            curr_point = self.point_at_t(t)
+            total_length += prev_point.distance_to(curr_point)
+            prev_point = curr_point
+
+        return total_length
+
+    def bounding_box(self) -> Tuple[Point, Point]:
+        """Compute the axis-aligned bounding box of the Bezier curve.
+
+        Returns:
+            Tuple of (min_point, max_point) defining the bounding box.
+        """
+        # Start with control points
+        x_coords = [self.p0.x, self.p1.x, self.p2.x, self.p3.x]
+        y_coords = [self.p0.y, self.p1.y, self.p2.y, self.p3.y]
+
+        # Find extrema by solving derivative = 0
+        # For x: 3(1-t)²(P₁-P₀) + 6(1-t)t(P₂-P₁) + 3t²(P₃-P₂) = 0
+        # This simplifies to: at² + bt + c = 0 where:
+        a_x = 3 * (self.p3.x - 3 * self.p2.x + 3 * self.p1.x - self.p0.x)
+        b_x = 6 * (self.p2.x - 2 * self.p1.x + self.p0.x)
+        c_x = 3 * (self.p1.x - self.p0.x)
+
+        a_y = 3 * (self.p3.y - 3 * self.p2.y + 3 * self.p1.y - self.p0.y)
+        b_y = 6 * (self.p2.y - 2 * self.p1.y + self.p0.y)
+        c_y = 3 * (self.p1.y - self.p0.y)
+
+        # Solve for critical points
+        for a, b, c in [(a_x, b_x, c_x), (a_y, b_y, c_y)]:
+            if abs(a) > 1e-10:  # Quadratic case
+                roots = _solve_quadratic(a, b, c)
+                for t in roots:
+                    if 0 <= t <= 1:
+                        point = self.point_at_t(t)
+                        x_coords.append(point.x)
+                        y_coords.append(point.y)
+            elif abs(b) > 1e-10:  # Linear case
+                t = -c / b
+                if 0 <= t <= 1:
+                    point = self.point_at_t(t)
+                    x_coords.append(point.x)
+                    y_coords.append(point.y)
+
+        min_x, max_x = min(x_coords), max(x_coords)
+        min_y, max_y = min(y_coords), max(y_coords)
+
+        return Point(min_x, min_y), Point(max_x, max_y)
+
+
 def _intersect_linear_circle(
     lin_pt: np.ndarray, dir: np.ndarray, circle: Circle
 ) -> List[float]:
@@ -915,7 +1155,7 @@ def _intersect_circle_circle(c1: Circle, c2: Circle) -> List[Point]:
     return [Point(*p3), Point(*p4)]
 
 
-GEOMETRIC_TYPE = Union[Point, Line, Ray, Circle, Segment]
+GEOMETRIC_TYPE = Union[Point, Line, Ray, Circle, Segment, CubicBezier]
 
 
 def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> List[Point]:
@@ -942,6 +1182,9 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> List[Point]:
         elif isinstance(b, Circle):
             t = _intersect_linear_circle(a.p1.coords, a.p2.coords - a.p1.coords, b)
             return [a.point_at_rel_dist(ct) for ct in t if (0 <= ct) and (ct <= 1)]
+        elif isinstance(b, CubicBezier):
+            # Segment-Bezier intersection (swap and reuse Bezier-Segment logic)
+            return intersect(b, a)
     elif isinstance(a, Ray):
         if isinstance(b, Segment):
             return _intersect_linear_linear(
@@ -962,6 +1205,9 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> List[Point]:
                 for ct in t
                 if (0 <= ct)
             ]
+        elif isinstance(b, CubicBezier):
+            # Ray-Bezier intersection (swap and reuse Bezier-Ray logic)
+            return intersect(b, a)
     elif isinstance(a, Line):
         if isinstance(b, Segment):
             return _intersect_linear_linear(
@@ -978,6 +1224,9 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> List[Point]:
         elif isinstance(b, Circle):
             t = _intersect_linear_circle(a.point.coords, a.unit_direction, b)
             return [Point(*(a.point.coords + ct * a.unit_direction)) for ct in t]
+        elif isinstance(b, CubicBezier):
+            # Line-Bezier intersection (swap and reuse Bezier-Line logic)
+            return intersect(b, a)
     elif isinstance(a, Circle):
         if isinstance(b, Segment):
             t = _intersect_linear_circle(b.p1.coords, b.p2.coords - b.p1.coords, a)
@@ -998,6 +1247,98 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> List[Point]:
             ]
         elif isinstance(b, Circle):
             return _intersect_circle_circle(a, b)
+        elif isinstance(b, CubicBezier):
+            # Circle-Bezier intersection (swap and reuse Bezier-Circle logic)
+            return intersect(b, a)
+    elif isinstance(a, CubicBezier):
+        if isinstance(b, Segment):
+            # Bezier-Segment intersection
+            seg_dir = b.unit_direction
+            t_values = _intersect_bezier_line(a, b.p1.coords, seg_dir)
+            intersections = []
+            for t in t_values:
+                if 0 <= t <= 1:
+                    bezier_point = a.point_at_t(t)
+                    # Check if point lies on segment
+                    if b.contains_point(bezier_point):
+                        intersections.append(bezier_point)
+            return intersections
+        elif isinstance(b, Ray):
+            # Bezier-Ray intersection
+            t_values = _intersect_bezier_line(a, b.origin.coords, b.unit_direction)
+            intersections = []
+            for t in t_values:
+                if 0 <= t <= 1:
+                    bezier_point = a.point_at_t(t)
+                    # Check if point is in ray direction
+                    to_point = bezier_point.coords - b.origin.coords
+                    if np.dot(to_point, b.unit_direction) >= 0:
+                        intersections.append(bezier_point)
+            return intersections
+        elif isinstance(b, Line):
+            # Bezier-Line intersection
+            t_values = _intersect_bezier_line(a, b.point.coords, b.unit_direction)
+            return [a.point_at_t(t) for t in t_values if 0 <= t <= 1]
+        elif isinstance(b, Circle):
+            # Bezier-Circle intersection (approximate using sampling)
+            intersections = []
+            num_samples = 1000
+            prev_point = a.point_at_t(0)
+
+            for i in range(1, num_samples + 1):
+                t = i / num_samples
+                curr_point = a.point_at_t(t)
+
+                # Check if segment crosses circle boundary
+                prev_inside = b.contains_point_inside(prev_point)
+                curr_inside = b.contains_point_inside(curr_point)
+
+                if prev_inside != curr_inside:
+                    # Binary search for more precise intersection
+                    t_start = (i - 1) / num_samples
+                    t_end = t
+
+                    for _ in range(20):  # Binary search iterations
+                        t_mid = (t_start + t_end) / 2
+                        mid_point = a.point_at_t(t_mid)
+                        mid_inside = b.contains_point_inside(mid_point)
+
+                        if mid_inside == prev_inside:
+                            t_start = t_mid
+                        else:
+                            t_end = t_mid
+
+                    intersections.append(a.point_at_t((t_start + t_end) / 2))
+
+                prev_point = curr_point
+
+            return intersections
+        elif isinstance(b, CubicBezier):
+            # Bezier-Bezier intersection (approximate using sampling)
+            intersections = []
+            num_samples = 200
+            tolerance = 1e-6
+
+            for i in range(num_samples + 1):
+                t1 = i / num_samples
+                point1 = a.point_at_t(t1)
+
+                for j in range(num_samples + 1):
+                    t2 = j / num_samples
+                    point2 = b.point_at_t(t2)
+
+                    if point1.distance_to(point2) < tolerance:
+                        # Check if this intersection is already found
+                        is_duplicate = False
+                        for existing in intersections:
+                            if existing.distance_to(point1) < tolerance:
+                                is_duplicate = True
+                                break
+
+                        if not is_duplicate:
+                            intersections.append(point1)
+
+            return intersections
 
     raise TypeError(f"Intersection not implemented for {type(a)} and {type(b)}")
 
