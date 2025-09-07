@@ -48,7 +48,7 @@ def make_model_config() -> ModelConfig:
     return ModelConfig(MoL=55 * CM, ZuvHoB=1 * CM)
 
 
-def shorts(meas: TrouserMeasurements, config: ModelConfig) -> PatternPart:
+def baby_trousers(meas: TrouserMeasurements, config: ModelConfig) -> PatternPart:
     ## Front Section
     # Anchor: top right
 
@@ -201,7 +201,18 @@ def shorts(meas: TrouserMeasurements, config: ModelConfig) -> PatternPart:
         Segment(back_pt13, back_pt11)
     ]
     elems = elems + back_elems
-    return PatternPart(name="Children Shorts", elements=elems)
+    return PatternPart(name="Baby Trousers with Nappies", elements=elems)
+
+
+def boy_trousers(measurements, model_config) -> PatternPart:
+    ## Front Section
+    # Anchor: top right
+
+    # STEP 1:
+    # Grundgerüst
+    pt0 = Point(25 * CM, -40 * CM, "p1")
+    elems = []
+    return PatternPart(name="Flat Boy Trousers", elements=elems)
 
 
 if __name__ == "__main__":
@@ -209,7 +220,7 @@ if __name__ == "__main__":
     allowance = make_allowance()
     measurements = make_measurements_trouser(person, allowance)
     model_config = make_model_config()
-    part = shorts(measurements, model_config)
+    part = baby_trousers(measurements, model_config)
 
     d = render_pattern_part(part, 60 * CM, 90 * CM)
     d.save_svg("children_shorts.svg")
