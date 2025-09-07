@@ -127,6 +127,89 @@ Comprehensive tests are included in `test_bezier.py` covering:
 - All intersection types with various geometric objects
 - Edge cases and numerical precision
 
+## SVG Rendering Support
+
+The `CubicBezier` class is fully integrated with the SVG rendering system in `sewpat.render`:
+
+### Basic Rendering
+
+```python
+from sewpat.geometry import Point, CubicBezier
+from sewpat.render import render_pattern_part, StyleOptions
+from sewpat.part import PatternPart
+
+# Create a Bezier curve
+bezier = CubicBezier(
+    Point(0, 0),      # Start point
+    Point(25, 50),    # First control point
+    Point(75, 50),    # Second control point
+    Point(100, 0)     # End point
+)
+
+# Add custom styling
+bezier.style = StyleOptions(
+    stroke_color="blue",
+    stroke_width=2.0,
+    dash_array=[5, 3]  # Optional dashing
+)
+
+# Create pattern and render
+pattern = PatternPart("My Pattern", [bezier])
+drawing = render_pattern_part(pattern)
+```
+
+### Control Point Visualization
+
+```python
+# Render with control points and control lines visible
+drawing = render_pattern_part(
+    pattern,
+    show_bezier_control_points=True
+)
+```
+
+### Styling Options
+
+Bezier curves support all standard `StyleOptions`:
+- `stroke_color`: Line color (e.g., "blue", "#FF0000")
+- `stroke_width`: Line thickness in SVG units
+- `dash_array`: Dashing pattern (e.g., [5, 3] for 5-unit dash, 3-unit gap)
+- `opacity`: Transparency (0.0 to 1.0)
+
+### Utility Functions
+
+The render module provides additional utilities:
+
+```python
+from sewpat.render import bezier_to_svg_path, get_bezier_bounds
+
+# Convert to SVG path string
+svg_path = bezier_to_svg_path(bezier)
+# Returns: "M 0,0 C 25,50 75,50 100,0"
+
+# Get bounding box
+min_x, min_y, max_x, max_y = get_bezier_bounds(bezier)
+```
+
+### Integration with Intersections
+
+Intersection points are automatically rendered when added to a pattern:
+
+```python
+from sewpat.geometry import Line, intersect
+import numpy as np
+
+# Create intersecting line
+line = Line(Point(0, 25), np.array([1, 0]))
+
+# Find intersections
+intersections = intersect(bezier, line)
+
+# Add all elements to pattern
+pattern.elements.extend([bezier, line])
+pattern.elements.extend(intersections)  # Intersection points will be rendered
+```
+
 ## Future Enhancements
 
 Potential improvements for future versions:
@@ -134,4 +217,5 @@ Potential improvements for future versions:
 - Curve subdivision for more precise Bezier-Bezier intersections
 - Support for rational Bezier curves (NURBS)
 - Curve offsetting and parallel curve generation
-- Integration with rendering pipeline for visualization
+- Animation support for parametric curve visualization
+- Advanced styling options (gradients, patterns)
