@@ -27,14 +27,24 @@ class TrouserMeasurements:
     HüU: float
     HüT: float
     SiH: float
-    SrH: float
     TaW: float
     HüW: float
+    SrH: float = None
+    sTaH: float = None
+    KnH: float = None  # Kniehöhe
     vHoB: float = None  # Vorderhosenbreite
     gender: Gender = Gender.female
 
     def __post_init__(self):
         self.vHoB = -0.25 * self.HüW if self.vHoB is None else self.vHoB
+        if self.gender in [Gender.boy, Gender.girl]:
+            self.KnH = 0.5 * self.SrH if self.KnH is None else self.KnH
+            self.sTaH = self.SrH + self.SiH
+        elif self.gender == Gender.female:
+            self.KnH = 0.5 * self.SrH - self.SrH / 10 if self.KnH is None else self.KnH
+            self.SrH = self.sTaH - self.SrH
+        if self.KnH is None:
+            raise NotImplementedError("Kniehöhe is missing.")
 
 
 @dataclass
