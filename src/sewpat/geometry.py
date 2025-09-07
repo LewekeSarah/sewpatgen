@@ -939,7 +939,7 @@ class CubicBezier:
         p3: End point of the curve.
     """
 
-    def __init__(self, p0: Point, p1: Point, p2: Point, p3: Point):
+    def __init__(self, p0: Point, p1: Point, p2: Point, p3: Point, name: Optional[str] = None):
         """Initialize a cubic Bezier curve with four control points.
 
         Args:
@@ -947,14 +947,16 @@ class CubicBezier:
             p1: First control point.
             p2: Second control point.
             p3: End point of the curve.
+            name: The name of the curve.
         """
         self.p0 = p0
         self.p1 = p1
         self.p2 = p2
         self.p3 = p3
+        self.name = name
 
     def __str__(self) -> str:
-        return f"CubicBezier(p0={self.p0}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
+        return f"CubicBezier(name={self.name}, p0={self.p0}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
 
     def point_at_t(self, t: float) -> Point:
         """Evaluate the Bezier curve at parameter t.

@@ -36,7 +36,7 @@ class TrouserMeasurements:
     gender: Gender = Gender.female
 
     def __post_init__(self):
-        self.vHoB = -0.25 * self.HüW if self.vHoB is None else self.vHoB
+        self.vHoB = 0.25 * self.HüW if self.vHoB is None else self.vHoB
         if self.gender in [Gender.boy, Gender.girl]:
             self.KnH = 0.5 * self.SrH if self.KnH is None else self.KnH
             self.sTaH = self.SrH + self.SiH

@@ -77,8 +77,7 @@ def render_geometric_element(
     drawing: draw.Drawing,
     style: StyleOptions = StyleOptions(),
     viewport_bounds: Optional[Tuple[float, float, float, float]] = None,
-    point_radius: float = 2.0,
-    font_size: int = 12,
+    point_radius: float = 5.0,
     show_bezier_control_points: bool = False,
     control_point_style: Optional[StyleOptions] = None,
 ) -> None:
@@ -90,7 +89,6 @@ def render_geometric_element(
         style: Style options for rendering.
         viewport_bounds: Optional (min_x, min_y, max_x, max_y) defining the visible area.
         point_radius: Radius to use when rendering points.
-        font_size: Font size to use when rendering points.
         show_bezier_control_points: Whether to show control points and lines for Bezier curves.
         control_point_style: Style for control points and control lines.
     """
@@ -137,6 +135,17 @@ def render_geometric_element(
             bezier_style["fill"] = "none"
 
         drawing.append(draw.Path(d=path_data, **bezier_style))
+
+        if element.name:
+            drawing.append(
+                draw.Text(
+                    element.name,
+                    style_dict["font_size"],
+                    text_anchor=style_dict["text_anchor"],
+                    fill="black",
+                    path=draw.Line(element.p0.x, element.p0.y, element.p3.x, element.p3.y),
+                )
+            )
 
         # Optionally show control points and control lines
         if show_bezier_control_points:
@@ -272,12 +281,12 @@ def render_pattern_part(
     default_styles = {
         "segment": StyleOptions(stroke_color="black", stroke_width=1.5),
         "point": StyleOptions(
-            stroke_color="black", fill_color="black", stroke_width=0.5
+            stroke_color="black", fill_color="black", stroke_width=0.1
         ),
         "circle": StyleOptions(stroke_color="black", stroke_width=1.0),
         "line": StyleOptions(stroke_color="gray", stroke_width=0.75, dash_array=[5, 5]),
         "ray": StyleOptions(stroke_color="gray", stroke_width=0.75, dash_array=[5, 5]),
-        "cubicbezier": StyleOptions(stroke_color="blue", stroke_width=2.0),
+        "cubicbezier": StyleOptions(stroke_color="black", stroke_width=1.0),
         "bezier_control": StyleOptions(stroke_color="red", fill_color="red", stroke_width=0.5),
     }
 
@@ -315,7 +324,6 @@ def render_pattern_part(
             drawing,
             style,
             viewport_bounds,
-            font_size,
             show_bezier_control_points=show_bezier_control_points,
             control_point_style=control_style
         )
