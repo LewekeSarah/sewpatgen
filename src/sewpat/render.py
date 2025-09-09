@@ -279,7 +279,7 @@ def render_pattern_part(
 
     # Default styles if not provided
     default_styles = {
-        "segment": StyleOptions(stroke_color="black", stroke_width=1.5),
+        "segment": StyleOptions(stroke_color="black", stroke_width=1.0),
         "point": StyleOptions(
             stroke_color="black", fill_color="black", stroke_width=0.1
         ),

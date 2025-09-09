@@ -78,6 +78,7 @@ class ModelConfig:
     MoL: float
     BeckenAdjustment: float = None
     ZuvHoB: float = None
+    SaW: float = None  # Saumweite
 
 
 def make_blouse_measurements(
