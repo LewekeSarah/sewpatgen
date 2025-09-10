@@ -25,10 +25,10 @@ class Allowance:
 class TrouserMeasurements:
     TaU: float
     HüU: float
-    HüT: float
     SiH: float
     TaW: float
     HüW: float
+    HüT: float = None
     SrH: float = None
     sTaH: float = None
     KnH: float = None  # Kniehöhe
@@ -118,14 +118,9 @@ def make_measurements_trouser(
         for key, val in balance.__dict__.items():
             measurements[key] += balance.__getattribute__(key)
 
-    return TrouserMeasurements(
-        **{
-            "TaU": measurements["TaU"],
-            "HüU": measurements["HüU"],
-            "HüT": measurements["HüT"],
-            "SiH": measurements["SiH"],
-            "SrH": measurements["SrH"],
-            "TaW": measurements["TaW"],
-            "HüW": measurements["HüW"],
-            "gender": person.gender,}
-    )
+    trouser_keys = ["TaU", "HüU", "HüT", "SiH", "SrH", "TaW", "HüW"]
+    trouser_dict = {
+        key: val for key, val in measurements.items() if key in trouser_keys
+    }
+    trouser_dict["gender"] = person.gender
+    return TrouserMeasurements(**trouser_dict)
