@@ -13,7 +13,7 @@ from sewpat.measurments import (
     make_measurements_trouser,
     TrouserMeasurements,
 )
-from sewpat.pages import DinA2, DinA1
+from sewpat.pages import DinA1
 from sewpat.person import Gender, Person
 from sewpat.render import render_pattern_part, StyleOptions
 
@@ -355,7 +355,7 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> PatternPart:
         Segment(pt9, grain_end[0], style=StyleOptions(dash_array=[3, 2])),
         Segment(back_pt9, grain_end_back[0], style=StyleOptions(dash_array=[3, 2]))
     ]
-
+    aux_elems += [seam]
     node = [
         pt14,
         pt15,

@@ -349,7 +349,7 @@ class Segment:
 
         return Point(*(base + self.unit_normal * distance_to_obj))
 
-    def contains_point(self, point: Point, tolerance: float = 1e-14) -> bool:
+    def contains_point(self, point: Point, tolerance: float = 1e-12) -> bool:
         """Check if a point lies on the line segment.
 
         Args:
