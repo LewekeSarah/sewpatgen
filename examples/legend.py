@@ -8,7 +8,7 @@ from sewpat.line_styles import (
     get_seam_style,
 )
 from sewpat.pages import DinA4
-from sewpat.render import render_pattern_part, StyleOptions
+from sewpat.render import export_pattern_part_svg_mm, StyleOptions
 
 
 def make_legend():
@@ -69,6 +69,4 @@ def make_legend():
 
 if __name__ == "__main__":
     part = make_legend()
-
-    d = render_pattern_part(part, DinA4.width, DinA4.height, font_size=10)
-    d.save_svg("legend.svg")
+    export_pattern_part_svg_mm(part, filename="legend.svg", height_mm=DinA4.height, width_mm=DinA4.width)

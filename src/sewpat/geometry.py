@@ -610,6 +610,31 @@ class Line:
         return Point(*(base + self.unit_normal * distance_to_obj))
 
 
+class Rect:
+    """An axis-aligned rectangle defined by its top-left corner, width and height.
+
+    Attributes:
+        origin: The top-left corner of the rectangle.
+        width: The width of the rectangle.
+        height: The height of the rectangle.
+        name: Optional label displayed in the centre of the rectangle.
+    """
+
+    def __init__(
+        self,
+        origin: Point,
+        width: float,
+        height: float,
+        name: Optional[str] = None,
+        style: Optional["StyleOptions"] = None,
+    ):
+        self.origin = origin
+        self.width = width
+        self.height = height
+        self.name = name
+        self.style = style
+
+
 class Circle:
     """A circle defined by a center point and radius.
 

@@ -17,7 +17,7 @@ from sewpat.geometry import (
 )
 from sewpat.measurments import make_blouse_measurements
 from sewpat.part import PatternPart
-from sewpat.render import render_pattern_part, export_pattern_part_svg_mm
+from sewpat.render import export_pattern_part_svg_mm
 from sewpat.measurments import Allowance, BlouseMeasurements, ModelConfig
 from sewpat.person import Person, BalanceAdjustments
 
@@ -144,7 +144,4 @@ if __name__ == "__main__":
     measurements = make_blouse_measurements(person, allowance, balance)
     model_config = make_model_config()
     part = make_blouse(measurements, model_config)
-
-    d = render_pattern_part(part, 5000, 5000)
-    export_pattern_part_svg_mm(part, width_mm=1300, height_mm=1300, filename="blouse_mm.svg")
-    d.save_svg("blouse.svg")
+    export_pattern_part_svg_mm(part, width_mm=1300, height_mm=1300, filename="women/blouse.svg")

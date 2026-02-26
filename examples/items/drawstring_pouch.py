@@ -5,7 +5,7 @@ from sewpat.basic_shapes import get_square, get_precision_point
 from sewpat.geometry import CM, Segment, segment_to_intersection
 from sewpat.line_styles import get_grainline_style, get_hem_style, get_seam_style
 from sewpat.pages import DinA4
-from sewpat.render import render_pattern_part, StyleOptions
+from sewpat.render import export_pattern_part_svg_mm, StyleOptions
 
 
 @dataclass
@@ -28,12 +28,11 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
 
     ## STEP 1
     # Anchor: top left
-    bottom_left = Point(-0.5 * model.width, 0.5 * model.height, "p1")
+    top_left = Point(1 * CM, 1 * CM, "p1")
 
     ## STEP 2
     # Basic Rectangle
-    # top_left = bottom_left.translate(0, -2 * model.height)
-    top_left = bottom_left.translate(0, -1 * model.height)
+    bottom_left = top_left.translate(0, model.height)
     top_right = top_left.translate(model.width, 0)
     bottom_right = bottom_left.translate(model.width, 0)
     elems.append(Segment(bottom_left, top_left, style=get_seam_style(), name=f"Höhe {model.height / CM:.0f} cm"))
@@ -75,13 +74,13 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
     # Add grainline and marks
     elems.append(
         Segment(
-            bottom_left.translate(
-                model.width / 2,
-                -(model.drawstring_margin + model.drawstring_height) + 3 * CM,
-            ),
             top_left.translate(
                 model.width / 2,
                 (model.drawstring_margin + model.drawstring_height) + 3 * CM,
+            ),
+            bottom_left.translate(
+                model.width / 2,
+                -(model.drawstring_margin + model.drawstring_height) + 3 * CM,
             ),
             name="grainline / Fadenlauf",
             style=get_grainline_style(),
@@ -164,5 +163,10 @@ if __name__ == "__main__":
     )
     part = make_drawstring_pouch(drawstring_pouch)
 
-    d = render_pattern_part(part, DinA4.height, DinA4.width, font_size=12)
-    d.save_svg("drawstring_pouch.svg")
+    export_pattern_part_svg_mm(
+        part,
+        filename="items/drawstring_pouch.svg",
+        width_mm=DinA4.height,
+        height_mm=DinA4.width
+        ,
+    )
