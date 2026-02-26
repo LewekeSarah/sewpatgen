@@ -1,4 +1,5 @@
 from sewpat import Segment, PatternPart
+from sewpat.basic_shapes import get_square
 from sewpat.geometry import (
     CM,
     Point,
@@ -365,7 +366,8 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> PatternPart:
         pt19,
         pt7,
     ]
-    return PatternPart(name="Flat Boy Trousers", elements=elems + node)
+
+    return PatternPart(name="Flat Boy Trousers", elements=elems + node + get_square(pt9))
 
 
 def base_grid_trouser(meas: TrouserMeasurements, start_point: Point) -> tuple[Point, Point, Point, Point, Point, Point]:
