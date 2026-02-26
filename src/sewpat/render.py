@@ -236,6 +236,28 @@ def _render_point(element: Point, style_dict: Dict[str, Any], font_size_mm: floa
 
 
 # ---------------------------------------------------------------------------
+# Renderer registry
+# ---------------------------------------------------------------------------
+
+def _make_renderers(
+    font_size_mm: float,
+    show_bezier_control_points: bool,
+    control_style_dict: Dict[str, Any],
+    show_points: bool,
+) -> Dict[type, Any]:
+    """Build a mapping from geometry type to its render callable."""
+    return {
+        CubicBezier: lambda el, sd: _render_cubic_bezier(
+            el, sd, font_size_mm, show_bezier_control_points, control_style_dict
+        ),
+        Segment: lambda el, sd: _render_segment(el, sd, font_size_mm),
+        Circle: lambda el, sd: _render_circle(el, sd),
+        Rect: lambda el, sd: _render_rect(el, sd, font_size_mm),
+        Point: lambda el, sd: _render_point(el, sd, font_size_mm) if show_points else [],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public export function
 # ---------------------------------------------------------------------------
 
@@ -277,25 +299,17 @@ def export_pattern_part_svg_mm(
         _svg_text(margin_mm, margin_mm, font_size_mm, pattern_part.name),
     ]
 
+    renderers = _make_renderers(
+        font_size_mm, show_bezier_control_points, control_style_dict, show_points
+    )
+
     for element in pattern_part.elements:
         element_type = element.__class__.__name__.lower()
         style_dict = styles.get(element_type, styles["segment"]).as_dict()
 
-        if isinstance(element, CubicBezier):
-            svg_nodes.extend(
-                _render_cubic_bezier(
-                    element, style_dict, font_size_mm,
-                    show_bezier_control_points, control_style_dict,
-                )
-            )
-        elif isinstance(element, Segment):
-            svg_nodes.extend(_render_segment(element, style_dict, font_size_mm))
-        elif isinstance(element, Circle):
-            svg_nodes.extend(_render_circle(element, style_dict))
-        elif isinstance(element, Rect):
-            svg_nodes.extend(_render_rect(element, style_dict, font_size_mm))
-        elif isinstance(element, Point) and show_points:
-            svg_nodes.extend(_render_point(element, style_dict, font_size_mm))
+        renderer = renderers.get(type(element))
+        if renderer is not None:
+            svg_nodes.extend(renderer(element, style_dict))
 
     svg_nodes.append("</svg>")
 

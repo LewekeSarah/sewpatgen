@@ -12,3 +12,7 @@ class DinA2:
 class DinA1:
     width: float =  594 * MM
     height: float = 841 * MM
+
+class DinA0:
+    width: float = 841 * MM
+    height: float = 1189 * MM
