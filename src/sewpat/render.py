@@ -4,69 +4,28 @@ SVG Rendering module for sewing patterns.
 This module provides functions to render pattern parts and geometric elements
 to SVG files.
 """
-from typing import Dict, List, Optional, Any
+from __future__ import annotations
+
+import warnings
+from typing import Any, Callable
 
 from sewpat.geometry import Point, Segment, Circle, Rect, CubicBezier
 from sewpat.part import PatternPart
+from sewpat.style import StyleOptions, DEFAULT_STROKE_WIDTH, DEFAULT_STROKE_WIDTH_GRAIN
+
+__all__ = [
+    "StyleOptions",
+    "DEFAULT_STROKE_WIDTH",
+    "DEFAULT_STROKE_WIDTH_GRAIN",
+    "export_pattern_part_svg_mm",
+]
 
 # ---------------------------------------------------------------------------
-# Stroke width constants — single source of truth for the whole library.
-# Override DEFAULT_STROKE_WIDTH here to change all pattern lines at once.
+# Arrow marker
 # ---------------------------------------------------------------------------
-DEFAULT_STROKE_WIDTH: float = 0.5
-DEFAULT_STROKE_WIDTH_GRAIN: float = 0.2
 
-
-class StyleOptions:
-    """Style options for rendering pattern elements."""
-
-    def __init__(
-        self,
-        stroke_color: str = "black",
-        stroke_width: float = DEFAULT_STROKE_WIDTH,
-        fill_color: str = "none",
-        dash_array: Optional[List[float]] = None,
-        opacity: float = 1.0,
-        arrow_start: bool = False,
-    ):
-        """Initialize style options.
-
-        Args:
-            stroke_color: Color of the stroke (outline).
-            stroke_width: Width of the stroke in SVG units.
-            fill_color: Fill color for closed shapes.
-            dash_array: List of values defining the dash pattern, or None for solid line.
-            opacity: Opacity value between 0.0 (transparent) and 1.0 (opaque).
-            arrow_start: Whether to draw an arrowhead at the start of the element (p1).
-        """
-        self.stroke_color = stroke_color
-        self.stroke_width = stroke_width
-        self.fill_color = fill_color
-        self.dash_array = dash_array
-        self.opacity = opacity
-        self.arrow_start = arrow_start
-
-    def as_dict(self) -> Dict[str, Any]:
-        """Convert style options to a dictionary.
-
-        Returns:
-            Dictionary with style attributes.
-        """
-        style_dict: Dict[str, Any] = {
-            "stroke": self.stroke_color,
-            "stroke-width": self.stroke_width,
-            "fill": self.fill_color,
-            "opacity": self.opacity,
-            "arrow-start": self.arrow_start,
-        }
-        if self.dash_array:
-            style_dict["stroke-dasharray"] = ",".join(map(str, self.dash_array))
-        return style_dict
-
-
-# ---------------------------------------------------------------------------
-# Default style registry
-# ---------------------------------------------------------------------------
+# Colour used for the arrowhead fill (e.g. on grainlines).
+_ARROW_FILL_COLOR = "grey"
 
 # SVG <defs> block defining a reusable arrowhead marker.
 # - markerUnits="userSpaceOnUse" keeps the marker size in the same mm-based
@@ -79,12 +38,16 @@ _ARROW_DEFS = (
     '<defs>'
     '<marker id="arrow" markerWidth="8" markerHeight="6" '
     'refX="0" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse">'
-    '<path d="M0,0 L0,6 L8,3 Z" fill="grey" />'
+    f'<path d="M0,0 L0,6 L8,3 Z" fill="{_ARROW_FILL_COLOR}" />'
     '</marker>'
     '</defs>'
 )
 
-_DEFAULT_STYLES: Dict[str, StyleOptions] = {
+# ---------------------------------------------------------------------------
+# Default style registry
+# ---------------------------------------------------------------------------
+
+_DEFAULT_STYLES: dict[str, StyleOptions] = {
     "segment":        StyleOptions(),
     "point":          StyleOptions(fill_color="black", stroke_width=0.1),
     "circle":         StyleOptions(),
@@ -105,7 +68,7 @@ def _svg_text(x: float, y: float, font_size_mm: float, text: str, **extra: str) 
     return f'<text {attrs}>{text}</text>'
 
 
-def _common_stroke_attrs(style_dict: Dict[str, Any], *, force_fill: Optional[str] = None) -> str:
+def _common_stroke_attrs(style_dict: dict[str, Any], *, force_fill: str | None = None) -> str:
     """Build common stroke/fill/opacity SVG attribute string from a style dict."""
     stroke = style_dict.get("stroke", "black") or "black"
     stroke_width = style_dict.get("stroke-width", 0.5)
@@ -121,13 +84,13 @@ def _common_stroke_attrs(style_dict: Dict[str, Any], *, force_fill: Optional[str
 
 def _render_cubic_bezier(
     element: CubicBezier,
-    style_dict: Dict[str, Any],
+    style_dict: dict[str, Any],
     font_size_mm: float,
     show_control_points: bool,
-    control_style_dict: Dict[str, Any],
-) -> List[str]:
+    control_style_dict: dict[str, Any],
+) -> list[str]:
     """Return SVG elements for a CubicBezier curve."""
-    nodes: List[str] = []
+    nodes: list[str] = []
 
     path_data = (
         f'M {element.p0.x},{element.p0.y} '
@@ -145,7 +108,6 @@ def _render_cubic_bezier(
         c_stroke = control_style_dict.get("stroke", "red")
         c_fill = control_style_dict.get("fill", "red")
         c_width = control_style_dict.get("stroke-width", 0.3)
-        # Handle lines between anchor and control points
         for p_start, p_end in [(element.p0, element.p1), (element.p2, element.p3)]:
             nodes.append(
                 f'<line x1="{p_start.x}" y1="{p_start.y}" x2="{p_end.x}" y2="{p_end.y}" '
@@ -162,11 +124,11 @@ def _render_cubic_bezier(
 
 def _render_segment(
     element: Segment,
-    style_dict: Dict[str, Any],
+    style_dict: dict[str, Any],
     font_size_mm: float,
-) -> List[str]:
+) -> list[str]:
     """Return SVG elements for a Segment."""
-    nodes: List[str] = []
+    nodes: list[str] = []
     attrs = _common_stroke_attrs(style_dict, force_fill="none")
     if style_dict.get("arrow-start"):
         attrs += ' marker-start="url(#arrow)"'
@@ -181,7 +143,7 @@ def _render_segment(
     return nodes
 
 
-def _render_circle(element: Circle, style_dict: Dict[str, Any]) -> List[str]:
+def _render_circle(element: Circle, style_dict: dict[str, Any]) -> list[str]:
     """Return SVG elements for a Circle."""
     attrs = _common_stroke_attrs(style_dict)
     return [
@@ -189,9 +151,9 @@ def _render_circle(element: Circle, style_dict: Dict[str, Any]) -> List[str]:
     ]
 
 
-def _render_rect(element: Rect, style_dict: Dict[str, Any], font_size_mm: float) -> List[str]:
+def _render_rect(element: Rect, style_dict: dict[str, Any], font_size_mm: float) -> list[str]:
     """Return SVG elements for a Rect."""
-    nodes: List[str] = []
+    nodes: list[str] = []
     # Element-level style overrides the passed style_dict when available.
     effective = element.style.as_dict() if element.style is not None else style_dict
     stroke_attrs = _common_stroke_attrs(effective)
@@ -211,9 +173,9 @@ def _render_rect(element: Rect, style_dict: Dict[str, Any], font_size_mm: float)
     return nodes
 
 
-def _render_point(element: Point, style_dict: Dict[str, Any], font_size_mm: float) -> List[str]:
+def _render_point(element: Point, style_dict: dict[str, Any], font_size_mm: float) -> list[str]:
     """Return SVG elements for a Point."""
-    nodes: List[str] = []
+    nodes: list[str] = []
     attrs = _common_stroke_attrs(style_dict, force_fill=style_dict.get("fill", "black"))
     nodes.append(f'<circle cx="{element.x}" cy="{element.y}" r="1mm" {attrs} />')
     if element.name:
@@ -228,9 +190,9 @@ def _render_point(element: Point, style_dict: Dict[str, Any], font_size_mm: floa
 def _make_renderers(
     font_size_mm: float,
     show_bezier_control_points: bool,
-    control_style_dict: Dict[str, Any],
+    control_style_dict: dict[str, Any],
     show_points: bool,
-) -> Dict[type, Any]:
+) -> dict[type, Callable[[Any, dict[str, Any]], list[str]]]:
     """Build a mapping from geometry type to its render callable."""
     return {
         CubicBezier: lambda el, sd: _render_cubic_bezier(
@@ -254,31 +216,41 @@ def export_pattern_part_svg_mm(
     height_mm: float = 297,
     margin_mm: float = 10,
     font_size_mm: float = 5,
-    style_map: Optional[Dict[str, StyleOptions]] = None,
+    style_map: dict[str, StyleOptions] | None = None,
     show_points: bool = True,
     show_bezier_control_points: bool = False,
 ) -> None:
-    """Exportiert ein PatternPart als SVG mit mm-Einheiten für präzises Drucken.
+    """Export a PatternPart as an SVG file with mm units for precise printing.
 
     Args:
-        pattern_part: Das zu exportierende PatternPart.
-        filename: Dateiname für die SVG-Ausgabe.
-        width_mm: Breite des SVG in mm.
-        height_mm: Höhe des SVG in mm.
-        margin_mm: Rand in mm.
-        font_size_mm: Schriftgröße in mm.
-        style_map: Optionales Mapping von Elementtypen zu StyleOptions.
-        show_points: Ob Punkte angezeigt werden sollen.
-        show_bezier_control_points: Ob Bezier-Kontrollpunkte angezeigt werden sollen.
+        pattern_part: The PatternPart to export.
+        filename: Output filename for the SVG.
+        width_mm: Width of the SVG canvas in mm.
+        height_mm: Height of the SVG canvas in mm.
+        margin_mm: Margin around the canvas in mm.
+        font_size_mm: Font size for labels in mm.
+        style_map: Optional mapping of element type names to StyleOptions overrides.
+            Unknown keys emit a warning and are ignored.
+        show_points: Whether to render Point elements.
+        show_bezier_control_points: Whether to render Bezier control point handles.
     """
     # Merge caller overrides into a copy of the defaults.
     styles = {**_DEFAULT_STYLES}
     if style_map:
-        styles.update({k: v for k, v in style_map.items() if k in styles})
+        for k, v in style_map.items():
+            if k in styles:
+                styles[k] = v
+            else:
+                warnings.warn(
+                    f"style_map key {k!r} does not match any known element type "
+                    f"({list(styles.keys())}); it will be ignored.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
     control_style_dict = styles["bezier_control"].as_dict()
 
-    svg_nodes: List[str] = [
+    svg_nodes: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{width_mm}mm" height="{height_mm}mm" '
         f'viewBox="0 0 {width_mm} {height_mm}">',
@@ -307,4 +279,3 @@ def export_pattern_part_svg_mm(
 
     with open(filename, "w") as f:
         f.write("\n".join(svg_nodes))
-

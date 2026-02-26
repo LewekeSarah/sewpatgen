@@ -1,4 +1,6 @@
-from sewpat.render import StyleOptions, DEFAULT_STROKE_WIDTH_GRAIN
+from __future__ import annotations
+
+from sewpat.style import StyleOptions, DEFAULT_STROKE_WIDTH_GRAIN
 
 
 def get_grainline_style() -> StyleOptions:
@@ -25,4 +27,3 @@ def get_hem_style() -> StyleOptions:
 
 def get_seam_style() -> StyleOptions:
     return StyleOptions(dash_array=[5.0, 2.0])
-

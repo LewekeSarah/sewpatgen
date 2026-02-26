@@ -97,7 +97,7 @@ class PersonAnalyser:
             for key, val in self.balance.__dict__.items():
                 person_balanced.__setattr__(key, person_balanced.__getattribute__(key) + val)
         if person_balanced.gender == Gender.female:
-            if (person_balanced.VL - person_balanced.RüL) > self.get_optimal_balance():
+            if (person_balanced.VL - person_balanced.RüL) > self.optimal_balance:
                 raise ValueError("VL and RüB are not properly balanced")
             else:
                 self.person_balanced = person_balanced

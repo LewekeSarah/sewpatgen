@@ -9,17 +9,17 @@ from __future__ import annotations
 import math
 import numpy as np
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sewpat.render import StyleOptions
+    from sewpat.style import StyleOptions
 
 
 MM = 1.0
 CM = 10.0 * MM
 
 
-def _solve_quadratic(a: float, b: float, c: float) -> List[float]:
+def _solve_quadratic(a: float, b: float, c: float) -> list[float]:
     """Solve a quadratic equation ax^2 + bx + c = 0 in a numerically stable way.
 
     Uses a numerically stable algorithm to find solutions by avoiding
@@ -31,7 +31,7 @@ def _solve_quadratic(a: float, b: float, c: float) -> List[float]:
         c: Constant term.
 
     Returns:
-        List[float]: A list containing 0, 1, or 2 solutions.
+        list[float]: A list containing 0, 1, or 2 solutions.
     """
     # TODO: https://cnrs.hal.science/hal-04116310v1/document
     # Check if this is actually a linear equation
@@ -75,7 +75,7 @@ def _solve_quadratic(a: float, b: float, c: float) -> List[float]:
 
 def _intersect_lines(
     pt1: np.ndarray, n1: np.ndarray, pt2: np.ndarray, n2: np.ndarray
-) -> Optional[np.ndarray]:
+) -> np.ndarray | None:
     """Find intersection of two lines represented by a point on the line and the unit normal.
 
     Args:
@@ -85,7 +85,7 @@ def _intersect_lines(
         n2: Unit normal of second line.
 
     Returns:
-        Optional[np.ndarray]: Intersection between the two lines if they are not parallel.
+        np.ndarray | None: Intersection between the two lines if they are not parallel.
     """
     c1 = np.dot(pt1, n1)
     c2 = np.dot(pt2, n2)
@@ -116,9 +116,9 @@ class Point:
     """
 
     coords: np.ndarray
-    name: Optional[str] = None
+    name: str | None = None
 
-    def __init__(self, x: float, y: float, name: Optional[str] = None):
+    def __init__(self, x: float, y: float, name: str | None = None):
         """Initialize a point with x and y coordinates.
 
         Args:
@@ -146,7 +146,7 @@ class Point:
         else:
             return f"Point(x={self.coords[0]:.6g}, y={self.coords[1]:.6g})"
 
-    def distance_to(self, other: Union["Point", np.ndarray]) -> float:
+    def distance_to(self, other: Point | np.ndarray) -> float:
         """Calculate the Euclidean distance between this point and another."""
         if isinstance(other, Point):
             return float(np.linalg.norm(self.coords - other.coords))
@@ -198,7 +198,7 @@ class Segment:
         name: Optional, name of the line segment.
     """
 
-    def __init__(self, p1: Point, p2: Point, name: Optional[str] = None, style: Optional[StyleOptions] = None):
+    def __init__(self, p1: Point, p2: Point, name: str | None = None, style: StyleOptions | None = None):
         """Initialize a line with two points.
 
         Args:
@@ -284,8 +284,8 @@ class Segment:
     def point_perpendicular(
         self,
         distance_to_obj: float,
-        distance_on_obj: Optional[float] = None,
-        rel_pos_on_obj: Optional[float] = None,
+        distance_on_obj: float | None = None,
+        rel_pos_on_obj: float | None = None,
     ) -> Point:
         """Calculates a point at a given perpendicular distance from the line segment.
 
@@ -368,8 +368,8 @@ class Ray:
     def __init__(
         self,
         origin: Point,
-        direction: Union[Tuple[float, float], List[float], np.ndarray],
-        name: Optional[str] = None,
+        direction: tuple[float, float] | list[float] | np.ndarray,
+        name: str | None = None,
     ):
         """Initialize a ray with an origin point and direction vector.
 
@@ -496,8 +496,8 @@ class Line:
     def __init__(
         self,
         point: Point,
-        direction: Union[Tuple[float, float], List[float], np.ndarray],
-        name: Optional[str] = None,
+        direction: tuple[float, float] | list[float] | np.ndarray,
+        name: str | None = None,
     ):
         """Initialize a line with a point and direction vector.
 
@@ -625,8 +625,8 @@ class Rect:
         origin: Point,
         width: float,
         height: float,
-        name: Optional[str] = None,
-        style: Optional["StyleOptions"] = None,
+        name: str | None = None,
+        style: StyleOptions | None = None,
     ):
         self.origin = origin
         self.width = width
@@ -644,7 +644,7 @@ class Circle:
         name: Optional, name of the circle.
     """
 
-    def __init__(self, center: Point, radius: float, name: Optional[str] = None):
+    def __init__(self, center: Point, radius: float, name: str | None = None):
         """Initialize a circle with center point and radius.
 
         Args:
@@ -809,11 +809,11 @@ class Circle:
 def _intersect_linear_linear(
     p1: np.ndarray,
     p2: np.ndarray,
-    a: Union[Segment, Ray, Line],
-    b: Union[Segment, Ray, Line],
+    a: Segment | Ray | Line,
+    b: Segment | Ray | Line,
     check1: bool,
     check2: bool,
-) -> List[Point]:
+) -> list[Point]:
     """Find the intersection point between two linear objects (i.e., segments, lines, rays).
 
     Args:
@@ -825,7 +825,7 @@ def _intersect_linear_linear(
         check2: Determines whether contains_point() is checked on object 2.
 
     Returns:
-        List[Point]: List containing the intersection point, or empty list if no intersection.
+        list[Point]: List containing the intersection point, or empty list if no intersection.
     """
     pt = _intersect_lines(p1, a.unit_normal, p2, b.unit_normal)
 
@@ -841,7 +841,7 @@ def _intersect_linear_linear(
     return [intersection]
 
 
-def _solve_cubic(a: float, b: float, c: float, d: float) -> List[float]:
+def _solve_cubic(a: float, b: float, c: float, d: float) -> list[float]:
     """Solve a cubic equation ax³ + bx² + cx + d = 0.
 
     Args:
@@ -898,7 +898,7 @@ def _solve_cubic(a: float, b: float, c: float, d: float) -> List[float]:
     return roots
 
 
-def _intersect_bezier_line(bezier: "CubicBezier", line_point: np.ndarray, line_dir: np.ndarray) -> List[float]:
+def _intersect_bezier_line(bezier: CubicBezier, line_point: np.ndarray, line_dir: np.ndarray) -> list[float]:
     """Find intersection parameters t where a cubic Bezier intersects a line.
 
     Args:
@@ -949,7 +949,7 @@ class CubicBezier:
         p3: End point of the curve.
     """
 
-    def __init__(self, p0: Point, p1: Point, p2: Point, p3: Point, name: Optional[str] = None):
+    def __init__(self, p0: Point, p1: Point, p2: Point, p3: Point, name: str | None = None):
         """Initialize a cubic Bezier curve with four control points.
 
         Args:
@@ -1040,7 +1040,7 @@ class CubicBezier:
 
         return total_length
 
-    def bounding_box(self) -> Tuple[Point, Point]:
+    def bounding_box(self) -> tuple[Point, Point]:
         """Compute the axis-aligned bounding box of the Bezier curve.
 
         Returns:
@@ -1085,7 +1085,7 @@ class CubicBezier:
 
 def _intersect_linear_circle(
     lin_pt: np.ndarray, dir: np.ndarray, circle: Circle
-) -> List[float]:
+) -> list[float]:
     """Find the intersection point between a linear object (i.e., segments, lines, rays) and a circle.
 
     Args:
@@ -1105,7 +1105,7 @@ def _intersect_linear_circle(
     return _solve_quadratic(A, 2 * B, C - circle.radius**2)
 
 
-def _intersect_circle_circle(c1: Circle, c2: Circle) -> List[Point]:
+def _intersect_circle_circle(c1: Circle, c2: Circle) -> list[Point]:
     """Find intersection points between two circles.
 
     Args:
@@ -1167,10 +1167,10 @@ def _intersect_circle_circle(c1: Circle, c2: Circle) -> List[Point]:
     return [Point(*p3), Point(*p4)]
 
 
-GEOMETRIC_TYPE = Union[Point, Line, Ray, Circle, Segment, CubicBezier]
+GEOMETRIC_TYPE = Point | Line | Ray | Circle | Segment | CubicBezier
 
 
-def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> List[Point]:
+def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
     """Find intersections between two geometrical objects.
 
     Args:
@@ -1178,7 +1178,7 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> List[Point]:
         b: Second object.
 
     Returns:
-        List[Point]: List containing intersections or empty list if there are no intersections.
+        list[Point]: List containing intersections or empty list if there are no intersections.
     """
     if isinstance(a, Segment):
         if isinstance(b, Segment):
@@ -1357,7 +1357,7 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> List[Point]:
 
 def segment_to_intersection(
     start: Point, dir: np.ndarray, obj: GEOMETRIC_TYPE
-) -> Tuple[Point, Segment]:
+) -> tuple[Point, Segment]:
     """Creates a Segment from the given start point to the intersection with an object in given direction.
 
     Args:

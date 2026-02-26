@@ -418,6 +418,6 @@ if __name__ == "__main__":
     export_pattern_part_svg_mm(
         part,
         filename="children/boy_shorts.svg",
-        height_mm=DinA1.height,
-        width_mm=DinA1.width,
+        height_mm=DinA1.width,
+        width_mm=DinA1.height,
     )
