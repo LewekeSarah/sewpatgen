@@ -109,7 +109,7 @@ def make_measurements_trouser(
     for perimeter, width in zip(["TaU", "HüU"], ["TaW", "HüW"]):
         measurements[width] = measurements[perimeter]
         if perimeter in allowances.keys():
-            measurements[width] += allowances[key]
+            measurements[width] += allowances[perimeter]
     measurements.pop("KöH")
 
     if balance is not None:

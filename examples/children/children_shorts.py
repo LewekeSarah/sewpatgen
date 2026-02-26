@@ -49,7 +49,7 @@ def make_allowance() -> Allowance:
     return Allowance(
         SiH=3 * CM,  # baby 4.5 * CM,
         SrH=-3 * CM,  # baby-2 * CM,
-        HüU=4 * 5.5 * CM,  # baby20 * CM,
+        HüU=5.5 * CM,  # baby 4 * CM,
     )
 
 
