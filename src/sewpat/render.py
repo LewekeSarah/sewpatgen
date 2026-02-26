@@ -444,6 +444,126 @@ def get_bezier_bounds(bezier: CubicBezier) -> Tuple[float, float, float, float]:
     return min_pt.x, min_pt.y, max_pt.x, max_pt.y
 
 
+def export_pattern_part_svg_mm(
+    pattern_part: PatternPart,
+    filename: str,
+    width_mm: float = 210,
+    height_mm: float = 297,
+    margin_mm: float = 10,
+    font_size_mm: float = 5,
+    style_map: Optional[Dict[str, StyleOptions]] = None,
+    show_points: bool = True,
+    show_bezier_control_points: bool = False
+) -> None:
+    """Exportiert ein PatternPart als SVG mit mm-Einheiten und Styles für präzises Drucken.
+
+    Args:
+        pattern_part: Das zu exportierende PatternPart.
+        filename: Dateiname für die SVG-Ausgabe.
+        width_mm: Breite des SVG in mm.
+        height_mm: Höhe des SVG in mm.
+        margin_mm: Rand in mm.
+        font_size_mm: Schriftgröße in mm.
+        style_map: Optionales Mapping von Elementtypen zu StyleOptions.
+        show_points: Ob Punkte angezeigt werden sollen.
+        show_bezier_control_points: Ob Bezier-Kontrollpunkte angezeigt werden sollen.
+    """
+    # Default styles
+    default_styles = {
+        "segment": StyleOptions(stroke_color="black", stroke_width=0.5),
+        "point": StyleOptions(stroke_color="black", fill_color="black", stroke_width=0.1),
+        "circle": StyleOptions(stroke_color="black", stroke_width=0.5),
+        "line": StyleOptions(stroke_color="gray", stroke_width=0.5, dash_array=[2, 2]),
+        "ray": StyleOptions(stroke_color="gray", stroke_width=0.5, dash_array=[2, 2]),
+        "cubicbezier": StyleOptions(stroke_color="black", stroke_width=0.5),
+        "bezier_control": StyleOptions(stroke_color="red", fill_color="red", stroke_width=0.3),
+    }
+    if style_map:
+        for k, v in style_map.items():
+            if k in default_styles:
+                default_styles[k] = v
+
+    svg_header = f'<svg xmlns="http://www.w3.org/2000/svg" width="{width_mm}mm" height="{height_mm}mm" viewBox="0 0 {width_mm} {height_mm}">'  # viewBox in mm
+    svg_elements = []
+    # Titel
+    svg_elements.append(f'<text x="{margin_mm}" y="{margin_mm}" font-size="{font_size_mm}mm" fill="black">{pattern_part.name}</text>')
+    # Elemente
+    for element in pattern_part.elements:
+        element_type = element.__class__.__name__.lower()
+        style = default_styles.get(element_type, default_styles["segment"])
+        style_dict = style.as_dict()
+        # SVG-Attribute
+        stroke = style_dict.get("stroke", "black")
+        stroke_width = style_dict.get("stroke-width", 0.5)
+        fill = style_dict.get("fill", "none")
+        dasharray = style_dict.get("stroke-dasharray", None)
+        opacity = style_dict.get("opacity", 1.0)
+        # Segment/Linie
+        if hasattr(element, 'p1') and hasattr(element, 'p2'):
+            line_attrs = f'stroke="{stroke}" stroke-width="{stroke_width}mm" fill="none" opacity="{opacity}"'
+            if dasharray:
+                line_attrs += f' stroke-dasharray="{dasharray}"'
+            svg_elements.append(
+                f'<line x1="{element.p1.x}" y1="{element.p1.y}" x2="{element.p2.x}" y2="{element.p2.y}" {line_attrs} />'
+            )
+            # Annotation
+            if hasattr(element, 'name') and element.name:
+                svg_elements.append(
+                    f'<text x="{(element.p1.x + element.p2.x)/2}" y="{(element.p1.y + element.p2.y)/2}" font-size="{font_size_mm}mm" fill="black">{element.name}</text>'
+                )
+        # Punkt
+        elif hasattr(element, 'x') and hasattr(element, 'y') and show_points:
+            svg_elements.append(
+                f'<circle cx="{element.x}" cy="{element.y}" r="1mm" stroke="{stroke}" fill="{fill}" stroke-width="{stroke_width}mm" opacity="{opacity}" />'
+            )
+            if hasattr(element, 'name') and element.name:
+                svg_elements.append(
+                    f'<text x="{element.x}" y="{element.y}" font-size="{font_size_mm}mm" fill="black">{element.name}</text>'
+                )
+        # Kreis
+        elif hasattr(element, 'center') and hasattr(element, 'radius'):
+            svg_elements.append(
+                f'<circle cx="{element.center.x}" cy="{element.center.y}" r="{element.radius}mm" stroke="{stroke}" fill="{fill}" stroke-width="{stroke_width}mm" opacity="{opacity}" />'
+            )
+        # Bezier
+        elif hasattr(element, 'p0') and hasattr(element, 'p1') and hasattr(element, 'p2') and hasattr(element, 'p3'):
+            # SVG Path
+            path_data = f'M {element.p0.x},{element.p0.y} C {element.p1.x},{element.p1.y} {element.p2.x},{element.p2.y} {element.p3.x},{element.p3.y}'
+            svg_path_attrs = f'stroke="{stroke}" stroke-width="{stroke_width}mm" fill="none" opacity="{opacity}"'
+            if dasharray:
+                svg_path_attrs += f' stroke-dasharray="{dasharray}"'
+            svg_elements.append(
+                f'<path d="{path_data}" {svg_path_attrs} />'
+            )
+            if hasattr(element, 'name') and element.name:
+                svg_elements.append(
+                    f'<text x="{element.p0.x}" y="{element.p0.y}" font-size="{font_size_mm}mm" fill="black">{element.name}</text>'
+                )
+            # Kontrollpunkte/linien
+            if show_bezier_control_points:
+                control_style = default_styles.get("bezier_control", StyleOptions(stroke_color="red", fill_color="red", stroke_width=0.3))
+                control_dict = control_style.as_dict()
+                control_stroke = control_dict.get("stroke", "red")
+                control_fill = control_dict.get("fill", "red")
+                control_width = control_dict.get("stroke-width", 0.3)
+                # Kontrolllinien
+                svg_elements.append(
+                    f'<line x1="{element.p0.x}" y1="{element.p0.y}" x2="{element.p1.x}" y2="{element.p1.y}" stroke="{control_stroke}" stroke-width="{control_width}mm" fill="none" stroke-dasharray="2,2" />'
+                )
+                svg_elements.append(
+                    f'<line x1="{element.p2.x}" y1="{element.p2.y}" x2="{element.p3.x}" y2="{element.p3.y}" stroke="{control_stroke}" stroke-width="{control_width}mm" fill="none" stroke-dasharray="2,2" />'
+                )
+                # Kontrollpunkte
+                for pt in [element.p0, element.p1, element.p2, element.p3]:
+                    svg_elements.append(
+                        f'<circle cx="{pt.x}" cy="{pt.y}" r="1mm" stroke="{control_stroke}" fill="{control_fill}" stroke-width="{control_width}mm" />'
+                    )
+    svg_footer = '</svg>'
+    svg_content = '\n'.join([svg_header] + svg_elements + [svg_footer])
+    with open(filename, 'w') as f:
+        f.write(svg_content)
+
+
 if __name__ == "__main__":
     # Example usage
 
@@ -527,3 +647,4 @@ if __name__ == "__main__":
 
     sample_part = create_sample_pattern()
     save_pattern_part_svg(sample_part, "sample_pattern.svg", show_bezier_control_points=True)
+    export_pattern_part_svg_mm(sample_part, "sample_pattern_mm.svg")

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from sewpat.render import StyleOptions
 
 
-MM = 1.0 * 3.75
+MM = 1.0
 CM = 10.0 * MM
 
 
@@ -132,21 +132,13 @@ class Point:
 
     @property
     def x(self) -> float:
-        """Get the x coordinate.
-
-        Returns:
-            float: The x-coordinate of the point.
-        """
-        return self.coords[0]
+        """Get the x coordinate."""
+        return float(self.coords[0])
 
     @property
     def y(self) -> float:
-        """Get the y coordinate.
-
-        Returns:
-            float: The y-coordinate of the point.
-        """
-        return self.coords[1]
+        """Get the y coordinate."""
+        return float(self.coords[1])
 
     def __str__(self) -> str:
         if self.name:
@@ -155,18 +147,11 @@ class Point:
             return f"Point(x={self.coords[0]:.6g}, y={self.coords[1]:.6g})"
 
     def distance_to(self, other: Union["Point", np.ndarray]) -> float:
-        """Calculate the Euclidean distance between this point and another.
-
-        Args:
-            other: Another point to calculate distance to.
-
-        Returns:
-            float: The Euclidean distance between the two points.
-        """
+        """Calculate the Euclidean distance between this point and another."""
         if isinstance(other, Point):
-            return np.linalg.norm(self.coords - other.coords)
+            return float(np.linalg.norm(self.coords - other.coords))
         else:
-            return np.linalg.norm(self.coords - other)
+            return float(np.linalg.norm(self.coords - other))
 
     def translate(self, dx: float, dy: float) -> "Point":
         """Return a new point translated by the given vector.
@@ -324,7 +309,7 @@ class Segment:
 
         Examples:
             # Point 5 units perpendicular from the midpoint of the line
-            >>> line = Line(Point(0, 0), Point(10, 0))
+            >>> line = Line(Point(0, 0), [10, 0])
             >>> point = line.point_perpendicular(5, rel_pos_on_obj=0.5)
             >>> print(point)
             Point(5, 5)
