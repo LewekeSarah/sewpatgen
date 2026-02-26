@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from sewpat import PatternPart, Point
 from sewpat.basic_shapes import get_square, get_precision_point
-from sewpat.geometry import CM, Segment, segment_to_intersection
+from sewpat.geometry import CM, Rect, Segment, segment_to_intersection
 from sewpat.line_styles import get_grainline_style, get_hem_style, get_seam_style
 from sewpat.pages import DinA4
 from sewpat.render import export_pattern_part_svg_mm, StyleOptions
@@ -21,14 +21,14 @@ class DrawstringPouchConfig:
 def make_drawstring_pouch(model: DrawstringPouchConfig):
     ## STEP 0:
     # Add size control
-    square_start = Point(0.2 * model.width, 0, "p1")
-    elems = get_square(square_start)
+    square_start = Point(0.2 * model.width, 0.5 * model.height, "p1")
+    elems = get_square(square_start, edge_length=5 * CM)
 
     # SVG coordinates: x increases right, y increases down
 
     ## STEP 1
     # Anchor: top left
-    top_left = Point(1 * CM, 1 * CM, "p1")
+    top_left = Point(1.5 * CM, 1.5 * CM, "p1")
 
     ## STEP 2
     # Basic Rectangle
@@ -61,7 +61,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
     elems = elems + precision_points
 
     ## STEP 3
-    # Drawstring top part
+    # Drawstring channel — shown as a dashed rectangle inset from the top edge
     ds1_top_left = top_left.translate(0, model.drawstring_margin)
     ds1_top_right = top_right.translate(0, model.drawstring_margin)
     ds1_bottom_left = top_left.translate(
@@ -70,19 +70,14 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
     ds1_bottom_right = top_right.translate(
         0, (model.drawstring_margin + model.drawstring_height)
     )
+    drawstring_style = StyleOptions(dash_array=[5.0, 2.0])
     elems.append(
-        Segment(
-            ds1_top_left,
-            ds1_top_right,
-            style=StyleOptions(dash_array=[5.0, 2.0], stroke_width=1),
-        )
-    )
-    elems.append(
-        Segment(
-            ds1_bottom_left,
-            ds1_bottom_right,
+        Rect(
+            origin=ds1_top_left,
+            width=model.width,
+            height=model.drawstring_height,
             name="drawstring / Tunnelzug",
-            style=StyleOptions(dash_array=[5.0, 2.0], stroke_width=1),
+            style=drawstring_style,
         )
     )
 
@@ -107,13 +102,22 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
     bottom_left_sa = bottom_left.translate(-model.seam_allowance, model.seam_allowance)
     top_right_sa = top_right.translate(model.seam_allowance, -model.seam_allowance)
     bottom_right_sa = bottom_right.translate(model.seam_allowance, model.seam_allowance)
+
+    sa_width = model.width + 2 * model.seam_allowance
+    sa_height = model.height + 2 * model.seam_allowance
+    elems.append(
+        Rect(
+            origin=top_left_sa,
+            width=sa_width,
+            height=sa_height,
+            name=f"Nahtzugabe {model.seam_allowance / CM:.0f} cm",
+        )
+    )
+
+    # Keep virtual edge segments for mark-intersection arithmetic (not rendered)
     left_edge = Segment(bottom_left_sa, top_left_sa)
     right_edge = Segment(top_right_sa, bottom_right_sa)
     bottom_edge = Segment(bottom_right_sa, bottom_left_sa)
-    elems.append(left_edge)
-    elems.append(Segment(top_left_sa, top_right_sa))
-    elems.append(right_edge)
-    elems.append(bottom_edge)
 
     # Add marks
     _, s1 = segment_to_intersection(
@@ -143,30 +147,6 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
     elems.append(s5)
     elems.append(s6)
 
-    # Drawstring bottom part
-    # ds2_bottom_left = bottom_left.translate(0, -model.drawstring_margin)
-    # ds2_bottom_right = bottom_right.translate(0, -model.drawstring_margin)
-    # ds2_top_left = bottom_left.translate(
-    #     0, -(model.drawstring_margin + model.drawstring_height)
-    # )
-    # ds2_top_right = bottom_right.translate(
-    #     0, -(model.drawstring_margin + model.drawstring_height)
-    # )
-    # elems.append(
-    #     Segment(
-    #         ds2_bottom_left,
-    #         ds2_bottom_right,
-    #         name="Drawstring Back",
-    #         style=StyleOptions(dash_array=[5.0, 2.0], stroke_width=1),
-    #     )
-    # )
-    # elems.append(
-    #     Segment(
-    #         ds2_top_left,
-    #         ds2_top_right,
-    #         style=StyleOptions(dash_array=[5.0, 2.0], stroke_width=1),
-    #     )
-    # )
 
     return PatternPart(name="", elements=elems)
 

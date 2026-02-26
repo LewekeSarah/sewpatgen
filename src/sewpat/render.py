@@ -9,6 +9,12 @@ from typing import Dict, List, Optional, Any
 from sewpat.geometry import Point, Segment, Circle, Rect, CubicBezier
 from sewpat.part import PatternPart
 
+# ---------------------------------------------------------------------------
+# Stroke width constants — single source of truth for the whole library.
+# Override DEFAULT_STROKE_WIDTH here to change all pattern lines at once.
+# ---------------------------------------------------------------------------
+DEFAULT_STROKE_WIDTH: float = 0.5
+DEFAULT_STROKE_WIDTH_GRAIN: float = 0.2
 
 
 class StyleOptions:
@@ -17,7 +23,7 @@ class StyleOptions:
     def __init__(
         self,
         stroke_color: str = "black",
-        stroke_width: float = 0.5,
+        stroke_width: float = DEFAULT_STROKE_WIDTH,
         fill_color: str = "none",
         dash_array: Optional[List[float]] = None,
         opacity: float = 1.0,
@@ -79,10 +85,10 @@ _ARROW_DEFS = (
 )
 
 _DEFAULT_STYLES: Dict[str, StyleOptions] = {
-    "segment": StyleOptions(stroke_color="black", stroke_width=0.5),
-    "point": StyleOptions(stroke_color="black", fill_color="black", stroke_width=0.1),
-    "circle": StyleOptions(stroke_color="black", stroke_width=0.5),
-    "cubicbezier": StyleOptions(stroke_color="black", stroke_width=0.5),
+    "segment":        StyleOptions(),
+    "point":          StyleOptions(fill_color="black", stroke_width=0.1),
+    "circle":         StyleOptions(),
+    "cubicbezier":    StyleOptions(),
     "bezier_control": StyleOptions(stroke_color="red", fill_color="red", stroke_width=0.3),
 }
 
@@ -177,13 +183,9 @@ def _render_segment(
 
 def _render_circle(element: Circle, style_dict: Dict[str, Any]) -> List[str]:
     """Return SVG elements for a Circle."""
-    stroke = style_dict.get("stroke", "black")
-    stroke_width = style_dict.get("stroke-width", 0.5)
-    fill = style_dict.get("fill", "none")
-    opacity = style_dict.get("opacity", 1.0)
+    attrs = _common_stroke_attrs(style_dict)
     return [
-        f'<circle cx="{element.center.x}" cy="{element.center.y}" r="{element.radius}mm" '
-        f'stroke="{stroke}" fill="{fill}" stroke-width="{stroke_width}mm" opacity="{opacity}" />'
+        f'<circle cx="{element.center.x}" cy="{element.center.y}" r="{element.radius}mm" {attrs} />'
     ]
 
 
@@ -192,22 +194,12 @@ def _render_rect(element: Rect, style_dict: Dict[str, Any], font_size_mm: float)
     nodes: List[str] = []
     # Element-level style overrides the passed style_dict when available.
     effective = element.style.as_dict() if element.style is not None else style_dict
+    stroke_attrs = _common_stroke_attrs(effective)
 
-    stroke = effective.get("stroke", "black")
-    stroke_width = effective.get("stroke-width", 0.5)
-    fill = effective.get("fill", "none")
-    opacity = effective.get("opacity", 1.0)
-    dasharray = effective.get("stroke-dasharray")
-
-    attrs = (
-        f'x="{element.origin.x}" y="{element.origin.y}" '
-        f'width="{element.width}" height="{element.height}" '
-        f'stroke="{stroke}" stroke-width="{stroke_width}" '
-        f'fill="{fill}" opacity="{opacity}"'
+    nodes.append(
+        f'<rect x="{element.origin.x}" y="{element.origin.y}" '
+        f'width="{element.width}" height="{element.height}" {stroke_attrs} />'
     )
-    if dasharray:
-        attrs += f' stroke-dasharray="{dasharray}"'
-    nodes.append(f'<rect {attrs} />')
 
     if element.name:
         cx = element.origin.x + element.width / 2
@@ -222,14 +214,8 @@ def _render_rect(element: Rect, style_dict: Dict[str, Any], font_size_mm: float)
 def _render_point(element: Point, style_dict: Dict[str, Any], font_size_mm: float) -> List[str]:
     """Return SVG elements for a Point."""
     nodes: List[str] = []
-    stroke = style_dict.get("stroke", "black")
-    fill = style_dict.get("fill", "black")
-    stroke_width = style_dict.get("stroke-width", 0.1)
-    opacity = style_dict.get("opacity", 1.0)
-    nodes.append(
-        f'<circle cx="{element.x}" cy="{element.y}" r="1mm" '
-        f'stroke="{stroke}" fill="{fill}" stroke-width="{stroke_width}mm" opacity="{opacity}" />'
-    )
+    attrs = _common_stroke_attrs(style_dict, force_fill=style_dict.get("fill", "black"))
+    nodes.append(f'<circle cx="{element.x}" cy="{element.y}" r="1mm" {attrs} />')
     if element.name:
         nodes.append(_svg_text(element.x, element.y, font_size_mm, element.name))
     return nodes
