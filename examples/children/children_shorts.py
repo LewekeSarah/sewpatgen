@@ -8,6 +8,7 @@ from sewpat.geometry import (
     Circle,
     CubicBezier,
 )
+from sewpat.line_styles import get_grainline_style
 from sewpat.measurments import (
     ModelConfig,
     Allowance,
@@ -25,7 +26,7 @@ def make_person() -> Person:
         BrU=63 * CM,
         TaU=62.5 * CM,
         HüU=71 * CM,
-        SiH=19.6 * CM, ## 18.5 * CM,
+        SiH=19.6 * CM,  ## 18.5 * CM,
         SrH=51.5 * CM,
         gender=Gender.boy,
     )  # gemessen 2025-09-15
@@ -47,16 +48,14 @@ def make_person() -> Person:
 def make_allowance() -> Allowance:
     return Allowance(
         SiH=3 * CM,  # baby 4.5 * CM,
-        SrH=- 3 * CM,  # baby-2 * CM,
+        SrH=-3 * CM,  # baby-2 * CM,
         HüU=4 * 5.5 * CM,  # baby20 * CM,
     )
 
 
 def make_model_config() -> ModelConfig:
     return ModelConfig(
-        MoL=48.75 * CM,
-        ZuvHoB=0.5 * CM,  # baby 1 * CM
-        SaW = 14 * CM  # 35/2
+        MoL=48.75 * CM, ZuvHoB=0.5 * CM, SaW=14 * CM  # baby 1 * CM  # 35/2
     )
 
 
@@ -216,10 +215,7 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> PatternPart:
     # Grundgerüst
     pt0 = Point(5 * CM, 5 * CM, "p1")
     pt1, pt2, pt3, pt4, pt5, pt6 = base_grid_trouser(meas, pt0, anchor_left=True)
-    elems = [
-        Segment(pt0, pt1),
-        Segment(pt0, pt6)
-    ]
+    elems = [Segment(pt0, pt1), Segment(pt0, pt6)]
     aux_elems = []
 
     # STEP 2:
@@ -230,25 +226,21 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> PatternPart:
     bz_control3 = pt7.translate(0.2 * CM, 2.5 * CM)
     elems += [
         CubicBezier(pt6, pt6, pt7, pt7),
-        CubicBezier(pt7, bz_control3, bz_control2, pt8)
+        CubicBezier(pt7, bz_control3, bz_control2, pt8),
     ]
     aux_elems += [
         Circle(pt4, 2.5 * CM),
         pt7,
         bz_control3,
         bz_control2,
-        Segment(pt6, pt0, name="Bund")
+        Segment(pt6, pt0, name="Bund"),
     ]
 
     # STEP 3:
     # Hosenbeingitter
     pt9, pt10, pt11, pt12, pt13 = get_leg_grid(meas, model, pt0, anchor_left=True)
     knee = Ray(pt3, (pt10.x, 0), name="Knielinie")
-    aux_elems += [
-        Ray(pt2, (pt10.x, 0), name="Saumlinie"),
-        knee,
-        Segment(pt12, pt13)
-    ]
+    aux_elems += [Ray(pt2, (pt10.x, 0), name="Saumlinie"), knee, Segment(pt12, pt13)]
 
     # STEP 4:
     # Seitennaht & Innennaht
@@ -262,8 +254,8 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> PatternPart:
     elems += [
         Point(pt14.x, pt14.y, "pt14"),
         CubicBezier(pt1, pt1, pt14, pt14),
-        front_seam_aux.point_perpendicular(.8 * CM , rel_pos_on_obj=0.5),
-        CubicBezier(pt8, bz_control, pt15.translate(0.1 * CM, - 2 * CM), pt15)
+        front_seam_aux.point_perpendicular(0.8 * CM, rel_pos_on_obj=0.5),
+        CubicBezier(pt8, bz_control, pt15.translate(0.1 * CM, -2 * CM), pt15),
     ]
     aux_elems += [
         side,
@@ -274,27 +266,29 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> PatternPart:
     # STEP 5:
     # Rückteil Grundgerüst
     back_pt0 = pt5.translate(10 * CM, 0)  # von links
-    back_pt1, back_pt2, back_pt3, back_pt4, back_pt5, back_pt6 = base_grid_trouser(meas, back_pt0, anchor_left=True)
-    back_pt9, back_pt10, back_pt11, back_pt12, back_pt13 = get_leg_grid(meas, model, back_pt0, anchor_left=True)
+    back_pt1, back_pt2, back_pt3, back_pt4, back_pt5, back_pt6 = base_grid_trouser(
+        meas, back_pt0, anchor_left=True
+    )
+    back_pt9, back_pt10, back_pt11, back_pt12, back_pt13 = get_leg_grid(
+        meas, model, back_pt0, anchor_left=True
+    )
 
     # STEP 6:
     # Hosenbund
     pt16 = back_pt6.translate(-3.5 * CM, 0)
-    pt17 = pt16.translate(0, - 3 * CM)
+    pt17 = pt16.translate(0, -3 * CM)
     pt18 = back_pt0.translate(-2 * CM, 0)
-    back_elems = [
-        Segment(pt17, pt18)
-    ]
+    back_elems = [Segment(pt17, pt18)]
     aux_elems += [
         Segment(back_pt9, back_pt11, style=StyleOptions(dash_array=[3, 2])),
     ]
 
     # STEP 7:
     # Hinternaht
-    pt19 = back_pt4.translate(0, - 0.5 * meas.SiH)
+    pt19 = back_pt4.translate(0, -0.5 * meas.SiH)
     pt20 = back_pt4.translate((2 * (pt8.x - pt4.x) + 0.5 * CM), 0)
     pt21 = pt20.translate(0, 1 * CM)
-    bz_contol4 = back_pt4.translate(3.05 *CM, -3.05 * CM)
+    bz_contol4 = back_pt4.translate(3.05 * CM, -3.05 * CM)
     back_elems += [
         Segment(pt17, pt19),
         CubicBezier(pt19, bz_contol4, bz_contol4, pt21),
@@ -315,10 +309,12 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> PatternPart:
     pt25 = pt15.translate(back_shift + (pt23.x - back_pt14.x), 0)
     back_aux = Segment(pt21, pt25, style=StyleOptions(dash_array=[3, 2]))
     bz_control5 = back_aux.point_perpendicular(2.5 * CM, rel_pos_on_obj=0.5)
-    back_inner_seam = Segment(pt24, pt25, style=StyleOptions(dash_array=[3, 2], stroke_color="red"))
+    back_inner_seam = Segment(
+        pt24, pt25, style=StyleOptions(dash_array=[3, 2], stroke_color="red")
+    )
     back_elems += [
         back_aux.point_perpendicular(1.2 * CM, rel_pos_on_obj=0.5),
-        CubicBezier(pt21, bz_control5, pt25.translate(0.1 * CM, -2 * CM), pt25)
+        CubicBezier(pt21, bz_control5, pt25.translate(0.1 * CM, -2 * CM), pt25),
     ]
     aux_elems += [
         back_aux,
@@ -335,10 +331,7 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> PatternPart:
     pt31 = intersect(seam, side_back)[0]
     pt32 = intersect(seam, inner_seam)[0]
     pt33 = intersect(seam, side)[0]
-    grain_end = intersect(
-        Segment(pt9, pt11),
-        seam
-    )
+    grain_end = intersect(Segment(pt9, pt11), seam)
     grain_end_back = intersect(Segment(back_pt10, back_pt11), seam)
 
     elems += [
@@ -348,8 +341,18 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> PatternPart:
         Segment(pt30, pt25),
         Segment(pt30, pt31),
         Segment(pt32, pt33),
-        Segment(pt9, grain_end[0], style=StyleOptions(dash_array=[3, 2])),
-        Segment(back_pt9, grain_end_back[0], style=StyleOptions(dash_array=[3, 2]))
+        Segment(
+            pt9,
+            grain_end[0],
+            style=get_grainline_style(),
+            name="grainline / Fadenlauf",
+        ),
+        Segment(
+            back_pt9,
+            grain_end_back[0],
+            style=get_grainline_style(),
+            name="grainline / Fadenlauf",
+        ),
     ]
     aux_elems += [seam]
     node = [
@@ -362,10 +365,14 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> PatternPart:
         pt7,
     ]
 
-    return PatternPart(name="Flat Boy Trousers", elements=elems + get_square(pt0))
+    return PatternPart(
+        name="Flat Boy Trousers", elements=elems + node + get_square(pt0)
+    )
 
 
-def base_grid_trouser(meas: TrouserMeasurements, start_point: Point, anchor_left: bool = False) -> tuple[Point, Point, Point, Point, Point, Point]:
+def base_grid_trouser(
+    meas: TrouserMeasurements, start_point: Point, anchor_left: bool = False
+) -> tuple[Point, Point, Point, Point, Point, Point]:
     pt1 = start_point.translate(0, meas.SiH)
     pt2 = pt1.translate(0, meas.SrH)
     pt3 = pt1.translate(0, meas.KnH)
@@ -380,7 +387,12 @@ def base_grid_trouser(meas: TrouserMeasurements, start_point: Point, anchor_left
     return pt1, pt2, pt3, pt4, pt5, pt6
 
 
-def get_leg_grid(meas: TrouserMeasurements, model: ModelConfig, start_point: Point, anchor_left: bool = False) -> tuple[Point, Point, Point, Point, Point]:
+def get_leg_grid(
+    meas: TrouserMeasurements,
+    model: ModelConfig,
+    start_point: Point,
+    anchor_left: bool = False,
+) -> tuple[Point, Point, Point, Point, Point]:
     base_grid = base_grid_trouser(meas, start_point, anchor_left=anchor_left)
     if anchor_left:
         pt9 = base_grid[0].translate(0.5 * meas.vHoB, 0)
@@ -394,7 +406,7 @@ def get_leg_grid(meas: TrouserMeasurements, model: ModelConfig, start_point: Poi
         pt11 = base_grid[1].translate(-0.5 * meas.vHoB, 0)
         pt12 = pt11.translate(model.SaW / 2 + 0.5 * CM, 0)
         pt13 = pt11.translate(-(model.SaW / 2 + 0.5 * CM), 0)
-    return  pt9, pt10, pt11, pt12, pt13
+    return pt9, pt10, pt11, pt12, pt13
 
 
 if __name__ == "__main__":
@@ -403,4 +415,9 @@ if __name__ == "__main__":
     measurements = make_measurements_trouser(person, allowance)
     model_config = make_model_config()
     part = boy_trousers(measurements, model_config)
-    export_pattern_part_svg_mm(part, filename="children/boy_shorts.svg", height_mm=DinA1.height, width_mm=DinA1.width)
+    export_pattern_part_svg_mm(
+        part,
+        filename="children/boy_shorts.svg",
+        height_mm=DinA1.height,
+        width_mm=DinA1.width,
+    )

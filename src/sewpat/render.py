@@ -4,15 +4,11 @@ SVG Rendering module for sewing patterns.
 This module provides functions to render pattern parts and geometric elements
 to SVG files.
 """
-from enum import Enum
 from typing import Dict, List, Optional, Any
 
 from sewpat.geometry import Point, Segment, Circle, Rect, CubicBezier
 from sewpat.part import PatternPart
 
-
-class LineEndStyle(Enum):
-    arrow = "arrow"
 
 
 class StyleOptions:
@@ -25,10 +21,7 @@ class StyleOptions:
         fill_color: str = "none",
         dash_array: Optional[List[float]] = None,
         opacity: float = 1.0,
-        marker_end: Optional[str] = None,
-        text_anchor: str = "start",
-        font_size: float = 12,
-        stroke_linecap: str = "butt",
+        arrow_start: bool = False,
     ):
         """Initialize style options.
 
@@ -38,20 +31,14 @@ class StyleOptions:
             fill_color: Fill color for closed shapes.
             dash_array: List of values defining the dash pattern, or None for solid line.
             opacity: Opacity value between 0.0 (transparent) and 1.0 (opaque).
-            marker_end: Line end style.
-            text_anchor: Anchor style.
-            font_size: Font size.
-            stroke_linecap: Line cap style.
+            arrow_start: Whether to draw an arrowhead at the start of the element (p1).
         """
         self.stroke_color = stroke_color
         self.stroke_width = stroke_width
         self.fill_color = fill_color
         self.dash_array = dash_array
         self.opacity = opacity
-        self.marker_end = LineEndStyle(marker_end).value if marker_end else None
-        self.font_size = font_size
-        self.text_anchor = text_anchor
-        self.stroke_linecap = stroke_linecap
+        self.arrow_start = arrow_start
 
     def as_dict(self) -> Dict[str, Any]:
         """Convert style options to a dictionary.
@@ -64,10 +51,7 @@ class StyleOptions:
             "stroke-width": self.stroke_width,
             "fill": self.fill_color,
             "opacity": self.opacity,
-            "marker_end": self.marker_end,
-            "font_size": self.font_size,
-            "text_anchor": self.text_anchor,
-            "stroke_linecap": self.stroke_linecap,
+            "arrow-start": self.arrow_start,
         }
         if self.dash_array:
             style_dict["stroke-dasharray"] = ",".join(map(str, self.dash_array))
@@ -78,12 +62,26 @@ class StyleOptions:
 # Default style registry
 # ---------------------------------------------------------------------------
 
+# SVG <defs> block defining a reusable arrowhead marker.
+# - markerUnits="userSpaceOnUse" keeps the marker size in the same mm-based
+#   user coordinate space as the rest of the drawing (Inkscape-safe).
+# - orient="auto-start-reverse" flips the marker 180° when used as marker-start,
+#   so the arrowhead points *away* from the line (upward on a vertical grainline).
+# - The path M0,0 L0,6 L8,3 Z is a right-pointing triangle; the reference point
+#   refX=8,refY=3 places its tip exactly on the line endpoint.
+_ARROW_DEFS = (
+    '<defs>'
+    '<marker id="arrow" markerWidth="8" markerHeight="6" '
+    'refX="0" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse">'
+    '<path d="M0,0 L0,6 L8,3 Z" fill="grey" />'
+    '</marker>'
+    '</defs>'
+)
+
 _DEFAULT_STYLES: Dict[str, StyleOptions] = {
     "segment": StyleOptions(stroke_color="black", stroke_width=0.5),
     "point": StyleOptions(stroke_color="black", fill_color="black", stroke_width=0.1),
     "circle": StyleOptions(stroke_color="black", stroke_width=0.5),
-    "line": StyleOptions(stroke_color="gray", stroke_width=0.5, dash_array=[2, 2]),
-    "ray": StyleOptions(stroke_color="gray", stroke_width=0.5, dash_array=[2, 2]),
     "cubicbezier": StyleOptions(stroke_color="black", stroke_width=0.5),
     "bezier_control": StyleOptions(stroke_color="red", fill_color="red", stroke_width=0.3),
 }
@@ -95,7 +93,7 @@ _DEFAULT_STYLES: Dict[str, StyleOptions] = {
 
 def _svg_text(x: float, y: float, font_size_mm: float, text: str, **extra: str) -> str:
     """Return an SVG ``<text>`` element."""
-    attrs = f'x="{x}" y="{y}" font-size="{font_size_mm}mm" fill="black"'
+    attrs = f'x="{x}" y="{y}" font-size="{font_size_mm}" fill="black"'
     for key, value in extra.items():
         attrs += f' {key}="{value}"'
     return f'<text {attrs}>{text}</text>'
@@ -164,6 +162,8 @@ def _render_segment(
     """Return SVG elements for a Segment."""
     nodes: List[str] = []
     attrs = _common_stroke_attrs(style_dict, force_fill="none")
+    if style_dict.get("arrow-start"):
+        attrs += ' marker-start="url(#arrow)"'
     nodes.append(
         f'<line x1="{element.p1.x}" y1="{element.p1.y}" '
         f'x2="{element.p2.x}" y2="{element.p2.y}" {attrs} />'
@@ -296,6 +296,7 @@ def export_pattern_part_svg_mm(
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{width_mm}mm" height="{height_mm}mm" '
         f'viewBox="0 0 {width_mm} {height_mm}">',
+        _ARROW_DEFS,
         _svg_text(margin_mm, margin_mm, font_size_mm, pattern_part.name),
     ]
 
@@ -305,7 +306,12 @@ def export_pattern_part_svg_mm(
 
     for element in pattern_part.elements:
         element_type = element.__class__.__name__.lower()
-        style_dict = styles.get(element_type, styles["segment"]).as_dict()
+        # Prefer the style attached to the element; fall back to the global default.
+        element_style = getattr(element, "style", None)
+        if element_style is not None:
+            style_dict = element_style.as_dict()
+        else:
+            style_dict = styles.get(element_type, styles["segment"]).as_dict()
 
         renderer = renderers.get(type(element))
         if renderer is not None:

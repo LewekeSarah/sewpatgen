@@ -35,11 +35,29 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
     bottom_left = top_left.translate(0, model.height)
     top_right = top_left.translate(model.width, 0)
     bottom_right = bottom_left.translate(model.width, 0)
-    elems.append(Segment(bottom_left, top_left, style=get_seam_style(), name=f"Höhe {model.height / CM:.0f} cm"))
-    elems.append(Segment(top_left, top_right, style=get_hem_style(), name=f"Breite {model.width / CM:.0f} cm"))
+    elems.append(
+        Segment(
+            bottom_left,
+            top_left,
+            style=get_seam_style(),
+            name=f"Höhe {model.height / CM:.0f} cm",
+        )
+    )
+    elems.append(
+        Segment(
+            top_left,
+            top_right,
+            style=get_hem_style(),
+            name=f"Breite {model.width / CM:.0f} cm",
+        )
+    )
     elems.append(Segment(top_right, bottom_right, style=get_seam_style()))
-    elems.append(Segment(bottom_right, bottom_left, style=get_seam_style(), name="Wendeöffnung"))
-    precision_points = get_precision_point(bottom_left) + get_precision_point(bottom_right)
+    elems.append(
+        Segment(bottom_right, bottom_left, style=get_seam_style(), name="Wendeöffnung")
+    )
+    precision_points = get_precision_point(bottom_left) + get_precision_point(
+        bottom_right
+    )
     elems = elems + precision_points
 
     ## STEP 3
@@ -64,24 +82,20 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
             ds1_bottom_left,
             ds1_bottom_right,
             name="drawstring / Tunnelzug",
-            style=StyleOptions(
-                dash_array=[5.0, 2.0], stroke_width=1, text_anchor="middle", font_size=12
-            ),
+            style=StyleOptions(dash_array=[5.0, 2.0], stroke_width=1),
         )
     )
 
     # STEP 3
     # Add grainline and marks
+    # The grainline runs vertically through the horizontal centre of the piece,
+    # from 2 cm below the top edge to 2 cm above the bottom edge.
+    grain_padding = 2 * CM
+    grain_x = top_left.x + model.width / 2
     elems.append(
         Segment(
-            top_left.translate(
-                model.width / 2,
-                (model.drawstring_margin + model.drawstring_height) + 3 * CM,
-            ),
-            bottom_left.translate(
-                model.width / 2,
-                -(model.drawstring_margin + model.drawstring_height) + 3 * CM,
-            ),
+            Point(grain_x, top_left.y + grain_padding),
+            Point(grain_x, bottom_left.y - grain_padding),
             name="grainline / Fadenlauf",
             style=get_grainline_style(),
         )
@@ -103,20 +117,25 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
 
     # Add marks
     _, s1 = segment_to_intersection(
-            ds1_bottom_left.translate(- 0.5 * CM, 0), -left_edge.unit_normal, left_edge
-        )
+        ds1_bottom_left.translate(-0.5 * CM, 0), -left_edge.unit_normal, left_edge
+    )
     _, s2 = segment_to_intersection(
-            ds1_top_left.translate(- 0.5 * CM, 0), -left_edge.unit_normal, left_edge
-        )
+        ds1_top_left.translate(-0.5 * CM, 0), -left_edge.unit_normal, left_edge
+    )
     _, s3 = segment_to_intersection(
-            ds1_bottom_right.translate(0.5 * CM, 0), -right_edge.unit_normal, right_edge
-        )
+        ds1_bottom_right.translate(0.5 * CM, 0), -right_edge.unit_normal, right_edge
+    )
     _, s4 = segment_to_intersection(
-            ds1_top_right.translate(0.5 * CM, 0), -right_edge.unit_normal, right_edge
-        )
-    node = bottom_right_sa.translate(- (model.width - model.flip_opening) / 2 - model.seam_allowance , -0.5 * CM)
+        ds1_top_right.translate(0.5 * CM, 0), -right_edge.unit_normal, right_edge
+    )
+    node = bottom_right_sa.translate(
+        -(model.width - model.flip_opening) / 2 - model.seam_allowance, -0.5 * CM
+    )
     s5 = Segment(node, node.translate(0, 0.5 * CM))
-    s6 = Segment(node.translate(- model.flip_opening , 0), node.translate(- model.flip_opening , 0.5 * CM))
+    s6 = Segment(
+        node.translate(-model.flip_opening, 0),
+        node.translate(-model.flip_opening, 0.5 * CM),
+    )
     elems.append(s1)
     elems.append(s2)
     elems.append(s3)
@@ -167,6 +186,5 @@ if __name__ == "__main__":
         part,
         filename="items/drawstring_pouch.svg",
         width_mm=DinA4.height,
-        height_mm=DinA4.width
-        ,
+        height_mm=DinA4.width,
     )

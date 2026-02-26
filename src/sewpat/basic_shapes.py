@@ -18,8 +18,6 @@ def get_square(box_start: Point, edge_length: float = 3 * CM) -> List[Union[Rect
         stroke_color="black",
         stroke_width=stroke_width,
         fill_color="none",
-        font_size=10,
-        text_anchor="middle",
     )
     label_bg_style = StyleOptions(
         stroke_color="none",
@@ -53,8 +51,6 @@ def get_square(box_start: Point, edge_length: float = 3 * CM) -> List[Union[Rect
             style=StyleOptions(
                 stroke_color="none",
                 stroke_width=0,
-                font_size=10,
-                text_anchor="middle",
             ),
             name=f"{edge_length / CM :.0f}cm x {edge_length / CM :.0f}cm",
         ),
