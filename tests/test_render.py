@@ -32,8 +32,8 @@ from sewpat.render import (
 )
 from sewpat.style import (
     StyleOptions,
-    STYLE_SEAM,
     STYLE_GRAINLINE,
+    STYLE_STITCH,
 )
 from sewpat.units import CM
 
@@ -252,7 +252,7 @@ class TestRenderSegment(unittest.TestCase):
         self.assertIn('x="5.0"', svg)
 
     def test_dash_array_in_style(self):
-        svg = self._svg(Segment(Point(0, 0), Point(5, 5)), style=STYLE_SEAM)
+        svg = self._svg(Segment(Point(0, 0), Point(5, 5)), style=STYLE_STITCH)
         self.assertIn("stroke-dasharray", svg)
 
     def test_grainline_has_arrow_marker(self):

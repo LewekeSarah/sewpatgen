@@ -25,7 +25,21 @@ from .geometry import (
 )
 from .units import MM, CM, INCH
 from .part import PatternPart, PatternElement, Pattern
-from .style import StyleOptions, DEFAULT_STROKE_WIDTH, DEFAULT_STROKE_WIDTH_GRAIN
+from .style import (
+    StyleOptions,
+    Marker,
+    DEFAULT_STROKE_WIDTH,
+    DEFAULT_STROKE_WIDTH_GRAIN,
+    STYLE_GRAINLINE,
+    STYLE_FOLD,
+    STYLE_HEM,
+    STYLE_CUT,
+    STYLE_STITCH,
+    STYLE_DART,
+    STYLE_CENTER_LINE,
+    STYLE_BUTTONHOLE,
+    STYLE_BUTTON,
+)
 
 __all__ = [
     # Geometry primitives
@@ -50,6 +64,16 @@ __all__ = [
     "Pattern",
     # Style
     "StyleOptions",
+    "Marker",
     "DEFAULT_STROKE_WIDTH",
     "DEFAULT_STROKE_WIDTH_GRAIN",
+    "STYLE_GRAINLINE",
+    "STYLE_FOLD",
+    "STYLE_HEM",
+    "STYLE_CUT",
+    "STYLE_STITCH",
+    "STYLE_DART",
+    "STYLE_CENTER_LINE",
+    "STYLE_BUTTONHOLE",
+    "STYLE_BUTTON",
 ]

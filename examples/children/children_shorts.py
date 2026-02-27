@@ -17,6 +17,7 @@ from sewpat.pages import DinA1
 from sewpat.person import Gender, Person
 from sewpat.render import export_pattern_svg_mm
 from sewpat.style import StyleOptions
+from pathlib import Path
 
 
 def make_person() -> Person:
@@ -296,11 +297,11 @@ if __name__ == "__main__":
     pattern = boy_trousers(measurements, model_config)
     export_pattern_svg_mm(
         pattern,
-        filename="children/boy_shorts.svg",
+        filename=str(Path(__file__).parent / "boy_shorts.svg"),
         height_mm=DinA1.width,
         width_mm=DinA1.height,
         parts=[
             "Vorderteil",
             "Rückteil",
-        ],  #  weglassen zum Debuggen entfernen
+        ],
     )

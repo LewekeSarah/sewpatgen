@@ -9,42 +9,24 @@ import warnings
 from typing import Any, Callable
 
 from sewpat.geometry import Point, Segment, Circle, Rect, Triangle, InfoBox, CubicBezier
+
 from sewpat.part import PatternPart, PatternElement, Pattern
 from sewpat.style import (
     StyleOptions,
+    Marker,
     DEFAULT_STROKE_WIDTH,
     DEFAULT_STROKE_WIDTH_GRAIN,
     DEFAULT_FONT_SIZE_MM,
 )
+from sewpat.markers import ARROW_DEFS, SCISSOR_BLADE_OVERHANG
 
 __all__ = [
     "StyleOptions",
+    "Marker",
     "export_pattern_part_svg_mm",
     "export_pattern_svg_mm",
 ]
 
-# ---------------------------------------------------------------------------
-# Arrow marker
-# ---------------------------------------------------------------------------
-
-# Colour used for the arrowhead fill (e.g. on grainlines).
-_ARROW_FILL_COLOR = "grey"
-
-# SVG <defs> block defining a reusable arrowhead marker.
-# - markerUnits="userSpaceOnUse" keeps the marker size in the same mm-based
-#   user coordinate space as the rest of the drawing (Inkscape-safe).
-# - orient="auto-start-reverse" flips the marker 180° when used as marker-start,
-#   so the arrowhead points *away* from the line (upward on a vertical grainline).
-# - The path M0,0 L0,6 L8,3 Z is a right-pointing triangle; the reference point
-#   refX=8,refY=3 places its tip exactly on the line endpoint.
-_ARROW_DEFS = (
-    "<defs>"
-    '<marker id="arrow" markerWidth="8" markerHeight="6" '
-    'refX="0" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse">'
-    f'<path d="M0,0 L0,6 L8,3 Z" fill="{_ARROW_FILL_COLOR}" />'
-    "</marker>"
-    "</defs>"
-)
 
 # ---------------------------------------------------------------------------
 # Default style registry
@@ -80,13 +62,20 @@ def _common_stroke_attrs(
     """Build common stroke/fill/opacity SVG attribute string from a style dict."""
     stroke = style_dict.get("stroke", "black") or "black"
     stroke_width = style_dict.get("stroke-width", 0.5)
+    stroke_linejoin = style_dict.get("stroke-linejoin", "miter")
+    stroke_miterlimit = style_dict.get("stroke-miterlimit", 4)
     fill = force_fill if force_fill is not None else style_dict.get("fill", "none")
     opacity = style_dict.get("opacity", 1.0)
     dasharray = style_dict.get("stroke-dasharray")
+    dashoffset = style_dict.get("stroke-dashoffset", 0)
 
-    attrs = f'stroke="{stroke}" stroke-width="{stroke_width}mm" fill="{fill}" opacity="{opacity}"'
+    attrs = (
+        f'stroke="{stroke}" stroke-width="{stroke_width}mm" '
+        f'stroke-linejoin="{stroke_linejoin}" stroke-miterlimit="{stroke_miterlimit}" '
+        f'fill="{fill}" opacity="{opacity}"'
+    )
     if dasharray:
-        attrs += f' stroke-dasharray="{dasharray}"'
+        attrs += f' stroke-dasharray="{dasharray}" stroke-dashoffset="{dashoffset}"'
     return attrs
 
 
@@ -138,16 +127,61 @@ def _render_segment(
     """Return SVG elements for a Segment."""
     nodes: list[str] = []
     attrs = _common_stroke_attrs(style_dict, force_fill="none")
-    if style_dict.get("arrow-start"):
+
+    # marker-start: arrows use a dedicated reversed marker id; distance uses its
+    # own start variant; others use the enum value directly.
+    ms = style_dict.get("marker-start")
+    if ms == "arrow":
         attrs += ' marker-start="url(#arrow)"'
+    elif ms == "distance":
+        attrs += ' marker-start="url(#distance-start)"'
+    elif ms:
+        attrs += f' marker-start="url(#{ms})"'
+
+    # marker-end: arrows use a dedicated "arrow-end" marker id; distance uses its
+    # own end variant; others use the enum value directly.
+    me = style_dict.get("marker-end")
+    if me == "arrow":
+        attrs += ' marker-end="url(#arrow-end)"'
+    elif me == "distance":
+        attrs += ' marker-end="url(#distance-end)"'
+    elif me:
+        attrs += f' marker-end="url(#{me})"'
+
+    # For the scissor marker the refX is at the blade crossing, but the blade
+    # tips reach back _SCISSOR_BLADE_OVERHANG mm into the line. Shorten p2 so
+    # the visible line terminates exactly at the blade tips.
+    x2, y2 = element.p2.x, element.p2.y
+    if me == "scissor":
+        dx = element.p2.x - element.p1.x
+        dy = element.p2.y - element.p1.y
+        length = (dx * dx + dy * dy) ** 0.5
+        if length > 0:
+            x2 -= SCISSOR_BLADE_OVERHANG * dx / length
+            y2 -= SCISSOR_BLADE_OVERHANG * dy / length
+
     nodes.append(
         f'<line x1="{element.p1.x}" y1="{element.p1.y}" '
-        f'x2="{element.p2.x}" y2="{element.p2.y}" {attrs} />'
+        f'x2="{x2}" y2="{y2}" {attrs} />'
     )
     if getattr(element, "name", None):
         mid_x = (element.p1.x + element.p2.x) / 2
         mid_y = (element.p1.y + element.p2.y) / 2
-        nodes.append(_svg_text(mid_x, mid_y, font_size_mm, element.name))
+        # Offset the label above the line by half a font-size so it sits close
+        # but doesn't overlap with the line itself.
+        nodes.append(
+            _svg_text(
+                mid_x,
+                mid_y - font_size_mm * 0.5,
+                font_size_mm,
+                element.name,
+                **{
+                    "text-anchor": "middle",
+                    "font-weight": style_dict.get("font-weight", "normal"),
+                    "font-style": style_dict.get("font-style", "normal"),
+                },
+            )
+        )
     return nodes
 
 
@@ -356,8 +390,8 @@ def _build_svg(
     svg_nodes: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{width_mm}mm" height="{height_mm}mm" '
-        f'viewBox="0 0 {width_mm} {height_mm}">',
-        _ARROW_DEFS,
+        f'viewBox="0 0 {width_mm} {height_mm}" style="background-color:white">',
+        ARROW_DEFS,
         _svg_text(margin_mm, margin_mm, DEFAULT_FONT_SIZE_MM, title),
     ]
 

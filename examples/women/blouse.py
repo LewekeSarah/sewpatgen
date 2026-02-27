@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Blouse without arms"""
 
+from pathlib import Path
 
 from sewpat.geometry import (
     Point,
@@ -145,5 +146,5 @@ if __name__ == "__main__":
         pattern,
         width_mm=DinA0.width,
         height_mm=DinA0.height,
-        filename="women/blouse.svg",
+        filename=str(Path(__file__).parent / "blouse.svg"),
     )

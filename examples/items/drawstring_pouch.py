@@ -1,9 +1,10 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 from sewpat import Pattern, PatternPart, Point
 from sewpat.geometry import Rect, Segment
 from sewpat.units import CM
-from sewpat.style import STYLE_HEM, STYLE_SEAM, StyleOptions
+from sewpat.style import STYLE_HEM, STYLE_STITCH, StyleOptions
 from sewpat.pages import DinA4
 from sewpat.render import export_pattern_svg_mm
 
@@ -44,15 +45,16 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
 
     body.append(
         Segment(bottom_left, top_left),
-        style=STYLE_SEAM,
+        style=STYLE_STITCH,
     )
     body.append(
         Segment(top_left, top_right),
         style=STYLE_HEM,
     )
-    body.append(Segment(top_right, bottom_right), style=STYLE_SEAM)
+    body.append(Segment(top_right, bottom_right), style=STYLE_STITCH)
     body.append(
-        Segment(bottom_right, bottom_left, name="Wendeöffnung"), style=STYLE_SEAM
+        Segment(bottom_right, bottom_left, name="Wendeöffnung"),
+        style=STYLE_STITCH,
     )
 
     body.add_precision_points(bottom_left, bottom_right)
@@ -148,7 +150,7 @@ if __name__ == "__main__":
     # Export complete pattern (body + drawstring channel)
     export_pattern_svg_mm(
         pattern,
-        filename="items/drawstring_pouch.svg",
+        filename=str(Path(__file__).parent / "drawstring_pouch.svg"),
         width_mm=DinA4.height,
         height_mm=DinA4.width,
     )
@@ -156,7 +158,7 @@ if __name__ == "__main__":
     # Export body only (without drawstring channel markings)
     export_pattern_svg_mm(
         pattern,
-        filename="items/drawstring_pouch_body_only.svg",
+        filename=str(Path(__file__).parent / "drawstring_pouch_body_only.svg"),
         width_mm=DinA4.height,
         height_mm=DinA4.width,
         parts=["body"],
