@@ -368,6 +368,7 @@ def _build_svg(
     margin_mm: float,
     show_points: bool,
     show_bezier_control_points: bool,
+    show_seam_allowance: bool = True,
 ) -> str:
     """Build and return the SVG string for one or more element groups."""
     svg_nodes: list[str] = [
@@ -379,8 +380,13 @@ def _build_svg(
     ]
 
     for elements in element_groups:
+        visible = (
+            elements
+            if show_seam_allowance
+            else [e for e in elements if not e.is_seam_allowance]
+        )
         _render_elements(
-            elements,
+            visible,
             svg_nodes,
             show_bezier_control_points,
             show_points,
@@ -399,6 +405,7 @@ def export_pattern_part_svg_mm(
     style_map: dict[str, StyleOptions] | None = None,
     show_points: bool = True,
     show_bezier_control_points: bool = False,
+    show_seam_allowance: bool = True,
 ) -> None:
     """Export a PatternPart as an SVG file with mm units for precise printing.
 
@@ -412,6 +419,9 @@ def export_pattern_part_svg_mm(
             Unknown keys emit a warning and are ignored.
         show_points: Whether to render Point elements.
         show_bezier_control_points: Whether to render Bezier control point handles.
+        show_seam_allowance: Whether to render seam-allowance offset lines.
+            Defaults to True. Set to False to export the pattern without seam
+            allowance (e.g. for a "no seam allowance" variant).
     """
     styles = _resolve_styles(style_map)
     svg = _build_svg(
@@ -422,6 +432,7 @@ def export_pattern_part_svg_mm(
         margin_mm=margin_mm,
         show_points=show_points,
         show_bezier_control_points=show_bezier_control_points,
+        show_seam_allowance=show_seam_allowance,
     )
     with open(filename, "w") as f:
         f.write(svg)
@@ -437,6 +448,7 @@ def export_pattern_svg_mm(
     show_points: bool = True,
     show_bezier_control_points: bool = False,
     parts: list[str] | None = None,
+    show_seam_allowance: bool = True,
 ) -> None:
     """Export a Pattern (all or selected parts) as a single SVG file.
 
@@ -450,6 +462,9 @@ def export_pattern_svg_mm(
         show_points: Whether to render Point elements.
         show_bezier_control_points: Whether to render Bezier control point handles.
         parts: Optional list of part names to include. If None, all parts are rendered.
+        show_seam_allowance: Whether to render seam-allowance offset lines.
+            Defaults to True. Set to False to export the pattern without seam
+            allowance (e.g. for a "no seam allowance" variant).
     """
     styles = _resolve_styles(style_map)
 
@@ -473,6 +488,7 @@ def export_pattern_svg_mm(
         margin_mm=margin_mm,
         show_points=show_points,
         show_bezier_control_points=show_bezier_control_points,
+        show_seam_allowance=show_seam_allowance,
     )
     with open(filename, "w") as f:
         f.write(svg)

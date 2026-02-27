@@ -171,3 +171,11 @@ STYLE_CENTER_LINE = StyleOptions(
     stroke_width=DEFAULT_STROKE_WIDTH,
     dash_array=[10.0, 2.0, 2.0, 2.0],
 )
+
+# Seam Allowance Line — thin solid outer line showing where to cut.
+# Drawn outside (and parallel to) the stitching line by the seam allowance
+# distance. No markers – the outline speaks for itself.
+STYLE_SEAM_ALLOWANCE = StyleOptions(
+    stroke_color="black",
+    stroke_width=DEFAULT_STROKE_WIDTH,
+)

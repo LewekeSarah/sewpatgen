@@ -315,7 +315,7 @@ class TestAddNotches(unittest.TestCase):
         part.append(Rect(origin=Point(0, 0), width=10 * CM, height=10 * CM))
         seg = Segment(Point(0, 10 * CM), Point(10 * CM, 10 * CM))
         mid = Point(5 * CM, 10 * CM)
-        part.add_notches(mid, segment=seg)
+        part.add_notches(mid, seam_edge=seg)
         triangles = [e for e in part.elements if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 1)
 
@@ -327,7 +327,7 @@ class TestAddNotches(unittest.TestCase):
         # Bottom edge: y = 10 cm  →  centroid is at y = 5 cm  →  inward = up (negative y)
         seg = Segment(Point(0, 10 * CM), Point(10 * CM, 10 * CM))
         mid = Point(5 * CM, 10 * CM)
-        part.add_notches(mid, segment=seg)
+        part.add_notches(mid, seam_edge=seg)
         tri = cast(Triangle, part.elements[-1].geometry)
         # Tip (p3) should have a smaller y-coordinate than the midpoint (closer to centroid)
         self.assertLess(tri.p3.y, mid.y)

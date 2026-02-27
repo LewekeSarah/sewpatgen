@@ -84,46 +84,55 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     pt8 = pt4.translate((0.25 * meas.vHoB - model.ZuvHoB), 0)  # von links
     bz_control2 = Segment(pt7, pt8).point_perpendicular(0.5 * CM, rel_pos_on_obj=0.75)
     bz_control3 = pt7.translate(0.2 * CM, 2.5 * CM)
-    front.append(CubicBezier(pt6, pt6, pt7, pt7))
-    front.append(CubicBezier(pt7, bz_control3, bz_control2, pt8))
     # Hilfsgeometrie Hosenausschnitt
-
-    front.append(pt7)
-    front.append(Segment(pt6, pt0, name="Bund"))
-    front.append(Segment(pt0, pt1))
+    front.append(Segment(pt6, pt0, name="Bund"), is_outline=True)  # pt6 -> pt0
+    front.append(Segment(pt0, pt1), is_outline=True)  # pt0 -> pt1
 
     # STEP 3: Hosenbeingitter
     pt9, pt10, pt11, pt12, pt13 = get_leg_grid(meas, model, pt0, anchor_left=True)
     knee = Ray(pt3, (pt10.x, 0), name="Knielinie")
 
     # STEP 4: Seitennaht & Innennaht
-    side = CubicBezier(pt1, pt1, pt12, pt12)
+    side = Segment(pt1, pt12)
     pt14 = intersect(side, knee)[0]
     pt15 = pt10.translate(pt10.x - pt14.x, 0)
     front_seam_aux = Segment(pt8, pt15)
     bz_control = front_seam_aux.point_perpendicular(1.6 * CM, rel_pos_on_obj=0.5)
     inner_seam = Segment(pt13, pt15)
 
-    front.append(Point(pt14.x, pt14.y, "pt14"))
-    front.append(CubicBezier(pt1, pt1, pt14, pt14))
-    front.append(front_seam_aux.point_perpendicular(0.8 * CM, rel_pos_on_obj=0.5))
-    front.append(CubicBezier(pt8, bz_control, pt15.translate(0.1 * CM, -2 * CM), pt15))
-
     # STEP 9a: Modellänge Vorderteil
     pt32 = intersect(seam, inner_seam)[0]
     pt33 = intersect(seam, side)[0]
-    front.append(Segment(pt14, pt33))
-    front.append(Segment(pt32, pt15))
-    front.append(Segment(pt32, pt33))
+
+    # Outline elements — original geometric directions; the chain-sorter in
+    # add_seam_allowance will reorder/reverse them into a connected loop.
+    front.append(Segment(pt1, pt14), is_outline=True)  # side seam
+    front.append(Segment(pt14, pt33), is_outline=True)  # side → hem
+    front.append(Segment(pt33, pt32), is_outline=True)  # hem
+    front.append(Segment(pt32, pt15), is_outline=True)  # inner leg up
+    front_inner_leg = CubicBezier(
+        pt8, bz_control, pt15.translate(0.1 * CM, -2 * CM), pt15
+    )
+    front.append(
+        front_inner_leg,
+        is_outline=True,
+    )  # inner seam (pt8 → pt15)
+    front_curve = CubicBezier(pt7, bz_control3, bz_control2, pt8)
+    front.append(front_curve, is_outline=True)  # crotch curve (pt7 → pt8)
+    front.append(Segment(pt6, pt7), is_outline=True)  # crotch top (pt6 → pt7)
 
     # Fadenlauf Vorderteil
     grain_end = intersect(Segment(pt9, pt11), seam)
     front.add_grainline(start=pt9, end=grain_end[0])
 
     # Kerben
-    front.add_notches(pt14, segment=Segment(pt14, pt33))  # Seitennaht am Knie
-    front.add_notches(pt15, segment=inner_seam)  # Innenbeinnaht am Saum
-    front.add_notches(pt7)  # Hosenausschnitt (Kurve)
+    front.add_notches(pt14, seam_edge=Segment(pt14, pt33))  # Seitennaht am Knie
+    front.add_notches(pt15, seam_edge=inner_seam)  # Innenbeinnaht am Saum
+    front.add_notches(pt7, seam_edge=front_curve)  # Hosenausschnitt (Kurve)
+    front.add_notches(
+        front_inner_leg.point_at_t(0.5),
+        seam_edge=front_inner_leg,
+    )  # Innennaht Mitte
 
     # Info-Box
     front.add_info_box(
@@ -133,6 +142,9 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
             "1× Stoff (gegengleich)",
         ]
     )
+
+    # Nahtzugabe Vorderteil
+    front.add_seam_allowance(model.seam_allowance)
 
     # -----------------------------------------------------------------------
     # RÜCKTEIL
@@ -153,15 +165,12 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     pt16 = back_pt6.translate(-3.5 * CM, 0)
     pt17 = pt16.translate(0, -3 * CM)
     pt18 = back_pt0.translate(-2 * CM, 0)
-    back.append(Segment(pt17, pt18))
 
     # STEP 7: Hinternaht
     pt19 = back_pt4.translate(0, -0.5 * meas.SiH)
     pt20 = back_pt4.translate((2 * (pt8.x - pt4.x) + 0.5 * CM), 0)
     pt21 = pt20.translate(0, 1 * CM)
     bz_contol4 = back_pt4.translate(3.05 * CM, -3.05 * CM)
-    back.append(Segment(pt17, pt19))
-    back.append(CubicBezier(pt19, bz_contol4, bz_contol4, pt21))
 
     # STEP 8: Seitennähte / Innenbeinnähte
     pt22 = back_pt12.translate(-1 * CM, 0)
@@ -175,24 +184,42 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     bz_control5 = back_aux.point_perpendicular(2.5 * CM, rel_pos_on_obj=0.5)
     back_inner_seam = Segment(pt24, pt25)
 
-    back.append(back_aux.point_perpendicular(1.2 * CM, rel_pos_on_obj=0.5))
-    back.append(CubicBezier(pt21, bz_control5, pt25.translate(0.1 * CM, -2 * CM), pt25))
-
     # STEP 9b: Modellänge Rückteil
     pt30 = intersect(seam, back_inner_seam)[0]
     pt31 = intersect(seam, side_back)[0]
-    back.append(Segment(pt18, pt31))
-    back.append(Segment(pt30, pt25))
-    back.append(Segment(pt30, pt31))
+
+    # Outline elements — original geometric directions; chain-sorter handles the loop.
+    back.append(Segment(pt17, pt19), is_outline=True)  # Hinternaht
+    back.append(
+        CubicBezier(pt19, bz_contol4, bz_contol4, pt21), is_outline=True
+    )  # crotch curve
+    back_inner_seam = CubicBezier(
+        pt21, bz_control5, pt25.translate(0.1 * CM, -2 * CM), pt25
+    )
+    back.append(
+        back_inner_seam,
+        is_outline=True,
+    )  # inner seam (pt21 → pt25)
+    back.append(Segment(pt25, pt30), is_outline=True)  # inner leg up → hem
+    back.append(Segment(pt30, pt31), is_outline=True)  # hem
+    back.append(Segment(pt18, pt31), is_outline=True)  # side seam (original direction)
+    back.append(Segment(pt17, pt18), is_outline=True)  # Bund (original direction)
 
     # Fadenlauf Rückteil
     grain_end_back = intersect(Segment(back_pt10, back_pt11), seam)
     back.add_grainline(start=back_pt9, end=grain_end_back[0])
 
     # Kerben
-    back.add_notches(pt23, segment=side_back)  # Seitennaht am Knie
-    back.add_notches(pt25, segment=back_inner_seam)  # Innenbeinnaht am Saum
-    back.add_notches(pt19, segment=Segment(pt17, pt19))  # Hinternaht
+    back.add_notches(pt23, seam_edge=side_back, is_back=True)  # Seitennaht am Knie
+    back.add_notches(
+        pt25, seam_edge=back_inner_seam, is_back=True
+    )  # Innenbeinnaht am Saum
+    back.add_notches(pt19, seam_edge=Segment(pt17, pt19), is_back=True)  # Hinternaht
+    back.add_notches(
+        back_inner_seam.point_at_t(0.5),
+        seam_edge=back_inner_seam,
+        is_back=True,
+    )  # Innennaht Mitte
 
     # Info-Box
     back.add_info_box(
@@ -202,6 +229,9 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
             "1× Stoff (gegengleich)",
         ]
     )
+
+    # Nahtzugabe Rückteil
+    back.add_seam_allowance(model.seam_allowance)
 
     # -----------------------------------------------------------------------
     # KONSTRUKTION (Hilfsgeometrie — wird standardmäßig nicht gerendert)
@@ -295,6 +325,8 @@ if __name__ == "__main__":
     measurements = make_measurements_trouser(person, allowance)
     model_config = make_model_config()
     pattern = boy_trousers(measurements, model_config)
+
+    # Without seam allowance
     export_pattern_svg_mm(
         pattern,
         filename=str(Path(__file__).parent / "boy_shorts.svg"),
@@ -304,4 +336,18 @@ if __name__ == "__main__":
             "Vorderteil",
             "Rückteil",
         ],
+        show_seam_allowance=False,
+    )
+
+    # With seam allowance
+    export_pattern_svg_mm(
+        pattern,
+        filename=str(Path(__file__).parent / "boy_shorts_with_sa.svg"),
+        height_mm=DinA1.width,
+        width_mm=DinA1.height,
+        parts=[
+            "Vorderteil",
+            "Rückteil",
+        ],
+        show_seam_allowance=True,
     )

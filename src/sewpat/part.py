@@ -1,5 +1,14 @@
-from .style import StyleOptions, STYLE_GRAINLINE
-from .geometry import Rect, Point, Segment, Circle, Triangle, InfoBox
+from .style import StyleOptions, STYLE_GRAINLINE, STYLE_SEAM_ALLOWANCE
+from .geometry import (
+    Rect,
+    Point,
+    Segment,
+    Circle,
+    Triangle,
+    InfoBox,
+    CubicBezier,
+    _miter_join,
+)
 from .units import CM, MM
 import numpy as np
 
@@ -11,6 +20,12 @@ class PatternElement:
         geometry: The geometric shape (Point, Segment, Rect, Circle, CubicBezier, …).
         style: Visual style for rendering this element.
         name: Optional label override. If None, the geometry's own name is used.
+        is_outline: Whether this element forms part of the cut-line outline.
+            Only elements with ``is_outline=True`` participate in seam-allowance
+            generation via :meth:`PatternPart.add_seam_allowance`.
+        is_seam_allowance: Whether this element was generated as a seam-allowance
+            offset line.  Elements with this flag can be hidden by passing
+            ``show_seam_allowance=False`` to the export functions.
     """
 
     def __init__(
@@ -18,10 +33,14 @@ class PatternElement:
         geometry: object,
         style: StyleOptions | None = None,
         name: str | None = None,
+        is_outline: bool = False,
+        is_seam_allowance: bool = False,
     ) -> None:
         self.geometry = geometry
         self.style = style if style is not None else StyleOptions()
         self.name = name
+        self.is_outline = is_outline
+        self.is_seam_allowance = is_seam_allowance
 
     def get_name(self) -> str | None:
         """Return the effective name (element name overrides geometry name)."""
@@ -42,6 +61,7 @@ class PatternPart:
         geometry: object,
         style: StyleOptions | None = None,
         name: str | None = None,
+        is_outline: bool = False,
     ) -> PatternElement:
         """Create a PatternElement from geometry + style and append it to this part.
 
@@ -49,11 +69,14 @@ class PatternPart:
             geometry: The geometric shape to add.
             style: Optional style for the element. Defaults to StyleOptions().
             name: Optional label override for the element.
+            is_outline: Whether this element forms part of the cut-line outline.
 
         Returns:
             The newly created PatternElement.
         """
-        elem = PatternElement(geometry=geometry, style=style, name=name)
+        elem = PatternElement(
+            geometry=geometry, style=style, name=name, is_outline=is_outline
+        )
         self.elements.append(elem)
         return elem
 
@@ -79,6 +102,7 @@ class PatternPart:
         Returns:
             The centroid Point, or None if there are no coordinates.
         """
+
         coords: list[np.ndarray] = []
         for elem in self.elements:
             g = elem.geometry
@@ -161,7 +185,7 @@ class PatternPart:
     def add_notches(
         self,
         *points: Point,
-        segment: Segment | None = None,
+        seam_edge: Segment | CubicBezier | None = None,
         length: float = 0.8 * CM,
         width: float = 0.4 * CM,
         is_back: bool = False,
@@ -176,32 +200,51 @@ class PatternPart:
         triangles mark a back seam edge (``is_back=True``), following the
         standard sewing-pattern reading guide.
 
-        If ``segment`` is provided, each point is projected orthogonally onto
-        that segment. The triangle base sits on the seam edge and the tip
-        points inward. The inward direction is determined automatically from
-        the part's centroid.
-
-        Without ``segment``, a vertical triangle centred on the point is used.
+        If ``seam_edge`` is a :class:`~sewpat.geometry.Segment`, each point is
+        projected orthogonally onto it.  If ``seam_edge`` is a
+        :class:`~sewpat.geometry.CubicBezier`, the closest point on the curve
+        is found numerically and the curve's tangent/normal at that point are
+        used.  Without ``seam_edge``, a vertical triangle centred on the point
+        is used.
 
         Args:
             *points: One or more reference points for the notches.
-            segment: Segment (seam edge) on which the notches stand.
+            seam_edge: Segment or CubicBezier (seam edge) on which the notches
+                stand.
             length: Distance from base to tip of the triangle. Defaults to 0.8 cm.
             width: Width of the triangle base on the seam edge. Defaults to 0.4 cm.
             is_back: If True, render two neighbouring triangles instead of one
                 to indicate a back pattern piece. Defaults to False.
         """
+        from scipy.optimize import minimize_scalar
+
         inward_ref = self.centroid
         half_w = width / 2
-        # Gap between the two triangles when is_back=True (10 % of width)
         gap = width * 0.5
 
         for pt in points:
-            if segment is not None:
-                notch_pt = segment.project_point(pt)
-                along = segment.unit_direction
-                normal = segment.unit_normal
-                # Flip normal if it points away from the interior
+            if isinstance(seam_edge, Segment):
+                notch_pt = seam_edge.project_point(pt)
+                along = seam_edge.unit_direction
+                normal = seam_edge.unit_normal
+                if inward_ref is not None:
+                    if np.dot(normal, inward_ref.coords - notch_pt.coords) < 0:
+                        normal = -normal
+            elif isinstance(seam_edge, CubicBezier):
+                # Find the parameter t that minimises distance to pt
+                result = minimize_scalar(
+                    lambda t: float(
+                        np.linalg.norm(seam_edge.point_at_t(t).coords - pt.coords)
+                    ),
+                    bounds=(0.0, 1.0),
+                    method="bounded",
+                )
+                t_closest = float(result.x)
+                notch_pt = seam_edge.point_at_t(t_closest)
+                tangent = seam_edge.tangent_at_t(t_closest)
+                tang_len = float(np.linalg.norm(tangent))
+                along = tangent / tang_len if tang_len > 1e-12 else tangent
+                normal = seam_edge.normal_at_t(t_closest)
                 if inward_ref is not None:
                     if np.dot(normal, inward_ref.coords - notch_pt.coords) < 0:
                         normal = -normal
@@ -214,7 +257,6 @@ class PatternPart:
             nx, ny = normal
             offsets = [0.0]
             if is_back:
-                # Two triangles side by side, separated by a small gap
                 offsets = [-(half_w + gap / 2), +(half_w + gap / 2)]
 
             for offset in offsets:
@@ -223,6 +265,164 @@ class PatternPart:
                 br = centre.translate(half_w * ax, half_w * ay)
                 tip = centre.translate(nx * length, ny * length)
                 self.append(Triangle(bl, br, tip))
+
+    def add_seam_allowance(
+        self,
+        distance: float,
+        outline_elements: list["PatternElement"] | None = None,
+        style: "StyleOptions | None" = None,
+    ) -> list["PatternElement"]:
+        """Add seam-allowance lines around the outline of this pattern part.
+
+        For each outline element (``is_outline=True`` or explicitly given via
+        *outline_elements*) an offset copy is created that is shifted outward
+        by *distance* mm from the interior of the part.  The interior is
+        determined automatically from :attr:`centroid`.
+
+        Successive offset segments are connected at corners using a
+        **miter-join** (extended intersection); if the miter ratio is too large
+        a bevel midpoint is used as fallback (see :func:`geometry._miter_join`).
+
+        Offset :class:`~sewpat.geometry.CubicBezier` elements are approximated
+        via the hodograph method (see :meth:`CubicBezier.offset`).
+
+        Args:
+            distance: Seam allowance in mm (must be positive).
+            outline_elements: Optional list of :class:`PatternElement` objects
+                that define the cut-line contour.  Defaults to all elements
+                whose ``is_outline`` flag is ``True``.
+            style: Optional :class:`~sewpat.style.StyleOptions` for the
+                generated seam-allowance elements.  Defaults to
+                :data:`~sewpat.style.STYLE_SEAM_ALLOWANCE`.
+
+        Returns:
+            List of the newly created :class:`PatternElement` objects.
+        """
+        if distance <= 0:
+            raise ValueError(
+                f"seam allowance distance must be positive, got {distance}"
+            )
+
+        sa_style = style if style is not None else STYLE_SEAM_ALLOWANCE
+        center = self.centroid
+
+        # --- collect outline geometry ----------------------------------------
+        if outline_elements is None:
+            outline_elements = [e for e in self.elements if e.is_outline]
+
+        if not outline_elements:
+            return []
+
+        # --- helpers ---------------------------------------------------------
+        def _start(g: Segment | CubicBezier) -> Point:
+            return g.p1 if isinstance(g, Segment) else g.p0
+
+        def _end(g: Segment | CubicBezier) -> Point:
+            return g.p2 if isinstance(g, Segment) else g.p3
+
+        def _reverse(g: Segment | CubicBezier) -> Segment | CubicBezier:
+            """Return a copy of *g* with direction flipped."""
+            if isinstance(g, Segment):
+                return Segment(g.p2, g.p1, name=g.name)
+            else:
+                # Swap anchor endpoints AND control points so the curve shape
+                # is preserved exactly.
+                return CubicBezier(g.p3, g.p2, g.p1, g.p0, name=g.name)
+
+        def _with_endpoints(
+            g: Segment | CubicBezier, new_start: Point, new_end: Point
+        ) -> Segment | CubicBezier:
+            if isinstance(g, Segment):
+                return Segment(new_start, new_end, name=g.name)
+            else:
+                return CubicBezier(new_start, g.p1, g.p2, new_end, name=g.name)
+
+        # --- handle Rect special case early ----------------------------------
+        for elem in outline_elements:
+            if isinstance(elem.geometry, Rect):
+                g = elem.geometry
+                new_elem = self.append(
+                    Rect(
+                        origin=g.origin.translate(-distance, -distance),
+                        width=g.width + 2 * distance,
+                        height=g.height + 2 * distance,
+                        name=g.name,
+                    ),
+                    style=sa_style,
+                )
+                new_elem.is_seam_allowance = True
+                return [new_elem]
+
+        # --- sort outline elements into a connected chain --------------------
+        # Collect Segment / CubicBezier geometries only.
+        geoms_raw: list[Segment | CubicBezier] = [
+            elem.geometry
+            for elem in outline_elements
+            if isinstance(elem.geometry, (Segment, CubicBezier))
+        ]
+
+        SNAP = 0.5  # mm — tolerance for endpoint matching
+
+        def _close(a: Point, b: Point) -> bool:
+            return float(np.linalg.norm(a.coords - b.coords)) < SNAP
+
+        # Greedy chain builder: start with the first element, then repeatedly
+        # find the next piece whose start or end connects to the current tail.
+        # Reverse the piece when it connects end-first so every element in the
+        # chain runs start → end continuously.
+        chain: list[Segment | CubicBezier] = [geoms_raw[0]]
+        remaining = list(geoms_raw[1:])
+        while remaining:
+            tail = _end(chain[-1])
+            found = False
+            for i, g in enumerate(remaining):
+                if _close(tail, _start(g)):
+                    chain.append(g)
+                    remaining.pop(i)
+                    found = True
+                    break
+                elif _close(tail, _end(g)):
+                    chain.append(_reverse(g))
+                    remaining.pop(i)
+                    found = True
+                    break
+            if not found:
+                # Gap in the outline — append remaining pieces as-is
+                chain.extend(remaining)
+                break
+
+        # --- offset each element in chain order ------------------------------
+        offset_geoms: list[Segment | CubicBezier] = [
+            g.offset(distance, center) for g in chain
+        ]
+
+        # --- miter-join corner stitching -------------------------------------
+        new_geoms: list[Segment | CubicBezier] = list(offset_geoms)
+        n = len(new_geoms)
+        if n > 1:
+            for i in range(n):
+                j = (i + 1) % n
+                ga = new_geoms[i]
+                gb = new_geoms[j]
+                end_a = _end(ga)
+                start_b = _start(gb)
+                # Only apply miter-join when the gap is non-trivial (> 0.01 mm)
+                if end_a.distance_to(start_b) > 0.01:
+                    if isinstance(ga, Segment) and isinstance(gb, Segment):
+                        corner = _miter_join(ga, gb)
+                    else:
+                        # For curves use a simple midpoint bevel
+                        corner = Point(*(0.5 * (end_a.coords + start_b.coords)))
+                    new_geoms[i] = _with_endpoints(ga, _start(ga), corner)
+                    new_geoms[j] = _with_endpoints(gb, corner, _end(gb))
+
+        # --- append and return -----------------------------------------------
+        added: list["PatternElement"] = []
+        for geom in new_geoms:
+            elem = self.append(geom, style=sa_style)
+            elem.is_seam_allowance = True
+            added.append(elem)
+        return added
 
 
 class Pattern:

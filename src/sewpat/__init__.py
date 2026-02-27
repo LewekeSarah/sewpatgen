@@ -36,6 +36,7 @@ from .style import (
     STYLE_CUT,
     STYLE_STITCH,
     STYLE_CENTER_LINE,
+    STYLE_SEAM_ALLOWANCE,
 )
 
 __all__ = [
@@ -70,4 +71,5 @@ __all__ = [
     "STYLE_CUT",
     "STYLE_STITCH",
     "STYLE_CENTER_LINE",
+    "STYLE_SEAM_ALLOWANCE",
 ]

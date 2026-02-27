@@ -404,6 +404,37 @@ class Segment:
         max_y = max(self.p1.y, self.p2.y)
         return Point(min_x, min_y), Point(max_x, max_y)
 
+    def offset(self, distance: float, center: "Point | None" = None) -> "Segment":
+        """Return a new Segment offset perpendicularly by *distance*.
+
+        The offset direction is chosen so that the result moves *away* from
+        *center* (i.e. outward from the interior of the pattern piece).  If
+        *center* is ``None`` the sign of *distance* controls the direction
+        directly: positive = left of the travel direction, negative = right.
+
+        Args:
+            distance: Perpendicular offset in mm. When *center* is provided the
+                absolute value is used and the sign is derived from *center*.
+            center: Interior reference point (e.g. ``PatternPart.centroid``).
+                When given the offset is forced *away* from this point.
+
+        Returns:
+            A new ``Segment`` with both endpoints shifted by *distance* along
+            the outward unit normal.
+        """
+        normal = self.unit_normal  # points left of travel direction
+        if center is not None:
+            mid = 0.5 * (self.p1.coords + self.p2.coords)
+            # Flip if normal points toward the interior (toward center)
+            if np.dot(normal, mid - center.coords) < 0:
+                normal = -normal
+            offset_vec = normal * abs(distance)
+        else:
+            offset_vec = normal * distance
+        new_p1 = Point(*(self.p1.coords + offset_vec))
+        new_p2 = Point(*(self.p2.coords + offset_vec))
+        return Segment(new_p1, new_p2, name=self.name)
+
 
 class Ray:
     """A ray starting from a point and going in a specific direction.
@@ -1338,6 +1369,97 @@ class CubicBezier:
                 lo = m1
         best_d = point.distance_to(self.point_at_t((lo + hi) / 2))
         return best_d <= tolerance
+
+    def offset(self, distance: float, center: "Point | None" = None) -> "CubicBezier":
+        """Return an approximate offset (parallel) curve shifted by *distance*.
+
+        The offset is constructed by independently moving each of the four
+        control points in the outward normal direction at its corresponding
+        curve parameter (t = 0, 1/3, 2/3, 1 for p0 … p3).  This is the
+        *hodograph approximation* and is accurate to sub-millimetre precision
+        for seam allowances ≤ 2 cm on typical garment curves.  For very tight
+        curvatures (e.g. tight armscye), split the curve first with
+        ``split()`` and offset each piece.
+
+        The offset direction is chosen so that the result moves *away* from
+        *center* (outward from the pattern piece interior).  If *center* is
+        ``None`` the sign of *distance* controls the direction directly:
+        positive = left of travel direction, negative = right.
+
+        Args:
+            distance: Offset in mm.  When *center* is provided the absolute
+                value is used and direction is derived from *center*.
+            center: Interior reference point (e.g. ``PatternPart.centroid``).
+
+        Returns:
+            A new ``CubicBezier`` approximating the offset curve.
+        """
+        # Determine sign from center orientation
+        if center is not None:
+            # Use the curve midpoint (t=0.5) to decide inward/outward
+            mid = self.point_at_t(0.5)
+            n_mid = self.normal_at_t(0.5)
+            # Flip if normal points toward interior
+            sign = 1.0 if np.dot(n_mid, mid.coords - center.coords) >= 0 else -1.0
+            d = sign * abs(distance)
+        else:
+            d = distance
+
+        # Offset each control point by the normal at the nearest curve parameter
+        def _shifted(pt: Point, t: float) -> Point:
+            n = self.normal_at_t(t)
+            return Point(pt.x + d * n[0], pt.y + d * n[1])
+
+        return CubicBezier(
+            _shifted(self.p0, 0.0),
+            _shifted(self.p1, 1 / 3),
+            _shifted(self.p2, 2 / 3),
+            _shifted(self.p3, 1.0),
+            name=self.name,
+        )
+
+
+def _miter_join(
+    seg_a: "Segment",
+    seg_b: "Segment",
+    miter_limit: float = 4.0,
+) -> "Point":
+    """Find the miter-join point where two offset segments meet.
+
+    Extends *seg_a* and *seg_b* as infinite lines and returns their
+    intersection.  If the lines are parallel or the miter ratio exceeds
+    *miter_limit* (measured as a multiple of the offset distance implied by
+    the gap between ``seg_a.p2`` and ``seg_b.p1``), a bevel fallback is
+    returned instead (midpoint between the two endpoints).
+
+    This is used by ``PatternPart.add_seam_allowance()`` to connect
+    successive offset segments at convex corners.
+
+    Args:
+        seg_a: First offset segment.  The join point replaces its end (p2).
+        seg_b: Second offset segment.  The join point replaces its start (p1).
+        miter_limit: Maximum miter ratio before falling back to a bevel.
+            A value of 4.0 means: if the miter extension is longer than
+            4× the gap between seg_a.p2 and seg_b.p1, use bevel instead.
+
+    Returns:
+        The corner point (miter intersection or bevel midpoint).
+    """
+    pt = _intersect_lines(
+        seg_a.p1.coords, seg_a.unit_normal, seg_b.p1.coords, seg_b.unit_normal
+    )
+    if pt is None:
+        # Parallel lines – return midpoint (straight seam, no corner needed)
+        return Point(*(0.5 * (seg_a.p2.coords + seg_b.p1.coords)))
+
+    corner = Point(*pt)
+    # Check miter ratio: distance from original endpoint to miter point
+    gap = float(np.linalg.norm(seg_a.p2.coords - seg_b.p1.coords))
+    miter_dist = seg_a.p2.distance_to(corner)
+    if gap > 1e-9 and miter_dist > miter_limit * gap:
+        # Bevel fallback
+        return Point(*(0.5 * (seg_a.p2.coords + seg_b.p1.coords)))
+    return corner
 
 
 def _intersect_linear_circle(

@@ -79,6 +79,7 @@ class ModelConfig:
     BeckenAdjustment: float = None
     ZuvHoB: float = None
     SaW: float = None  # Saumweite
+    seam_allowance: float = 1 * CM  # Nahtzugabe
 
 
 def make_blouse_measurements(

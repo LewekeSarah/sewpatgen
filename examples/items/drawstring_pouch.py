@@ -46,15 +46,18 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     body.append(
         Segment(bottom_left, top_left),
         style=STYLE_STITCH,
+        is_outline=True,
     )
     body.append(
         Segment(top_left, top_right),
         style=STYLE_HEM,
+        is_outline=True,
     )
-    body.append(Segment(top_right, bottom_right), style=STYLE_STITCH)
+    body.append(Segment(top_right, bottom_right), style=STYLE_STITCH, is_outline=True)
     body.append(
         Segment(bottom_right, bottom_left, name="Wendeöffnung (Futterstoff)"),
         style=STYLE_STITCH,
+        is_outline=True,
     )
 
     body.add_precision_points(bottom_left, bottom_right)
@@ -68,20 +71,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     )
 
     ## STEP 4: Seam Allowance
-    top_left_sa = top_left.translate(-model.seam_allowance, -model.seam_allowance)
-    bottom_left_sa = bottom_left.translate(-model.seam_allowance, model.seam_allowance)
-    top_right_sa = top_right.translate(model.seam_allowance, -model.seam_allowance)
-    bottom_right_sa = bottom_right.translate(model.seam_allowance, model.seam_allowance)
-
-    sa_width = model.width + 2 * model.seam_allowance
-    sa_height = model.height + 2 * model.seam_allowance
-    body.append(
-        Rect(
-            origin=top_left_sa,
-            width=sa_width,
-            height=sa_height,
-        ),
-    )
+    body.add_seam_allowance(model.seam_allowance)
 
     body.add_info_box(
         notes=[
@@ -98,8 +88,8 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     flip_left = bottom_right.translate(-(model.width - model.flip_opening) / 2, 0)
     flip_right = flip_left.translate(-model.flip_opening, 0)
 
-    left_edge = Segment(bottom_left_sa, top_left_sa)
-    right_edge = Segment(top_right_sa, bottom_right_sa)
+    left_edge = Segment(bottom_left, top_left)
+    right_edge = Segment(top_right, bottom_right)
     body.append(Segment(flip_left, flip_right), style=STYLE_HEM)
 
     # Add marks
@@ -128,8 +118,8 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
         style=StyleOptions(dash_array=[5.0, 2.0]),
     )
 
-    drawstring.add_notches(ds1_bottom_left, ds1_top_left, segment=left_edge)
-    drawstring.add_notches(ds1_bottom_right, ds1_top_right, segment=right_edge)
+    drawstring.add_notches(ds1_bottom_left, ds1_top_left, seam_edge=left_edge)
+    drawstring.add_notches(ds1_bottom_right, ds1_top_right, seam_edge=right_edge)
     return pattern
 
 
@@ -159,4 +149,13 @@ if __name__ == "__main__":
         width_mm=DinA4.height,
         height_mm=DinA4.width,
         parts=["body"],
+    )
+
+    # Export complete pattern without seam allowance lines
+    export_pattern_svg_mm(
+        pattern,
+        filename=str(Path(__file__).parent / "drawstring_pouch_no_sa.svg"),
+        width_mm=DinA4.height,
+        height_mm=DinA4.width,
+        show_seam_allowance=False,
     )
