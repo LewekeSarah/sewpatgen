@@ -10,6 +10,12 @@ import numpy as np
 from dataclasses import dataclass
 from sewpat.units import MM, CM
 
+# svgpathtools is used as a backend for Bezier–Bezier intersection.
+# It implements the numerically robust Bézier-clipping algorithm (Sederberg &
+# Nishita 1990) which converges quadratically and avoids the O(n²) sampling
+# artefacts of a brute-force grid scan.
+from svgpathtools import CubicBezier as _SvgCubicBezier
+
 
 def _solve_quadratic(a: float, b: float, c: float) -> list[float]:
     """Solve a quadratic equation ax^2 + bx + c = 0 in a numerically stable way.
@@ -1068,63 +1074,56 @@ class CubicBezier:
 
         return Point(x, y)
 
+    def _svg(self) -> _SvgCubicBezier:
+        """Return an equivalent svgpathtools CubicBezier for delegated calculations."""
+        return _SvgCubicBezier(
+            complex(self.p0.x, self.p0.y),
+            complex(self.p1.x, self.p1.y),
+            complex(self.p2.x, self.p2.y),
+            complex(self.p3.x, self.p3.y),
+        )
+
+    def length(self) -> float:
+        """Compute the exact arc length of the Bézier curve.
+
+        Delegates to ``svgpathtools``, which uses Gauss-Legendre quadrature
+        for a numerically exact result – unlike a polyline approximation.
+
+        Returns:
+            Arc length of the curve in the same units as the control points.
+        """
+        return self._svg().length()
+
     def tangent_at_t(self, t: float) -> np.ndarray:
         """Compute the tangent vector at parameter t.
+
+        Delegates to ``svgpathtools.derivative()``, which evaluates B'(t)
+        analytically.
 
         Args:
             t: Parameter value, typically between 0 and 1.
 
         Returns:
-            Tangent vector as numpy array.
+            Tangent vector as a numpy array (not normalised).
         """
-        # Derivative of cubic Bezier: B'(t) = 3(1-t)²(P₁-P₀) + 6(1-t)t(P₂-P₁) + 3t²(P₃-P₂)
-        t2 = t * t
-        mt = 1.0 - t
-        mt2 = mt * mt
-
-        dx = (
-            3 * mt2 * (self.p1.x - self.p0.x)
-            + 6 * mt * t * (self.p2.x - self.p1.x)
-            + 3 * t2 * (self.p3.x - self.p2.x)
-        )
-
-        dy = (
-            3 * mt2 * (self.p1.y - self.p0.y)
-            + 6 * mt * t * (self.p2.y - self.p1.y)
-            + 3 * t2 * (self.p3.y - self.p2.y)
-        )
-
-        return np.array([dx, dy])
-
-    def length_approx(self, num_segments: int = 100) -> float:
-        """Approximate the length of the Bezier curve using line segments.
-
-        Args:
-            num_segments: Number of line segments to use for approximation.
-
-        Returns:
-            Approximate length of the curve.
-        """
-        total_length = 0.0
-        prev_point = self.point_at_t(0.0)
-
-        for i in range(1, num_segments + 1):
-            t = i / num_segments
-            curr_point = self.point_at_t(t)
-            total_length += prev_point.distance_to(curr_point)
-            prev_point = curr_point
-
-        return total_length
+        d = self._svg().derivative(t)
+        return np.array([d.real, d.imag])
 
     def bounding_box(self) -> tuple[Point, Point]:
         """Compute the axis-aligned bounding box of the Bezier curve.
 
+        Only the start and end points (p0, p3) lie on the curve itself.
+        The control points p1 and p2 act as "magnets" and may lie well
+        outside the actual curve, so they must NOT be used as bounding-box
+        seeds. Instead the true extrema are found analytically by solving
+        B'(t) = 0 and evaluating the curve at the resulting t values.
+
         Returns:
             Tuple of (min_point, max_point) defining the bounding box.
         """
-        # Start with control points
-        x_coords = [self.p0.x, self.p1.x, self.p2.x, self.p3.x]
-        y_coords = [self.p0.y, self.p1.y, self.p2.y, self.p3.y]
+        # Seed with the two curve endpoints only (they are always on the curve)
+        x_coords = [self.p0.x, self.p3.x]
+        y_coords = [self.p0.y, self.p3.y]
 
         # Find extrema by solving derivative = 0
         # For x: 3(1-t)²(P₁-P₀) + 6(1-t)t(P₂-P₁) + 3t²(P₃-P₂) = 0
@@ -1241,6 +1240,45 @@ def _intersect_circle_circle(c1: Circle, c2: Circle) -> list[Point]:
     p4 = p2 - h * perp
 
     return [Point(*p3), Point(*p4)]
+
+
+def _intersect_bezier_bezier(
+    a: "CubicBezier", b: "CubicBezier", tol: float = 1e-12
+) -> list["Point"]:
+    """Find intersections between two cubic Bézier curves.
+
+    Uses ``svgpathtools`` as a backend, which implements the numerically robust
+    Bézier-clipping algorithm (Sederberg & Nishita 1990). The algorithm
+    converges quadratically and reliably finds all transversal intersections
+    without O(n²) sampling artefacts.
+
+    Args:
+        a: First cubic Bézier curve.
+        b: Second cubic Bézier curve.
+        tol: Distance tolerance for duplicate-intersection filtering (mm).
+             Defaults to 1e-12 (effectively exact).
+
+    Returns:
+        List of intersection points on curve *a*.
+    """
+    svg_a = _SvgCubicBezier(
+        complex(a.p0.x, a.p0.y),
+        complex(a.p1.x, a.p1.y),
+        complex(a.p2.x, a.p2.y),
+        complex(a.p3.x, a.p3.y),
+    )
+    svg_b = _SvgCubicBezier(
+        complex(b.p0.x, b.p0.y),
+        complex(b.p1.x, b.p1.y),
+        complex(b.p2.x, b.p2.y),
+        complex(b.p3.x, b.p3.y),
+    )
+    intersections: list[Point] = []
+    for t1, _t2 in svg_a.intersect(svg_b):
+        pt = a.point_at_t(t1)
+        if not any(pt.distance_to(ex) < tol for ex in intersections):
+            intersections.append(pt)
+    return intersections
 
 
 GEOMETRIC_TYPE = (
@@ -1404,31 +1442,7 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
 
             return intersections
         elif isinstance(b, CubicBezier):
-            # Bezier-Bezier intersection (approximate using sampling)
-            intersections = []
-            num_samples = 200
-            tolerance = 1e-6
-
-            for i in range(num_samples + 1):
-                t1 = i / num_samples
-                point1 = a.point_at_t(t1)
-
-                for j in range(num_samples + 1):
-                    t2 = j / num_samples
-                    point2 = b.point_at_t(t2)
-
-                    if point1.distance_to(point2) < tolerance:
-                        # Check if this intersection is already found
-                        is_duplicate = False
-                        for existing in intersections:
-                            if existing.distance_to(point1) < tolerance:
-                                is_duplicate = True
-                                break
-
-                        if not is_duplicate:
-                            intersections.append(point1)
-
-            return intersections
+            return _intersect_bezier_bezier(a, b)
 
     raise TypeError(f"Intersection not implemented for {type(a)} and {type(b)}")
 

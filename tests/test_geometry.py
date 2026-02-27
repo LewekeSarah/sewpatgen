@@ -7,7 +7,7 @@ defined in the geometry module: Point, Segment, Ray, and Circle.
 import math
 import unittest
 import numpy as np
-from sewpat.geometry import Point, Segment, Ray, Circle, intersect
+from sewpat.geometry import Point, Segment, Ray, Circle, CubicBezier, intersect
 
 
 class TestPoint(unittest.TestCase):
@@ -485,6 +485,165 @@ class TestCircle(unittest.TestCase):
         # One circle inside the other (no intersection)
         circle5 = Circle(Point(0, 0), 2)
         self.assertEqual(intersect(circle1, circle5), [])
+
+
+class TestCubicBezierBoundingBox(unittest.TestCase):
+    """Tests for CubicBezier.bounding_box().
+
+    The bounding box must reflect the actual curve extent, NOT the
+    convex hull of the four control points. p1 and p2 are off-curve
+    and must never be used as bounding-box seeds.
+    """
+
+    def _make_curve(self):
+        """Curve where control points lie outside the actual curve extent."""
+        return CubicBezier(
+            p0=Point(10, 10),
+            p1=Point(20, 0),  # below the curve
+            p2=Point(30, 20),  # above the curve
+            p3=Point(40, 10),
+        )
+
+    def test_bbox_x_bounds_match_endpoints(self):
+        """x range is fully determined by the endpoints for this curve."""
+        bez = self._make_curve()
+        mn, mx = bez.bounding_box()
+        self.assertAlmostEqual(mn.x, 10.0, places=6)
+        self.assertAlmostEqual(mx.x, 40.0, places=6)
+
+    def test_bbox_y_does_not_reach_control_points(self):
+        """y min/max must stay within the actual curve, not at control points."""
+        bez = self._make_curve()
+        mn, mx = bez.bounding_box()
+        # Control points are at y=0 and y=20 – the curve never reaches them
+        self.assertGreater(
+            mn.y, 0.0, "y_min must be above the off-curve control point y=0"
+        )
+        self.assertLess(
+            mx.y, 20.0, "y_max must be below the off-curve control point y=20"
+        )
+
+    def test_bbox_y_values_are_correct(self):
+        """Exact y extrema match the analytic result (also verified by svgpathtools)."""
+        bez = self._make_curve()
+        mn, mx = bez.bounding_box()
+        self.assertAlmostEqual(mn.y, 7.113249, places=4)
+        self.assertAlmostEqual(mx.y, 12.886751, places=4)
+
+    def test_bbox_endpoints_always_inside(self):
+        """Start and end points of the curve must lie within the bounding box."""
+        bez = self._make_curve()
+        mn, mx = bez.bounding_box()
+        for pt in (bez.p0, bez.p3):
+            self.assertGreaterEqual(pt.x, mn.x)
+            self.assertLessEqual(pt.x, mx.x)
+            self.assertGreaterEqual(pt.y, mn.y)
+            self.assertLessEqual(pt.y, mx.y)
+
+    def test_bbox_straight_line(self):
+        """A straight cubic Bezier has a bounding box equal to its endpoint range."""
+        bez = CubicBezier(
+            p0=Point(0, 0),
+            p1=Point(10, 10),  # control points along the diagonal
+            p2=Point(20, 20),
+            p3=Point(30, 30),
+        )
+        mn, mx = bez.bounding_box()
+        self.assertAlmostEqual(mn.x, 0.0, places=6)
+        self.assertAlmostEqual(mn.y, 0.0, places=6)
+        self.assertAlmostEqual(mx.x, 30.0, places=6)
+        self.assertAlmostEqual(mx.y, 30.0, places=6)
+
+
+class TestCubicBezierIntersect(unittest.TestCase):
+    """Tests for Bézier–Bézier intersection via intersect().
+
+    Reference values are verified against svgpathtools.CubicBezier.intersect(),
+    which uses the Bézier-clipping algorithm (Sederberg & Nishita 1990).
+    """
+
+    # The two crossing curves used throughout the suite
+    # (same curves as in examples/svgpathtools_test.py)
+    _A = CubicBezier(
+        p0=Point(10, 10),
+        p1=Point(20, 0),
+        p2=Point(30, 20),
+        p3=Point(40, 10),
+    )
+    _B = CubicBezier(
+        p0=Point(10, 15),
+        p1=Point(20, 25),
+        p2=Point(30, 5),
+        p3=Point(40, 15),
+    )
+
+    def test_two_crossings_found(self):
+        """The reference pair of curves has exactly two intersections."""
+        pts = intersect(self._A, self._B)
+        self.assertEqual(len(pts), 2)
+
+    def test_intersection_points_lie_on_both_curves(self):
+        """Every returned point must lie on both curves (distance < 0.05 mm).
+
+        We verify membership by sampling each curve at 1000 points and checking
+        that the intersection point is within 0.05 mm of the closest sample.
+        The tolerance is deliberately loose to account for the finite sampling
+        resolution (~0.033 mm step for a ~33 mm long curve).
+        """
+        tol = 0.05  # mm – sampling grid resolution bound
+        pts = intersect(self._A, self._B)
+        for pt in pts:
+            min_d_a = min(
+                pt.distance_to(self._A.point_at_t(k / 1000)) for k in range(1001)
+            )
+            min_d_b = min(
+                pt.distance_to(self._B.point_at_t(k / 1000)) for k in range(1001)
+            )
+            self.assertLess(min_d_a, tol, f"Point {pt} is not on curve A")
+            self.assertLess(min_d_b, tol, f"Point {pt} is not on curve B")
+
+    def test_first_intersection_coordinates(self):
+        """First intersection near (30.92, 12.50) as per svgpathtools reference."""
+        pts = sorted(intersect(self._A, self._B), key=lambda p: p.x)
+        self.assertAlmostEqual(pts[0].x, 30.924, places=1)
+        self.assertAlmostEqual(pts[0].y, 12.5, places=1)
+
+    def test_second_intersection_coordinates(self):
+        """Second intersection near (36.13, 12.50) as per svgpathtools reference."""
+        pts = sorted(intersect(self._A, self._B), key=lambda p: p.x)
+        self.assertAlmostEqual(pts[1].x, 36.133, places=1)
+        self.assertAlmostEqual(pts[1].y, 12.5, places=1)
+
+    def test_symmetric_call_returns_same_count(self):
+        """intersect(A, B) and intersect(B, A) must return the same number of points."""
+        pts_ab = intersect(self._A, self._B)
+        pts_ba = intersect(self._B, self._A)
+        self.assertEqual(len(pts_ab), len(pts_ba))
+
+    def test_no_intersection_parallel_curves(self):
+        """Two curves that do not cross must return an empty list."""
+        top = CubicBezier(
+            p0=Point(0, 20),
+            p1=Point(10, 20),
+            p2=Point(20, 20),
+            p3=Point(30, 20),
+        )
+        bottom = CubicBezier(
+            p0=Point(0, 0),
+            p1=Point(10, 0),
+            p2=Point(20, 0),
+            p3=Point(30, 0),
+        )
+        pts = intersect(top, bottom)
+        self.assertEqual(pts, [])
+
+    def test_no_duplicates_returned(self):
+        """No two returned points may be closer than 0.01 mm to each other."""
+        pts = intersect(self._A, self._B)
+        for i, p1 in enumerate(pts):
+            for j, p2 in enumerate(pts):
+                if i != j:
+                    self.assertGreater(p1.distance_to(p2), 0.01)
 
 
 if __name__ == "__main__":
