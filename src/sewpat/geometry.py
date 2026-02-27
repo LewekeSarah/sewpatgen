@@ -8,7 +8,6 @@ points, lines, segments, rays, and circles for use in CAD applications.
 import math
 import numpy as np
 from dataclasses import dataclass
-from typing import Union
 from sewpat.units import MM, CM
 
 
@@ -1244,9 +1243,9 @@ def _intersect_circle_circle(c1: Circle, c2: Circle) -> list[Point]:
     return [Point(*p3), Point(*p4)]
 
 
-GEOMETRIC_TYPE = Union[
-    Point, Line, Ray, Circle, Segment, Rect, Triangle, InfoBox, CubicBezier
-]
+GEOMETRIC_TYPE = (
+    Point | Line | Ray | Circle | Segment | Rect | Triangle | InfoBox | CubicBezier
+)
 
 
 def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:

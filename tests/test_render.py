@@ -87,7 +87,7 @@ class TestResolveStyles(unittest.TestCase):
         self.assertIn("point", styles)
         self.assertIn("circle", styles)
         self.assertIn("cubicbezier", styles)
-        self.assertIn("bezier_control", styles)
+        self.assertNotIn("bezier_control", styles)
 
     def test_none_returns_defaults_unchanged(self):
         s1 = _resolve_styles(None)
@@ -103,9 +103,9 @@ class TestResolveStyles(unittest.TestCase):
 
     def test_valid_override_is_applied(self):
         override = StyleOptions(stroke_color="green", stroke_width=2.0)
-        styles = _resolve_styles({"bezier_control": override})
-        self.assertEqual(styles["bezier_control"].stroke_color, "green")
-        self.assertEqual(styles["bezier_control"].stroke_width, 2.0)
+        styles = _resolve_styles({"segment": override})
+        self.assertEqual(styles["segment"].stroke_color, "green")
+        self.assertEqual(styles["segment"].stroke_width, 2.0)
 
     def test_unknown_key_emits_user_warning(self):
         with self.assertWarns(UserWarning) as cm:
@@ -144,9 +144,6 @@ class TestBuildSvg(unittest.TestCase):
             width_mm=210,
             height_mm=297,
             margin_mm=10,
-            control_style_dict=StyleOptions(
-                stroke_color="red", fill_color="red", stroke_width=0.3
-            ).as_dict(),
             show_points=True,
             show_bezier_control_points=False,
         )
@@ -228,7 +225,6 @@ class TestRenderSegment(unittest.TestCase):
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            control_style_dict={},
             show_points=False,
             show_bezier_control_points=False,
         )
@@ -273,7 +269,6 @@ class TestRenderCircle(unittest.TestCase):
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            control_style_dict={},
             show_points=False,
             show_bezier_control_points=False,
         )
@@ -301,7 +296,6 @@ class TestRenderRect(unittest.TestCase):
             width_mm=200,
             height_mm=200,
             margin_mm=5,
-            control_style_dict={},
             show_points=False,
             show_bezier_control_points=False,
         )
@@ -336,7 +330,6 @@ class TestRenderTriangle(unittest.TestCase):
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            control_style_dict={},
             show_points=False,
             show_bezier_control_points=False,
         )
@@ -364,7 +357,6 @@ class TestRenderPoint(unittest.TestCase):
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            control_style_dict={},
             show_points=show_points,
             show_bezier_control_points=False,
         )
@@ -395,7 +387,6 @@ class TestRenderInfoBox(unittest.TestCase):
             width_mm=200,
             height_mm=200,
             margin_mm=5,
-            control_style_dict={},
             show_points=False,
             show_bezier_control_points=False,
         )
@@ -430,16 +421,12 @@ class TestRenderCubicBezier(unittest.TestCase):
     def _svg(bezier, show_control=False, style=None):
         part = PatternPart(name="p")
         part.append(bezier, style=style)
-        ctrl_style = StyleOptions(
-            stroke_color="red", fill_color="red", stroke_width=0.3
-        ).as_dict()
         return _build_svg(
             title="t",
             element_groups=[part.elements],
             width_mm=200,
             height_mm=200,
             margin_mm=5,
-            control_style_dict=ctrl_style,
             show_points=False,
             show_bezier_control_points=show_control,
         )
@@ -541,24 +528,19 @@ class TestExportPatternPartSvgMm(unittest.TestCase):
         content = Path(fname).read_text()
         self.assertIn("2,2", content)  # dashed control handle
 
-    def test_style_map_bezier_control_override_applied(self):
-        # style_map["bezier_control"] controls the colour of control-point handles.
+    def test_style_map_known_key_does_not_warn(self):
+        # A known style_map key must not emit a warning.
         part = PatternPart(name="p")
-        part.append(CubicBezier(Point(0, 0), Point(5, 5), Point(15, 5), Point(20, 0)))
+        part.append(Segment(Point(0, 0), Point(10, 0)))
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
-        export_pattern_part_svg_mm(
-            part,
-            fname,
-            style_map={
-                "bezier_control": StyleOptions(
-                    stroke_color="purple", fill_color="purple"
-                )
-            },
-            show_bezier_control_points=True,
-        )
-        content = Path(fname).read_text()
-        self.assertIn("purple", content)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            export_pattern_part_svg_mm(
+                part,
+                fname,
+                style_map={"segment": StyleOptions(stroke_color="purple")},
+            )
 
     def test_style_map_unknown_key_warns(self):
         part = _simple_part()
@@ -679,24 +661,21 @@ class TestExportPatternSvgMm(unittest.TestCase):
         self.assertIn('width="150mm"', content)
         self.assertIn('height="200mm"', content)
 
-    def test_style_map_bezier_control_override_applied(self):
-        # style_map["bezier_control"] controls the colour of control-point handles.
+    def test_style_map_known_key_does_not_warn(self):
+        # A known style_map key must not emit a warning.
         pat = Pattern(name="p")
         part = PatternPart(name="a")
         part.append(CubicBezier(Point(0, 0), Point(5, 5), Point(15, 5), Point(20, 0)))
         pat.add_part(part)
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
-        export_pattern_svg_mm(
-            pat,
-            fname,
-            style_map={
-                "bezier_control": StyleOptions(stroke_color="teal", fill_color="teal")
-            },
-            show_bezier_control_points=True,
-        )
-        content = Path(fname).read_text()
-        self.assertIn("teal", content)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            export_pattern_svg_mm(
+                pat,
+                fname,
+                style_map={"cubicbezier": StyleOptions(stroke_color="teal")},
+            )
 
     def test_style_map_unknown_key_warns(self):
         pat = _simple_pattern()
@@ -757,7 +736,6 @@ class TestElementNameOverride(unittest.TestCase):
             width_mm=200,
             height_mm=200,
             margin_mm=5,
-            control_style_dict={},
             show_points=True,
             show_bezier_control_points=False,
         )

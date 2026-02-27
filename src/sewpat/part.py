@@ -16,14 +16,14 @@ class PatternElement:
     def __init__(
         self,
         geometry: object,
-        style: "StyleOptions | None" = None,
-        name: "str | None" = None,
+        style: StyleOptions | None = None,
+        name: str | None = None,
     ) -> None:
         self.geometry = geometry
         self.style = style if style is not None else StyleOptions()
         self.name = name
 
-    def get_name(self) -> "str | None":
+    def get_name(self) -> str | None:
         """Return the effective name (element name overrides geometry name)."""
         if self.name is not None:
             return self.name
@@ -33,18 +33,16 @@ class PatternElement:
 class PatternPart:
     """A collection of pattern elements forming one pattern piece."""
 
-    def __init__(
-        self, name: str, elements: "list[PatternElement] | None" = None
-    ) -> None:
+    def __init__(self, name: str, elements: list[PatternElement] | None = None) -> None:
         self.name = name
         self.elements: list[PatternElement] = elements if elements is not None else []
 
     def append(
         self,
         geometry: object,
-        style: "StyleOptions | None" = None,
-        name: "str | None" = None,
-    ) -> "PatternElement":
+        style: StyleOptions | None = None,
+        name: str | None = None,
+    ) -> PatternElement:
         """Create a PatternElement from geometry + style and append it to this part.
 
         Args:
@@ -59,7 +57,7 @@ class PatternPart:
         self.elements.append(elem)
         return elem
 
-    def extend(self, elements: "list[PatternElement]") -> None:
+    def extend(self, elements: list[PatternElement]) -> None:
         """Append multiple PatternElements at once.
 
         Args:
@@ -68,7 +66,7 @@ class PatternPart:
         self.elements.extend(elements)
 
     @property
-    def centroid(self) -> "Point | None":
+    def centroid(self) -> Point | None:
         """Calculate the centroid of all vertex coordinates in this part.
 
         Collects every coordinate from Points, Segment endpoints, Rect corners,
@@ -104,7 +102,7 @@ class PatternPart:
         start: Point,
         end: Point,
         name: str = "grainline / Fadenlauf",
-    ) -> "PatternElement":
+    ) -> PatternElement:
         """Add a grainline to this pattern part.
 
         The grainline is optional — not every part requires one.
@@ -120,8 +118,8 @@ class PatternPart:
         return self.append(Segment(start, end, name=name), style=STYLE_GRAINLINE)
 
     def add_info_box(
-        self, header: str | None = None, notes: "list[str] | None" = None
-    ) -> "PatternElement | None":
+        self, header: str | None = None, notes: list[str] | None = None
+    ) -> PatternElement | None:
         """Add an info box at the centroid of this pattern part.
 
         The info box displays the part name as a bold header and optional
@@ -163,7 +161,7 @@ class PatternPart:
     def add_notches(
         self,
         *points: Point,
-        segment: "Segment | None" = None,
+        segment: Segment | None = None,
         length: float = 0.8 * CM,
         width: float = 0.4 * CM,
         is_back: bool = False,
@@ -244,8 +242,8 @@ class Pattern:
     def __init__(
         self,
         name: str,
-        parts: "list[PatternPart] | None" = None,
-        anchor: "Point | None" = None,
+        parts: list[PatternPart] | None = None,
+        anchor: Point | None = None,
     ) -> None:
         self.name = name
         self.parts: list[PatternPart] = parts if parts is not None else []
@@ -256,8 +254,8 @@ class Pattern:
         self,
         origin: Point,
         edge_length: float = 3 * CM,
-        style: "StyleOptions | None" = None,
-    ) -> "PatternElement":
+        style: StyleOptions | None = None,
+    ) -> PatternElement:
         """Set a reference square for print-scale verification.
 
         The square is rendered on every SVG export independently of which
@@ -289,7 +287,7 @@ class Pattern:
         self.reference_square = elem
         return elem
 
-    def add_part(self, part: "PatternPart") -> "PatternPart":
+    def add_part(self, part: PatternPart) -> PatternPart:
         """Append a PatternPart to this pattern.
 
         Args:
@@ -301,7 +299,7 @@ class Pattern:
         self.parts.append(part)
         return part
 
-    def get_part(self, name: str) -> "PatternPart":
+    def get_part(self, name: str) -> PatternPart:
         """Return the first PatternPart with the given name.
 
         Args:

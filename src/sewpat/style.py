@@ -114,6 +114,7 @@ class StyleOptions:
             "marker-end": self.marker_end.value if self.marker_end else None,
             "font-weight": self.font_weight,
             "font-style": self.font_style,
+            "font-size-mm": self.font_size_mm,
         }
         if self.dash_array:
             style_dict["stroke-dasharray"] = ",".join(map(str, self.dash_array))

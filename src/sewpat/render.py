@@ -14,8 +14,6 @@ from sewpat.part import PatternPart, PatternElement, Pattern
 from sewpat.style import (
     StyleOptions,
     Marker,
-    DEFAULT_STROKE_WIDTH,
-    DEFAULT_STROKE_WIDTH_GRAIN,
     DEFAULT_FONT_SIZE_MM,
 )
 from sewpat.markers import ARROW_DEFS, SCISSOR_BLADE_OVERHANG
@@ -37,9 +35,6 @@ _DEFAULT_STYLES: dict[str, StyleOptions] = {
     "point": StyleOptions(fill_color="black", stroke_width=0.1),
     "circle": StyleOptions(),
     "cubicbezier": StyleOptions(),
-    "bezier_control": StyleOptions(
-        stroke_color="red", fill_color="red", stroke_width=0.3
-    ),
 }
 
 
@@ -82,12 +77,11 @@ def _common_stroke_attrs(
 def _render_cubic_bezier(
     element: CubicBezier,
     style_dict: dict[str, Any],
-    font_size_mm: float,
     show_control_points: bool,
-    control_style_dict: dict[str, Any],
 ) -> list[str]:
     """Return SVG elements for a CubicBezier curve."""
     nodes: list[str] = []
+    font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
 
     path_data = (
         f"M {element.p0.x},{element.p0.y} "
@@ -102,9 +96,9 @@ def _render_cubic_bezier(
         nodes.append(_svg_text(element.p0.x, element.p0.y, font_size_mm, element.name))
 
     if show_control_points:
-        c_stroke = control_style_dict.get("stroke", "red")
-        c_fill = control_style_dict.get("fill", "red")
-        c_width = control_style_dict.get("stroke-width", 0.3)
+        c_stroke = "red"
+        c_fill = "red"
+        c_width = 0.3
         for p_start, p_end in [(element.p0, element.p1), (element.p2, element.p3)]:
             nodes.append(
                 f'<line x1="{p_start.x}" y1="{p_start.y}" x2="{p_end.x}" y2="{p_end.y}" '
@@ -122,10 +116,10 @@ def _render_cubic_bezier(
 def _render_segment(
     element: Segment,
     style_dict: dict[str, Any],
-    font_size_mm: float,
 ) -> list[str]:
     """Return SVG elements for a Segment."""
     nodes: list[str] = []
+    font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
     attrs = _common_stroke_attrs(style_dict, force_fill="none")
 
     # marker-start: arrows use a dedicated reversed marker id; distance uses its
@@ -214,9 +208,10 @@ def _render_triangle(element: Triangle, style_dict: dict[str, Any]) -> list[str]
     ]
 
 
-def _render_info_box(element: InfoBox, font_size_mm: float) -> list[str]:
+def _render_info_box(element: InfoBox, style_dict: dict[str, Any]) -> list[str]:
     """Render an InfoBox as SVG text: header in bold, notes below."""
     nodes: list[str] = []
+    font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
     line_height = font_size_mm * 1.6
     x = element.position.x
     # Start y so the block is vertically centred on position
@@ -242,11 +237,10 @@ def _render_info_box(element: InfoBox, font_size_mm: float) -> list[str]:
     return nodes
 
 
-def _render_rect(
-    element: Rect, style_dict: dict[str, Any], font_size_mm: float
-) -> list[str]:
+def _render_rect(element: Rect, style_dict: dict[str, Any]) -> list[str]:
     """Return SVG elements for a Rect."""
     nodes: list[str] = []
+    font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
     stroke_attrs = _common_stroke_attrs(style_dict)
 
     nodes.append(
@@ -269,11 +263,10 @@ def _render_rect(
     return nodes
 
 
-def _render_point(
-    element: Point, style_dict: dict[str, Any], font_size_mm: float
-) -> list[str]:
+def _render_point(element: Point, style_dict: dict[str, Any]) -> list[str]:
     """Return SVG elements for a Point."""
     nodes: list[str] = []
+    font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
     attrs = _common_stroke_attrs(style_dict, force_fill=style_dict.get("fill", "black"))
     nodes.append(f'<circle cx="{element.x}" cy="{element.y}" r="1mm" {attrs} />')
     if element.name:
@@ -287,45 +280,36 @@ def _render_point(
 
 
 def _make_renderers(
-    font_size_mm: float,
     show_bezier_control_points: bool,
-    control_style_dict: dict[str, Any],
-    show_points: bool,
 ) -> dict[type, Callable[[Any, dict[str, Any]], list[str]]]:
     """Build a mapping from geometry type to its render callable."""
     return {
         CubicBezier: lambda el, sd: _render_cubic_bezier(
-            el, sd, font_size_mm, show_bezier_control_points, control_style_dict
+            el, sd, show_bezier_control_points
         ),
-        Segment: lambda el, sd: _render_segment(el, sd, font_size_mm),
+        Segment: lambda el, sd: _render_segment(el, sd),
         Circle: lambda el, sd: _render_circle(el, sd),
         Triangle: lambda el, sd: _render_triangle(el, sd),
-        InfoBox: lambda el, sd: _render_info_box(el, font_size_mm),
-        Rect: lambda el, sd: _render_rect(el, sd, font_size_mm),
-        Point: lambda el, sd: (
-            _render_point(el, sd, font_size_mm) if show_points else []
-        ),
+        InfoBox: lambda el, sd: _render_info_box(el, sd),
+        Rect: lambda el, sd: _render_rect(el, sd),
+        Point: lambda el, sd: _render_point(el, sd),
     }
 
 
 def _render_elements(
-    elements: "list",
+    elements: list[PatternElement],
     svg_nodes: list[str],
     show_bezier_control_points: bool,
-    control_style_dict: dict,
     show_points: bool,
 ) -> None:
     """Render a list of PatternElements into svg_nodes (in-place)."""
     for pat_elem in elements:
         element = pat_elem.geometry
+        if not show_points and isinstance(element, Point):
+            continue
         style = pat_elem.style
         effective_name = pat_elem.get_name()
-        renderers = _make_renderers(
-            style.font_size_mm,
-            show_bezier_control_points,
-            control_style_dict,
-            show_points,
-        )
+        renderers = _make_renderers(show_bezier_control_points)
         renderer = renderers.get(type(element))
         if renderer is not None:
             original_name = getattr(element, "name", None)
@@ -382,7 +366,6 @@ def _build_svg(
     width_mm: float,
     height_mm: float,
     margin_mm: float,
-    control_style_dict: dict,
     show_points: bool,
     show_bezier_control_points: bool,
 ) -> str:
@@ -400,7 +383,6 @@ def _build_svg(
             elements,
             svg_nodes,
             show_bezier_control_points,
-            control_style_dict,
             show_points,
         )
 
@@ -438,7 +420,6 @@ def export_pattern_part_svg_mm(
         width_mm=width_mm,
         height_mm=height_mm,
         margin_mm=margin_mm,
-        control_style_dict=styles["bezier_control"].as_dict(),
         show_points=show_points,
         show_bezier_control_points=show_bezier_control_points,
     )
@@ -490,7 +471,6 @@ def export_pattern_svg_mm(
         width_mm=width_mm,
         height_mm=height_mm,
         margin_mm=margin_mm,
-        control_style_dict=styles["bezier_control"].as_dict(),
         show_points=show_points,
         show_bezier_control_points=show_bezier_control_points,
     )
