@@ -264,18 +264,21 @@ class Segment:
         """
         return Point(*(0.5 * (self.p1.coords + self.p2.coords)))
 
-    def point_at_rel_dist(self, rel_pos: float) -> Point:
-        """Calculate a point on the line segment given its relative position.
+    def point_at_t(self, t: float) -> Point:
+        """Calculate a point on the line segment at relative parameter t.
 
         Args:
-            rel_pos: Relative position on the line segment in [0, 1]. A position
-            of 0 corresponds to p1.
+            t: Parameter value in [0, 1]. t=0 corresponds to p1, t=1 to p2.
 
         Returns:
-            Point: Position on the line segment.
+            Point: Position on the line segment at parameter t.
         """
-        assert (0 <= rel_pos) and (rel_pos <= 1), f"{rel_pos = } expected in [0, 1]"
-        return Point(*((1.0 - rel_pos) * self.p1.coords + rel_pos * self.p2.coords))
+        assert (0 <= t) and (t <= 1), f"{t = } expected in [0, 1]"
+        return Point(*((1.0 - t) * self.p1.coords + t * self.p2.coords))
+
+    def point_at_rel_dist(self, rel_pos: float) -> Point:
+        """Deprecated alias for ``point_at_t()``. Use ``point_at_t()`` instead."""
+        return self.point_at_t(rel_pos)
 
     def point_perpendicular(
         self,
@@ -368,6 +371,39 @@ class Segment:
         # Check if point is collinear and within segment bounds
         return abs(d1 + d2 - line_length) < tolerance
 
+    def point_at_length(self, arc_length: float) -> "Point":
+        """Return the point at a given arc length from p1 along the segment.
+
+        Mirrors ``CubicBezier.point_at_length()`` for API consistency.
+
+        Args:
+            arc_length: Distance from p1 along the segment (mm).
+
+        Returns:
+            Point on the segment at the given distance from p1.
+
+        Raises:
+            ValueError: If arc_length is negative or exceeds the segment length.
+        """
+        total = self.length
+        if arc_length < 0 or arc_length > total + 1e-9:
+            raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
+        return self.point_at_rel_dist(arc_length / total)
+
+    def bounding_box(self) -> tuple["Point", "Point"]:
+        """Return the axis-aligned bounding box of the segment.
+
+        Mirrors ``CubicBezier.bounding_box()`` for API consistency.
+
+        Returns:
+            Tuple of (min_point, max_point).
+        """
+        min_x = min(self.p1.x, self.p2.x)
+        min_y = min(self.p1.y, self.p2.y)
+        max_x = max(self.p1.x, self.p2.x)
+        max_y = max(self.p1.y, self.p2.y)
+        return Point(min_x, min_y), Point(max_x, max_y)
+
 
 class Ray:
     """A ray starting from a point and going in a specific direction.
@@ -439,7 +475,7 @@ class Ray:
         """Return a point on the ray at the given distance from the origin.
 
         Args:
-            distance: The distance from the origin.
+            distance: The distance from the origin along the ray direction.
 
         Returns:
             Point: A point on the ray at the specified distance from the origin.
@@ -567,7 +603,7 @@ class Line:
         """Return a point on the line at the given distance from the base point.
 
         Args:
-            distance: The distance from the base point.
+            distance: The distance from the base point along the line direction.
 
         Returns:
             Point: A point on the line at the specified distance from the base point.
@@ -576,14 +612,14 @@ class Line:
         return Point(*point_coords)
 
     def contains_point(self, point: Point, tolerance: float = 1e-14) -> bool:
-        """Check if a point lies on the ray.
+        """Check if a point lies on the line.
 
         Args:
             point: The point to check.
             tolerance: The maximum angular deviation allowed.
 
         Returns:
-            bool: True if the point lies on the ray within tolerance, False otherwise.
+            bool: True if the point lies on the line within tolerance, False otherwise.
         """
         # Vector from origin to point
         v = point.coords - self.point.coords
@@ -1109,6 +1145,80 @@ class CubicBezier:
         d = self._svg().derivative(t)
         return np.array([d.real, d.imag])
 
+    def normal_at_t(self, t: float) -> np.ndarray:
+        """Compute the unit normal vector at parameter t.
+
+        The normal points 90° counter-clockwise from the tangent direction
+        (i.e. to the *left* of the travel direction), consistent with the
+        convention used by ``Segment.unit_normal``.
+
+        This is the correct direction vector for offsetting a point on the
+        curve by a seam allowance.
+
+        Args:
+            t: Parameter value, typically between 0 and 1.
+
+        Returns:
+            Unit normal vector as a numpy array.
+        """
+        n = self._svg().normal(t)
+        return np.array([n.real, n.imag])
+
+    def point_at_length(self, arc_length: float) -> "Point":
+        """Return the point on the curve at a given arc length from the start.
+
+        Uses ``svgpathtools.ilength()`` (inverse arc-length) which solves for
+        the parameter *t* corresponding to the requested arc length via
+        Gauss-Legendre quadrature – the same method used by ``length()``.
+
+        Typical use: place a notch exactly 3 cm from the start of a curved
+        seam edge.
+
+        Args:
+            arc_length: Distance along the curve from p0, in the same units
+                as the control points (mm).
+
+        Returns:
+            Point on the curve at the given arc length.
+
+        Raises:
+            ValueError: If arc_length is negative or exceeds the curve length.
+        """
+        total = self.length()
+        if arc_length < 0 or arc_length > total + 1e-9:
+            raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
+        t = self._svg().ilength(arc_length)
+        return self.point_at_t(t)
+
+    def split(self, t: float) -> tuple["CubicBezier", "CubicBezier"]:
+        """Split the curve at parameter t into two cubic Bézier curves.
+
+        Delegates to ``svgpathtools.split()``, which uses the de Casteljau
+        algorithm for numerically stable subdivision.
+
+        Args:
+            t: Parameter value at which to split (0 < t < 1).
+
+        Returns:
+            Tuple of (left, right) CubicBezier curves, where *left* covers
+            the original curve from 0 to t and *right* from t to 1.
+        """
+        left, right = self._svg().split(t)
+        return (
+            CubicBezier(
+                Point(left.start.real, left.start.imag),
+                Point(left.control1.real, left.control1.imag),
+                Point(left.control2.real, left.control2.imag),
+                Point(left.end.real, left.end.imag),
+            ),
+            CubicBezier(
+                Point(right.start.real, right.start.imag),
+                Point(right.control1.real, right.control1.imag),
+                Point(right.control2.real, right.control2.imag),
+                Point(right.end.real, right.end.imag),
+            ),
+        )
+
     def bounding_box(self) -> tuple[Point, Point]:
         """Compute the axis-aligned bounding box of the Bezier curve.
 
@@ -1156,6 +1266,78 @@ class CubicBezier:
         min_y, max_y = min(y_coords), max(y_coords)
 
         return Point(min_x, min_y), Point(max_x, max_y)
+
+    def point_perpendicular(self, distance_to_obj: float, t: float) -> "Point":
+        """Return a point offset perpendicularly from the curve at parameter t.
+
+        Mirrors ``Segment.point_perpendicular()`` / ``Ray.point_perpendicular()``
+        / ``Line.point_perpendicular()`` for API consistency, adapted to the
+        curve case where the normal direction varies along the curve.
+
+        Positive *distance_to_obj* is to the left of the travel direction (same
+        sign convention as ``unit_normal`` on linear objects).
+
+        Typical use: offset a point on a seam line by the seam allowance.
+
+        Args:
+            distance_to_obj: Perpendicular offset in mm. Positive = left of
+                direction, negative = right of direction.
+            t: Parameter value on the curve (0 = p0, 1 = p3).
+
+        Returns:
+            Point offset by *distance_to_obj* in the normal direction at *t*.
+        """
+        pt = self.point_at_t(t)
+        nor = self.normal_at_t(t)
+        return Point(pt.x + distance_to_obj * nor[0], pt.y + distance_to_obj * nor[1])
+
+    def contains_point(self, point: "Point", tolerance: float = 0.01) -> bool:
+        """Check whether a point lies on the curve within a given tolerance.
+
+        Mirrors ``Segment.contains_point()`` / ``Ray.contains_point()`` /
+        ``Line.contains_point()`` for API consistency.
+
+        Because there is no closed-form inverse for a cubic Bézier, the check
+        is performed by finding the closest point on the curve via
+        ``point_at_length`` + binary search on the arc-length parameter and
+        comparing the distance.
+
+        Args:
+            point: The point to test.
+            tolerance: Maximum Euclidean distance (mm) allowed for the point
+                to be considered on the curve. Defaults to 0.01 mm.
+
+        Returns:
+            True if the closest point on the curve is within *tolerance* of
+            *point*, False otherwise.
+        """
+        # Coarse search: sample 200 points, keep the best t
+        best_t = 0.0
+        best_d = point.distance_to(self.p0)
+        for i in range(1, 201):
+            t = i / 200
+            d = point.distance_to(self.point_at_t(t))
+            if d < best_d:
+                best_d, best_t = d, t
+
+        # Early exit if already within tolerance
+        if best_d <= tolerance:
+            return True
+
+        # Refine with binary search around best_t (±1/200 bracket)
+        lo = max(0.0, best_t - 1 / 200)
+        hi = min(1.0, best_t + 1 / 200)
+        for _ in range(30):
+            m1 = lo + (hi - lo) / 3
+            m2 = hi - (hi - lo) / 3
+            if point.distance_to(self.point_at_t(m1)) < point.distance_to(
+                self.point_at_t(m2)
+            ):
+                hi = m2
+            else:
+                lo = m1
+        best_d = point.distance_to(self.point_at_t((lo + hi) / 2))
+        return best_d <= tolerance
 
 
 def _intersect_linear_circle(

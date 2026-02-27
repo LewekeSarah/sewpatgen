@@ -128,22 +128,23 @@ class TestSegment(unittest.TestCase):
         self.assertAlmostEqual(mid.y, 4.0)
 
     def test_contains_point(self):
-        """Test if a point lies on the line segment.
-
-        Verifies that the contains_point method correctly determines
-        whether a given point lies on the line segment within tolerance.
-        """
+        """Test if a point lies on the line segment."""
         line = Segment(Point(0, 0), Point(10, 10))
-
-        # Points on the line
         self.assertTrue(line.contains_point(Point(0, 0)))
         self.assertTrue(line.contains_point(Point(5, 5)))
         self.assertTrue(line.contains_point(Point(10, 10)))
-
-        # Points not on the line
         self.assertFalse(line.contains_point(Point(2, 3)))
-        self.assertFalse(line.contains_point(Point(-1, -1)))  # Outside segment
-        self.assertFalse(line.contains_point(Point(11, 11)))  # Outside segment
+        self.assertFalse(line.contains_point(Point(-1, -1)))
+        self.assertFalse(line.contains_point(Point(11, 11)))
+
+    def test_point_at_t(self):
+        """Test point_at_t() and that deprecated alias point_at_rel_dist() still works."""
+        seg = Segment(Point(0, 0), Point(10, 0))
+        self.assertAlmostEqual(seg.point_at_t(0.0).x, 0.0)
+        self.assertAlmostEqual(seg.point_at_t(0.5).x, 5.0)
+        self.assertAlmostEqual(seg.point_at_t(1.0).x, 10.0)
+        # deprecated alias
+        self.assertAlmostEqual(seg.point_at_rel_dist(0.5).x, 5.0)
 
     def test_line_line_intersection(self):
         """Test intersection between two lines.
@@ -209,8 +210,9 @@ class TestRay(unittest.TestCase):
     def test_point_at_distance(self):
         """Test getting a point at a specified distance on the ray.
 
-        Verifies that the point_at_distance method correctly calculates
-        a point along the ray at the specified distance from the origin.
+        Ray and Line use point_at_distance() (directional distance along an
+        infinite object). Segment and CubicBezier use point_at_length()
+        (arc length on a bounded path). The two are semantically distinct.
         """
         ray = Ray(Point(0, 0), (1, 0))  # Ray along x-axis
         point = ray.point_at_distance(5)
@@ -218,7 +220,7 @@ class TestRay(unittest.TestCase):
         self.assertAlmostEqual(point.y, 0.0)
 
         # Ray along y-axis
-        ray = Ray(Point(0, 0), (0, 1))  # Ray along y-axis
+        ray = Ray(Point(0, 0), (0, 1))
         point = ray.point_at_distance(3)
         self.assertAlmostEqual(point.x, 0.0)
         self.assertAlmostEqual(point.y, 3.0)
@@ -495,7 +497,8 @@ class TestCubicBezierBoundingBox(unittest.TestCase):
     and must never be used as bounding-box seeds.
     """
 
-    def _make_curve(self):
+    @staticmethod
+    def _make_curve():
         """Curve where control points lie outside the actual curve extent."""
         return CubicBezier(
             p0=Point(10, 10),
@@ -644,6 +647,290 @@ class TestCubicBezierIntersect(unittest.TestCase):
             for j, p2 in enumerate(pts):
                 if i != j:
                     self.assertGreater(p1.distance_to(p2), 0.01)
+
+
+class TestCubicBezierNewMethods(unittest.TestCase):
+    """Tests for normal_at_t(), point_at_length(), and split()."""
+
+    @staticmethod
+    def _curve():
+        return CubicBezier(
+            p0=Point(10, 10),
+            p1=Point(20, 0),
+            p2=Point(30, 20),
+            p3=Point(40, 10),
+        )
+
+    # ── normal_at_t ─────────────────────────────────────────────────────────
+
+    def test_normal_is_unit_length(self):
+        """normal_at_t() must return a vector of length 1."""
+        b = self._curve()
+        for t in [0.0, 0.25, 0.5, 0.75, 1.0]:
+            n = b.normal_at_t(t)
+            self.assertAlmostEqual(float(np.linalg.norm(n)), 1.0, places=10)
+
+    def test_normal_perpendicular_to_tangent(self):
+        """Normal and tangent must be perpendicular (dot product = 0)."""
+        b = self._curve()
+        for t in [0.1, 0.3, 0.5, 0.7, 0.9]:
+            tan = b.tangent_at_t(t)
+            nor = b.normal_at_t(t)
+            tan_unit = tan / np.linalg.norm(tan)
+            self.assertAlmostEqual(float(np.dot(tan_unit, nor)), 0.0, places=10)
+
+    def test_normal_offset_point_at_correct_distance(self):
+        """A point offset by d mm along the normal is d mm from the curve."""
+        b = self._curve()
+        d = 10.0  # mm seam allowance
+        t = 0.5
+        pt = b.point_at_t(t)
+        nor = b.normal_at_t(t)
+        offset = Point(pt.x + d * nor[0], pt.y + d * nor[1])
+        self.assertAlmostEqual(pt.distance_to(offset), d, places=10)
+
+    # ── point_at_length ──────────────────────────────────────────────────────
+
+    def test_point_at_length_zero_is_start(self):
+        """point_at_length(0) must return p0."""
+        b = self._curve()
+        pt = b.point_at_length(0.0)
+        self.assertAlmostEqual(pt.x, b.p0.x, places=4)
+        self.assertAlmostEqual(pt.y, b.p0.y, places=4)
+
+    def test_point_at_length_full_is_end(self):
+        """point_at_length(total_length) must return p3."""
+        b = self._curve()
+        pt = b.point_at_length(b.length())
+        self.assertAlmostEqual(pt.x, b.p3.x, places=4)
+        self.assertAlmostEqual(pt.y, b.p3.y, places=4)
+
+    def test_point_at_length_midpoint_is_on_curve(self):
+        """point_at_length(L/2) must lie on the curve."""
+        b = self._curve()
+        half = b.length() / 2
+        pt = b.point_at_length(half)
+        # Verify by sampling: closest sample on curve should be < 0.05 mm away
+        min_d = min(pt.distance_to(b.point_at_t(k / 2000)) for k in range(2001))
+        self.assertLess(min_d, 0.05)
+
+    def test_point_at_length_arc_distance_is_correct(self):
+        """The arc length from p0 to point_at_length(s) must equal s."""
+        b = self._curve()
+        s = b.length() * 0.3
+        # Find t for pt and integrate back – use svgpathtools ilength round-trip
+        from svgpathtools import CubicBezier as SvgBez
+
+        svg = SvgBez(
+            complex(b.p0.x, b.p0.y),
+            complex(b.p1.x, b.p1.y),
+            complex(b.p2.x, b.p2.y),
+            complex(b.p3.x, b.p3.y),
+        )
+        t = svg.ilength(s)
+        recovered = svg.length(t1=t)  # length from 0 to t
+        self.assertAlmostEqual(recovered, s, places=4)
+
+    def test_point_at_length_raises_on_negative(self):
+        """point_at_length() must raise ValueError for negative arc length."""
+        b = self._curve()
+        with self.assertRaises(ValueError):
+            b.point_at_length(-1.0)
+
+    def test_point_at_length_raises_on_overflow(self):
+        """point_at_length() must raise ValueError if arc length > curve length."""
+        b = self._curve()
+        with self.assertRaises(ValueError):
+            b.point_at_length(b.length() + 1.0)
+
+    # ── split ────────────────────────────────────────────────────────────────
+
+    def test_split_left_starts_at_p0(self):
+        """Left piece must start at the original p0."""
+        b = self._curve()
+        left, _ = b.split(0.5)
+        self.assertAlmostEqual(left.p0.x, b.p0.x, places=10)
+        self.assertAlmostEqual(left.p0.y, b.p0.y, places=10)
+
+    def test_split_right_ends_at_p3(self):
+        """Right piece must end at the original p3."""
+        b = self._curve()
+        _, right = b.split(0.5)
+        self.assertAlmostEqual(right.p3.x, b.p3.x, places=10)
+        self.assertAlmostEqual(right.p3.y, b.p3.y, places=10)
+
+    def test_split_join_point_matches(self):
+        """Left end and right start must be the same point (the split point)."""
+        b = self._curve()
+        left, right = b.split(0.5)
+        self.assertAlmostEqual(left.p3.x, right.p0.x, places=10)
+        self.assertAlmostEqual(left.p3.y, right.p0.y, places=10)
+
+    def test_split_join_point_lies_on_original(self):
+        """The split point must lie on the original curve at t."""
+        b = self._curve()
+        t = 0.4
+        left, right = b.split(t)
+        expected = b.point_at_t(t)
+        self.assertAlmostEqual(left.p3.x, expected.x, places=8)
+        self.assertAlmostEqual(left.p3.y, expected.y, places=8)
+
+    def test_split_lengths_sum_to_original(self):
+        """Left length + right length must equal the original curve length."""
+        b = self._curve()
+        left, right = b.split(0.5)
+        self.assertAlmostEqual(left.length() + right.length(), b.length(), places=6)
+
+    def test_split_returns_cubicbezier_instances(self):
+        """split() must return two CubicBezier objects."""
+        b = self._curve()
+        left, right = b.split(0.5)
+        self.assertIsInstance(left, CubicBezier)
+        self.assertIsInstance(right, CubicBezier)
+
+
+class TestSegmentNewMethods(unittest.TestCase):
+    """Tests for Segment.point_at_length() and Segment.bounding_box()."""
+
+    @staticmethod
+    def _seg():
+        return Segment(Point(0, 0), Point(30, 40))  # length = 50
+
+    # ── point_at_length ──────────────────────────────────────────────────────
+
+    def test_point_at_length_zero_is_p1(self):
+        s = self._seg()
+        pt = s.point_at_length(0)
+        self.assertAlmostEqual(pt.x, 0.0)
+        self.assertAlmostEqual(pt.y, 0.0)
+
+    def test_point_at_length_full_is_p2(self):
+        s = self._seg()
+        pt = s.point_at_length(50)
+        self.assertAlmostEqual(pt.x, 30.0)
+        self.assertAlmostEqual(pt.y, 40.0)
+
+    def test_point_at_length_midpoint(self):
+        s = self._seg()
+        pt = s.point_at_length(25)
+        self.assertAlmostEqual(pt.x, 15.0)
+        self.assertAlmostEqual(pt.y, 20.0)
+
+    def test_point_at_length_raises_negative(self):
+        with self.assertRaises(ValueError):
+            self._seg().point_at_length(-1)
+
+    def test_point_at_length_raises_overflow(self):
+        with self.assertRaises(ValueError):
+            self._seg().point_at_length(51)
+
+    # ── bounding_box ─────────────────────────────────────────────────────────
+
+    def test_bounding_box_axis_aligned(self):
+        s = Segment(Point(5, 3), Point(20, 15))
+        mn, mx = s.bounding_box()
+        self.assertAlmostEqual(mn.x, 5)
+        self.assertAlmostEqual(mn.y, 3)
+        self.assertAlmostEqual(mx.x, 20)
+        self.assertAlmostEqual(mx.y, 15)
+
+    def test_bounding_box_reversed_coords(self):
+        """Works correctly when p2 has smaller coordinates than p1."""
+        s = Segment(Point(20, 15), Point(5, 3))
+        mn, mx = s.bounding_box()
+        self.assertAlmostEqual(mn.x, 5)
+        self.assertAlmostEqual(mn.y, 3)
+        self.assertAlmostEqual(mx.x, 20)
+        self.assertAlmostEqual(mx.y, 15)
+
+    def test_bounding_box_horizontal(self):
+        s = Segment(Point(0, 5), Point(10, 5))
+        mn, mx = s.bounding_box()
+        self.assertAlmostEqual(mn.y, mx.y)  # zero height
+
+
+class TestCubicBezierConsistencyMethods(unittest.TestCase):
+    """Tests for CubicBezier.point_perpendicular() and CubicBezier.contains_point()."""
+
+    @staticmethod
+    def _curve():
+        return CubicBezier(
+            p0=Point(10, 10),
+            p1=Point(20, 0),
+            p2=Point(30, 20),
+            p3=Point(40, 10),
+        )
+
+    # ── point_perpendicular ──────────────────────────────────────────────────
+
+    def test_point_perpendicular_distance(self):
+        """Offset point must be exactly *distance* away from the curve point."""
+        b = self._curve()
+        d = 8.0
+        for t in [0.25, 0.5, 0.75]:
+            base = b.point_at_t(t)
+            offset = b.point_perpendicular(d, t)
+            self.assertAlmostEqual(base.distance_to(offset), d, places=10)
+
+    def test_point_perpendicular_direction_is_normal(self):
+        """The offset direction must be parallel to normal_at_t()."""
+        b = self._curve()
+        t = 0.5
+        base = b.point_at_t(t)
+        offset = b.point_perpendicular(5.0, t)
+        diff = np.array([offset.x - base.x, offset.y - base.y])
+        diff_unit = diff / np.linalg.norm(diff)
+        expected = b.normal_at_t(t)
+        self.assertAlmostEqual(float(np.dot(diff_unit, expected)), 1.0, places=10)
+
+    def test_point_perpendicular_negative_goes_other_side(self):
+        """Positive and negative distance must produce points on opposite sides."""
+        b = self._curve()
+        t = 0.5
+        pos = b.point_perpendicular(+5.0, t)
+        neg = b.point_perpendicular(-5.0, t)
+        base = b.point_at_t(t)
+        # Both must be 5 mm from base, 10 mm from each other
+        self.assertAlmostEqual(base.distance_to(pos), 5.0, places=10)
+        self.assertAlmostEqual(base.distance_to(neg), 5.0, places=10)
+        self.assertAlmostEqual(pos.distance_to(neg), 10.0, places=10)
+
+    # ── contains_point ───────────────────────────────────────────────────────
+
+    def test_contains_point_endpoints(self):
+        """p0 and p3 must be on the curve."""
+        b = self._curve()
+        self.assertTrue(b.contains_point(b.p0))
+        self.assertTrue(b.contains_point(b.p3))
+
+    def test_contains_point_midpoint(self):
+        """The midpoint of the curve must be on the curve."""
+        b = self._curve()
+        mid = b.point_at_t(0.5)
+        self.assertTrue(b.contains_point(mid))
+
+    def test_contains_point_off_curve(self):
+        """A control point is NOT on the curve and must return False."""
+        b = self._curve()
+        # p1=(20,0) is the off-curve control point – well outside the curve
+        self.assertFalse(b.contains_point(Point(20, 0)))
+
+    def test_contains_point_tolerance(self):
+        """A point 0.005 mm from the curve is inside default tolerance (0.01 mm)."""
+        b = self._curve()
+        pt = b.point_at_t(0.3)
+        # nudge slightly off-curve in normal direction
+        nor = b.normal_at_t(0.3)
+        near = Point(pt.x + 0.005 * nor[0], pt.y + 0.005 * nor[1])
+        self.assertTrue(b.contains_point(near, tolerance=0.01))
+
+    def test_contains_point_outside_tolerance(self):
+        """A point 1 mm from the curve is outside default tolerance."""
+        b = self._curve()
+        pt = b.point_at_t(0.3)
+        nor = b.normal_at_t(0.3)
+        far = Point(pt.x + 1.0 * nor[0], pt.y + 1.0 * nor[1])
+        self.assertFalse(b.contains_point(far, tolerance=0.01))
 
 
 if __name__ == "__main__":
