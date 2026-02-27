@@ -59,7 +59,9 @@ def make_model_config() -> ModelConfig:
 
 
 def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
-    pattern_boy_trousers = Pattern(name="Flat Boy Trousers", anchor=Point(5 * CM, 5 * CM))
+    pattern_boy_trousers = Pattern(
+        name="Flat Boy Trousers", anchor=Point(5 * CM, 5 * CM)
+    )
     pt0 = pattern_boy_trousers.anchor
 
     # -----------------------------------------------------------------------
