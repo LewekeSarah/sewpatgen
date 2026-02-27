@@ -18,13 +18,25 @@ from .geometry import (
     Circle,
     Line,
     Rect,
+    Triangle,
     CubicBezier,
     intersect,
     segment_to_intersection,
 )
 from .units import MM, CM, INCH
-from .part import PatternPart
-from .style import StyleOptions, DEFAULT_STROKE_WIDTH, DEFAULT_STROKE_WIDTH_GRAIN
+from .part import PatternPart, PatternElement, Pattern
+from .style import (
+    StyleOptions,
+    Marker,
+    DEFAULT_STROKE_WIDTH,
+    DEFAULT_STROKE_WIDTH_GRAIN,
+    STYLE_GRAINLINE,
+    STYLE_FOLD,
+    STYLE_HEM,
+    STYLE_CUT,
+    STYLE_STITCH,
+    STYLE_CENTER_LINE,
+)
 
 __all__ = [
     # Geometry primitives
@@ -34,6 +46,7 @@ __all__ = [
     "Circle",
     "Line",
     "Rect",
+    "Triangle",
     "CubicBezier",
     # Geometry helpers
     "intersect",
@@ -44,8 +57,17 @@ __all__ = [
     "INCH",
     # Pattern
     "PatternPart",
+    "PatternElement",
+    "Pattern",
     # Style
     "StyleOptions",
+    "Marker",
     "DEFAULT_STROKE_WIDTH",
     "DEFAULT_STROKE_WIDTH_GRAIN",
+    "STYLE_GRAINLINE",
+    "STYLE_FOLD",
+    "STYLE_HEM",
+    "STYLE_CUT",
+    "STYLE_STITCH",
+    "STYLE_CENTER_LINE",
 ]

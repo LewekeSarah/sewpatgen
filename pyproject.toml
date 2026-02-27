@@ -23,14 +23,11 @@ build-backend = "uv_build"
 
 [tool.black]
 line-length = 88
-target-version = ["py314"]
+target-version = ["py313"]
 
 [tool.isort]
 profile = "black"
 line_length = 88
-
-[project.optional-dependencies]
-dev = ["pytest>=7.0.0", "black>=25.1.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -38,3 +35,9 @@ testpaths = ["tests"]
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "pytest>=8.4.1",
+]

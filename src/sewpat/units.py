@@ -13,4 +13,3 @@ Example::
 MM: float = 1.0
 CM: float = 10.0 * MM
 INCH: float = 25.4 * MM
-
