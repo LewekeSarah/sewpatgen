@@ -325,6 +325,23 @@ class Segment:
 
         return Point(*(base + self.unit_normal * distance_to_obj))
 
+    def project_point(self, point: "Point") -> "Point":
+        """Return the orthogonal projection of *point* onto this segment's line.
+
+        The result is the closest point on the infinite line through p1 and p2.
+        It is not clamped to the segment endpoints.
+
+        Args:
+            point: The point to project.
+
+        Returns:
+            Point: The foot of the perpendicular from *point* to the segment line.
+        """
+        p1 = self.p1.coords
+        d = self.p2.coords - p1
+        t = float(np.dot(point.coords - p1, d) / np.dot(d, d))
+        return Point(*(p1 + t * d))
+
     def contains_point(self, point: Point, tolerance: float = 1e-12) -> bool:
         """Check if a point lies on the line segment.
 

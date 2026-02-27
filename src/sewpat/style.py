@@ -126,6 +126,8 @@ class StyleOptions:
 # ---------------------------------------------------------------------------
 
 # -- Existing presets -------------------------------------------------------
+# based on https://de.scribd.com/document/564488289/Guide-to-read-Basic-Pattern-Symbols
+
 
 STYLE_GRAINLINE = StyleOptions(
     stroke_color="grey",
@@ -137,7 +139,7 @@ STYLE_GRAINLINE = StyleOptions(
 
 STYLE_FOLD = StyleOptions(
     stroke_color="grey",
-    dash_array=[7.0, 1.0, 1.0, 1.0],
+    dash_array=[10.0, 2.0],
 )
 
 STYLE_HEM = StyleOptions(
@@ -153,19 +155,13 @@ STYLE_CUT = StyleOptions(
     marker_end=Marker.SCISSOR,
 )
 
-# Stitching / Seam Line — dashed line inside the cutting line showing where to sew.
+# Stitching Line — dashed line inside the cutting line showing where to sew.
 STYLE_STITCH = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
     dash_array=[5.0, 2.0],
 )
 
-# Dart — dashed line used to mark dart legs and fold lines inside a dart.
-STYLE_DART = StyleOptions(
-    stroke_color="black",
-    stroke_width=DEFAULT_STROKE_WIDTH,
-    dash_array=[4.0, 2.0],
-)
 
 # Center Front / Center Back Line — long-dash–short-dash line marking
 # the vertical centre of a garment front or back.
@@ -173,18 +169,4 @@ STYLE_CENTER_LINE = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
     dash_array=[10.0, 2.0, 2.0, 2.0],
-)
-
-
-# Buttonhole — thin solid black line marking the buttonhole position/length.
-STYLE_BUTTONHOLE = StyleOptions(
-    stroke_color="black",
-    stroke_width=DEFAULT_STROKE_WIDTH,
-)
-
-# Button — solid circle mark (use fill to render the button dot).
-STYLE_BUTTON = StyleOptions(
-    stroke_color="black",
-    stroke_width=DEFAULT_STROKE_WIDTH,
-    fill_color="black",
 )

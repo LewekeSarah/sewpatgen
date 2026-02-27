@@ -20,7 +20,7 @@ class DrawstringPouchConfig:
 
 
 def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
-    pattern = Pattern(name="Drawstring Pouch")
+    pattern = Pattern(name="Drawstring Pouch", anchor=Point(1.2 * CM, 1.2 * CM))
 
     # -----------------------------------------------------------------------
     # Part 1: Main body
@@ -53,7 +53,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     )
     body.append(Segment(top_right, bottom_right), style=STYLE_STITCH)
     body.append(
-        Segment(bottom_right, bottom_left, name="Wendeöffnung"),
+        Segment(bottom_right, bottom_left, name="Wendeöffnung (Futterstoff)"),
         style=STYLE_STITCH,
     )
 
@@ -94,9 +94,13 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     )
 
     # Virtual edge segments for mark-intersection arithmetic (not rendered)
+
+    flip_left = bottom_right.translate(-(model.width - model.flip_opening) / 2, 0)
+    flip_right = flip_left.translate(-model.flip_opening, 0)
+
     left_edge = Segment(bottom_left_sa, top_left_sa)
     right_edge = Segment(top_right_sa, bottom_right_sa)
-    bottom_edge = Segment(bottom_right_sa, bottom_left_sa)
+    body.append(Segment(flip_left, flip_right), style=STYLE_HEM)
 
     # Add marks
     ds1_top_left = top_left.translate(0, model.drawstring_margin)
@@ -107,13 +111,6 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     ds1_bottom_right = top_right.translate(
         0, model.drawstring_margin + model.drawstring_height
     )
-
-    flip_left = bottom_right_sa.translate(
-        -(model.width - model.flip_opening) / 2 - model.seam_allowance, 0
-    )
-    flip_right = flip_left.translate(-model.flip_opening, 0)
-
-    body.add_notches(flip_left, flip_right, segment=bottom_edge)
 
     # -----------------------------------------------------------------------
     # Part 2: Drawstring channel

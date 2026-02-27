@@ -35,10 +35,7 @@ from .style import (
     STYLE_HEM,
     STYLE_CUT,
     STYLE_STITCH,
-    STYLE_DART,
     STYLE_CENTER_LINE,
-    STYLE_BUTTONHOLE,
-    STYLE_BUTTON,
 )
 
 __all__ = [
@@ -72,8 +69,5 @@ __all__ = [
     "STYLE_HEM",
     "STYLE_CUT",
     "STYLE_STITCH",
-    "STYLE_DART",
     "STYLE_CENTER_LINE",
-    "STYLE_BUTTONHOLE",
-    "STYLE_BUTTON",
 ]

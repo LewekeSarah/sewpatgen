@@ -157,8 +157,8 @@ class PatternPart:
             *centers: One or more points to mark.
         """
         for center in centers:
-            self.append(Circle(center, radius=5 * MM))
-            self.append(Circle(center, radius=0.5 * MM))
+            self.append(Circle(center, radius=2 * MM))
+            self.append(Circle(center, radius=0.2 * MM))
 
     def add_notches(
         self,
@@ -166,12 +166,17 @@ class PatternPart:
         segment: "Segment | None" = None,
         length: float = 0.8 * CM,
         width: float = 0.4 * CM,
+        is_back: bool = False,
     ) -> None:
         """Add notch marks at the given points, always facing inward.
 
         Notches are small filled triangles standing on the seam edge and
         pointing inward (toward the fabric), as per standard sewing pattern
         conventions.
+
+        A **single** triangle marks a front seam edge; **two** neighbouring
+        triangles mark a back seam edge (``is_back=True``), following the
+        standard sewing-pattern reading guide.
 
         If ``segment`` is provided, each point is projected orthogonally onto
         that segment. The triangle base sits on the seam edge and the tip
@@ -185,38 +190,41 @@ class PatternPart:
             segment: Segment (seam edge) on which the notches stand.
             length: Distance from base to tip of the triangle. Defaults to 0.8 cm.
             width: Width of the triangle base on the seam edge. Defaults to 0.4 cm.
+            is_back: If True, render two neighbouring triangles instead of one
+                to indicate a back pattern piece. Defaults to False.
         """
         inward_ref = self.centroid
         half_w = width / 2
+        # Gap between the two triangles when is_back=True (10 % of width)
+        gap = width * 0.5
+
         for pt in points:
             if segment is not None:
-                # Orthogonal projection of pt onto the segment line
-                p1 = segment.p1.coords
-                d = segment.p2.coords - p1
-                t = float(np.dot(pt.coords - p1, d) / np.dot(d, d))
-                notch_pt = Point(*(p1 + t * d))
-
-                # Inward normal — flip if pointing away from centroid
-                normal = segment.unit_normal
-                if inward_ref is not None:
-                    to_inner = inward_ref.coords - notch_pt.coords
-                    if np.dot(normal, to_inner) < 0:
-                        normal = -normal
-
-                # Along-edge direction (unit_direction of segment)
+                notch_pt = segment.project_point(pt)
                 along = segment.unit_direction
-                nx, ny = normal
-                ax, ay = along
-
-                base_left = notch_pt.translate(-half_w * ax, -half_w * ay)
-                base_right = notch_pt.translate(half_w * ax, half_w * ay)
-                tip = notch_pt.translate(nx * length, ny * length)
+                normal = segment.unit_normal
+                # Flip normal if it points away from the interior
+                if inward_ref is not None:
+                    if np.dot(normal, inward_ref.coords - notch_pt.coords) < 0:
+                        normal = -normal
             else:
-                base_left = pt.translate(-half_w, 0)
-                base_right = pt.translate(half_w, 0)
-                tip = pt.translate(0, -length)
+                notch_pt = pt
+                along = np.array([1.0, 0.0])
+                normal = np.array([0.0, -1.0])
 
-            self.append(Triangle(base_left, base_right, tip))
+            ax, ay = along
+            nx, ny = normal
+            offsets = [0.0]
+            if is_back:
+                # Two triangles side by side, separated by a small gap
+                offsets = [-(half_w + gap / 2), +(half_w + gap / 2)]
+
+            for offset in offsets:
+                centre = notch_pt.translate(offset * ax, offset * ay)
+                bl = centre.translate(-half_w * ax, -half_w * ay)
+                br = centre.translate(half_w * ax, half_w * ay)
+                tip = centre.translate(nx * length, ny * length)
+                self.append(Triangle(bl, br, tip))
 
 
 class Pattern:

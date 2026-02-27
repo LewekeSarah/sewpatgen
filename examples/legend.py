@@ -1,5 +1,5 @@
 from sewpat import Pattern, PatternPart, Point
-from sewpat.geometry import Rect, Segment, segment_to_intersection
+from sewpat.geometry import Rect, Segment
 from sewpat.units import MM, CM
 from pathlib import Path
 from sewpat.style import (
@@ -7,7 +7,6 @@ from sewpat.style import (
     STYLE_HEM,
     STYLE_CUT,
     STYLE_STITCH,
-    STYLE_DART,
     STYLE_CENTER_LINE,
 )
 from sewpat.pages import DinA4
@@ -31,9 +30,9 @@ def make_legend() -> Pattern:
     )
     aux.add_precision_points(left_p1.translate(6 * CM, -3 * CM))
 
-    part = PatternPart("Line Style Legend")
-    legend.add_part(part)
-    part.append(
+    lines = PatternPart("Line Style Legend")
+    legend.add_part(lines)
+    lines.append(
         Segment(
             left_p1.translate(6.5 * CM, -4.5 * CM).translate(0, 1.5 * CM),
             left_p1.translate(6.5 * CM, -4.5 * CM).translate(5 * CM, 1.5 * CM),
@@ -51,8 +50,7 @@ def make_legend() -> Pattern:
         ("hem", STYLE_HEM),
         ("stitching line", STYLE_STITCH),
         ("cutting line", STYLE_CUT),
-        ("dart", STYLE_DART),
-        ("center front / back", STYLE_CENTER_LINE),
+        ("center line", STYLE_CENTER_LINE),
     ]
 
     for i, (label, style) in enumerate(PRESETS):
@@ -60,20 +58,20 @@ def make_legend() -> Pattern:
         p1 = left_p1.translate(0, y)
         p2 = right_p1.translate(0, y)
         if style is None:
-            part.add_grainline(p1, p2, name=label)
+            lines.add_grainline(p1, p2, name=label)
         else:
-            part.append(Segment(p1, p2, name=label), style=style)
+            lines.append(Segment(p1, p2, name=label), style=style)
 
     # Notch demonstration — one row below the last preset line.
     notch_y = len(PRESETS) * 1.5 * CM
     notch_p1 = left_p1.translate(0, notch_y)
     notch_p2 = right_p1.translate(0, notch_y)
     notch_seg = Segment(notch_p1, notch_p2, name="notches")
-    part.append(notch_seg)
+    lines.append(notch_seg)
 
     # Place three notches at 25 %, 50 % and 75 % along the segment.
     seg_len = notch_p2.x - notch_p1.x
-    part.add_notches(
+    lines.add_notches(
         notch_p1.translate(0.25 * seg_len, 0),
         notch_p1.translate(0.75 * seg_len, 0),
         segment=notch_seg,
