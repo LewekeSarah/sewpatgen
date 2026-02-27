@@ -319,6 +319,61 @@ def _render_elements(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_styles(
+    style_map: dict[str, StyleOptions] | None,
+    stacklevel: int = 3,
+) -> dict[str, StyleOptions]:
+    """Merge *style_map* overrides into a copy of ``_DEFAULT_STYLES``.
+
+    Unknown keys emit a :class:`UserWarning` and are ignored.
+    """
+    styles = {**_DEFAULT_STYLES}
+    if style_map:
+        for k, v in style_map.items():
+            if k in styles:
+                styles[k] = v
+            else:
+                warnings.warn(
+                    f"style_map key {k!r} does not match any known element type "
+                    f"({list(styles.keys())}); it will be ignored.",
+                    UserWarning,
+                    stacklevel=stacklevel,
+                )
+    return styles
+
+
+def _build_svg(
+    title: str,
+    element_groups: list[list[PatternElement]],
+    width_mm: float,
+    height_mm: float,
+    margin_mm: float,
+    control_style_dict: dict,
+    show_points: bool,
+    show_bezier_control_points: bool,
+) -> str:
+    """Build and return the SVG string for one or more element groups."""
+    svg_nodes: list[str] = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{width_mm}mm" height="{height_mm}mm" '
+        f'viewBox="0 0 {width_mm} {height_mm}">',
+        _ARROW_DEFS,
+        _svg_text(margin_mm, margin_mm, DEFAULT_FONT_SIZE_MM, title),
+    ]
+
+    for elements in element_groups:
+        _render_elements(
+            elements,
+            svg_nodes,
+            show_bezier_control_points,
+            control_style_dict,
+            show_points,
+        )
+
+    svg_nodes.append("</svg>")
+    return "\n".join(svg_nodes)
+
+
 def export_pattern_part_svg_mm(
     pattern_part: PatternPart,
     filename: str,
@@ -342,41 +397,19 @@ def export_pattern_part_svg_mm(
         show_points: Whether to render Point elements.
         show_bezier_control_points: Whether to render Bezier control point handles.
     """
-    styles = {**_DEFAULT_STYLES}
-    if style_map:
-        for k, v in style_map.items():
-            if k in styles:
-                styles[k] = v
-            else:
-                warnings.warn(
-                    f"style_map key {k!r} does not match any known element type "
-                    f"({list(styles.keys())}); it will be ignored.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-
-    control_style_dict = styles["bezier_control"].as_dict()
-
-    svg_nodes: list[str] = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" '
-        f'width="{width_mm}mm" height="{height_mm}mm" '
-        f'viewBox="0 0 {width_mm} {height_mm}">',
-        _ARROW_DEFS,
-        _svg_text(margin_mm, margin_mm, DEFAULT_FONT_SIZE_MM, pattern_part.name),
-    ]
-
-    _render_elements(
-        pattern_part.elements,
-        svg_nodes,
-        show_bezier_control_points,
-        control_style_dict,
-        show_points,
+    styles = _resolve_styles(style_map)
+    svg = _build_svg(
+        title=pattern_part.name,
+        element_groups=[pattern_part.elements],
+        width_mm=width_mm,
+        height_mm=height_mm,
+        margin_mm=margin_mm,
+        control_style_dict=styles["bezier_control"].as_dict(),
+        show_points=show_points,
+        show_bezier_control_points=show_bezier_control_points,
     )
-
-    svg_nodes.append("</svg>")
-
     with open(filename, "w") as f:
-        f.write("\n".join(svg_nodes))
+        f.write(svg)
 
 
 def export_pattern_svg_mm(
@@ -403,28 +436,7 @@ def export_pattern_svg_mm(
         show_bezier_control_points: Whether to render Bezier control point handles.
         parts: Optional list of part names to include. If None, all parts are rendered.
     """
-    styles = {**_DEFAULT_STYLES}
-    if style_map:
-        for k, v in style_map.items():
-            if k in styles:
-                styles[k] = v
-            else:
-                warnings.warn(
-                    f"style_map key {k!r} does not match any known element type "
-                    f"({list(styles.keys())}); it will be ignored.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-
-    control_style_dict = styles["bezier_control"].as_dict()
-
-    svg_nodes: list[str] = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" '
-        f'width="{width_mm}mm" height="{height_mm}mm" '
-        f'viewBox="0 0 {width_mm} {height_mm}">',
-        _ARROW_DEFS,
-        _svg_text(margin_mm, margin_mm, DEFAULT_FONT_SIZE_MM, pattern.name),
-    ]
+    styles = _resolve_styles(style_map)
 
     selected_parts = (
         [p for p in pattern.parts if p.name in parts]
@@ -432,26 +444,21 @@ def export_pattern_svg_mm(
         else pattern.parts
     )
 
-    # Always render the reference square first if set
+    # Always render the reference square first if set, then each part in order.
+    element_groups: list[list[PatternElement]] = []
     if pattern.reference_square is not None:
-        _render_elements(
-            [pattern.reference_square],
-            svg_nodes,
-            show_bezier_control_points,
-            control_style_dict,
-            show_points,
-        )
+        element_groups.append([pattern.reference_square])
+    element_groups.extend(part.elements for part in selected_parts)
 
-    for pattern_part in selected_parts:
-        _render_elements(
-            pattern_part.elements,
-            svg_nodes,
-            show_bezier_control_points,
-            control_style_dict,
-            show_points,
-        )
-
-    svg_nodes.append("</svg>")
-
+    svg = _build_svg(
+        title=pattern.name,
+        element_groups=element_groups,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        margin_mm=margin_mm,
+        control_style_dict=styles["bezier_control"].as_dict(),
+        show_points=show_points,
+        show_bezier_control_points=show_bezier_control_points,
+    )
     with open(filename, "w") as f:
-        f.write("\n".join(svg_nodes))
+        f.write(svg)
