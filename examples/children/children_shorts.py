@@ -1,14 +1,13 @@
 from sewpat import Segment, PatternPart
 from sewpat.basic_shapes import get_square
 from sewpat.geometry import (
-    CM,
     Point,
     intersect,
     Ray,
     Circle,
     CubicBezier,
 )
-from sewpat.line_styles import get_grainline_style
+from sewpat.units import CM
 from sewpat.measurments import (
     ModelConfig,
     Allowance,
@@ -17,8 +16,8 @@ from sewpat.measurments import (
 )
 from sewpat.pages import DinA1
 from sewpat.person import Gender, Person
-from sewpat.render import StyleOptions, export_pattern_part_svg_mm
-
+from sewpat.render import export_pattern_part_svg_mm
+from sewpat.style import StyleOptions, STYLE_GRAINLINE
 
 def make_person() -> Person:
     henri = Person(
@@ -344,13 +343,13 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> PatternPart:
         Segment(
             pt9,
             grain_end[0],
-            style=get_grainline_style(),
+            style=STYLE_GRAINLINE,
             name="grainline / Fadenlauf",
         ),
         Segment(
             back_pt9,
             grain_end_back[0],
-            style=get_grainline_style(),
+            style=STYLE_GRAINLINE,
             name="grainline / Fadenlauf",
         ),
     ]

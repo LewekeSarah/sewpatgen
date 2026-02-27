@@ -1,4 +1,4 @@
-from sewpat.geometry import MM
+from sewpat.units import MM
 
 
 class DinA4:

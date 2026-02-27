@@ -1,4 +1,5 @@
-from sewpat.geometry import CM, Rect, MM, Point, Circle
+from sewpat.geometry import Rect, Point, Circle
+from sewpat.units import CM, MM
 from sewpat.style import StyleOptions, DEFAULT_STROKE_WIDTH
 
 

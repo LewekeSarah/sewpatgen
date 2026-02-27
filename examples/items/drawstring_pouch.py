@@ -2,8 +2,9 @@ from dataclasses import dataclass
 
 from sewpat import PatternPart, Point
 from sewpat.basic_shapes import get_square, get_precision_point
-from sewpat.geometry import CM, Rect, Segment, segment_to_intersection
-from sewpat.line_styles import get_grainline_style, get_hem_style, get_seam_style
+from sewpat.geometry import Rect, Segment, segment_to_intersection
+from sewpat.units import CM
+from sewpat.style import STYLE_GRAINLINE, STYLE_HEM, STYLE_SEAM
 from sewpat.pages import DinA4
 from sewpat.render import export_pattern_part_svg_mm, StyleOptions
 
@@ -39,7 +40,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
         Segment(
             bottom_left,
             top_left,
-            style=get_seam_style(),
+            style=STYLE_SEAM,
             name=f"Höhe {model.height / CM:.0f} cm",
         )
     )
@@ -47,13 +48,13 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
         Segment(
             top_left,
             top_right,
-            style=get_hem_style(),
+            style=STYLE_HEM,
             name=f"Breite {model.width / CM:.0f} cm",
         )
     )
-    elems.append(Segment(top_right, bottom_right, style=get_seam_style()))
+    elems.append(Segment(top_right, bottom_right, style=STYLE_SEAM))
     elems.append(
-        Segment(bottom_right, bottom_left, style=get_seam_style(), name="Wendeöffnung")
+        Segment(bottom_right, bottom_left, style=STYLE_SEAM, name="Wendeöffnung")
     )
     precision_points = get_precision_point(bottom_left) + get_precision_point(
         bottom_right
@@ -92,7 +93,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
             Point(grain_x, top_left.y + grain_padding),
             Point(grain_x, bottom_left.y - grain_padding),
             name="grainline / Fadenlauf",
-            style=get_grainline_style(),
+            style=STYLE_GRAINLINE,
         )
     )
 

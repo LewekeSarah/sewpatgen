@@ -21,9 +21,8 @@ from .geometry import (
     CubicBezier,
     intersect,
     segment_to_intersection,
-    MM,
-    CM,
 )
+from .units import MM, CM, INCH
 from .part import PatternPart
 from .style import StyleOptions, DEFAULT_STROKE_WIDTH, DEFAULT_STROKE_WIDTH_GRAIN
 
@@ -42,6 +41,7 @@ __all__ = [
     # Units
     "MM",
     "CM",
+    "INCH",
     # Pattern
     "PatternPart",
     # Style

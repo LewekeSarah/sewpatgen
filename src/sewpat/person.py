@@ -3,7 +3,7 @@ import copy
 from dataclasses import dataclass
 from enum import Enum
 
-from sewpat.geometry import CM
+from sewpat.units import CM
 
 
 class Gender(Enum):

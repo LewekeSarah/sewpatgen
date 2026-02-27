@@ -9,12 +9,10 @@ from typing import Any, Callable
 
 from sewpat.geometry import Point, Segment, Circle, Rect, CubicBezier
 from sewpat.part import PatternPart
-from sewpat.style import StyleOptions, DEFAULT_STROKE_WIDTH, DEFAULT_STROKE_WIDTH_GRAIN
+from sewpat.style import StyleOptions, DEFAULT_STROKE_WIDTH, DEFAULT_STROKE_WIDTH_GRAIN, DEFAULT_FONT_SIZE_MM
 
 __all__ = [
     "StyleOptions",
-    "DEFAULT_STROKE_WIDTH",
-    "DEFAULT_STROKE_WIDTH_GRAIN",
     "export_pattern_part_svg_mm",
 ]
 
@@ -213,7 +211,6 @@ def export_pattern_part_svg_mm(
     width_mm: float = 210,
     height_mm: float = 297,
     margin_mm: float = 10,
-    font_size_mm: float = 5,
     style_map: dict[str, StyleOptions] | None = None,
     show_points: bool = True,
     show_bezier_control_points: bool = False,
@@ -226,11 +223,14 @@ def export_pattern_part_svg_mm(
         width_mm: Width of the SVG canvas in mm.
         height_mm: Height of the SVG canvas in mm.
         margin_mm: Margin around the canvas in mm.
-        font_size_mm: Font size for labels in mm.
         style_map: Optional mapping of element type names to StyleOptions overrides.
             Unknown keys emit a warning and are ignored.
         show_points: Whether to render Point elements.
         show_bezier_control_points: Whether to render Bezier control point handles.
+
+    Note:
+        Font size is controlled per element via ``StyleOptions(font_size_mm=...)``.
+        The fallback is ``DEFAULT_FONT_SIZE_MM``.
     """
     # Merge caller overrides into a copy of the defaults.
     styles = {**_DEFAULT_STYLES}
@@ -253,25 +253,17 @@ def export_pattern_part_svg_mm(
         f'width="{width_mm}mm" height="{height_mm}mm" '
         f'viewBox="0 0 {width_mm} {height_mm}">',
         _ARROW_DEFS,
-        _svg_text(margin_mm, margin_mm, font_size_mm, pattern_part.name),
+        _svg_text(margin_mm, margin_mm, DEFAULT_FONT_SIZE_MM, pattern_part.name),
     ]
 
-    renderers = _make_renderers(
-        font_size_mm, show_bezier_control_points, control_style_dict, show_points
-    )
-
     for element in pattern_part.elements:
-        element_type = element.__class__.__name__.lower()
-        # Prefer the style attached to the element; fall back to the global default.
-        element_style = getattr(element, "style", None)
-        if element_style is not None:
-            style_dict = element_style.as_dict()
-        else:
-            style_dict = styles.get(element_type, styles["segment"]).as_dict()
-
+        style = element.style
+        renderers = _make_renderers(
+            style.font_size_mm, show_bezier_control_points, control_style_dict, show_points
+        )
         renderer = renderers.get(type(element))
         if renderer is not None:
-            svg_nodes.extend(renderer(element, style_dict))
+            svg_nodes.extend(renderer(element, style.as_dict()))
 
     svg_nodes.append("</svg>")
 

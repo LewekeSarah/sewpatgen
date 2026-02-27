@@ -7,8 +7,8 @@ from sewpat.geometry import (
     Segment,
     intersect,
     segment_to_intersection,
-    CM,
 )
+from sewpat.units import CM
 from sewpat.measurments import make_blouse_measurements
 from sewpat.pages import DinA0
 from sewpat.part import PatternPart

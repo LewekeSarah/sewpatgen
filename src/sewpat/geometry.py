@@ -7,14 +7,8 @@ points, lines, segments, rays, and circles for use in CAD applications.
 import math
 import numpy as np
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from sewpat.style import StyleOptions
-
-
-MM = 1.0
-CM = 10.0 * MM
+from sewpat.style import StyleOptions
+from sewpat.units import MM, CM
 
 
 def _solve_quadratic(a: float, b: float, c: float) -> list[float]:
@@ -116,17 +110,19 @@ class Point:
     coords: np.ndarray
     name: str | None = None
 
-    def __init__(self, x: float, y: float, name: str | None = None):
+    def __init__(self, x: float, y: float, name: str | None = None, style: StyleOptions = StyleOptions()):
         """Initialize a point with x and y coordinates.
 
         Args:
             x: The x-coordinate of the point.
             y: The y-coordinate of the point.
             name: Optional, name of the point.
+            style: Style options for rendering the point.
         """
         # Use object.__setattr__ to set values in a frozen dataclass
         object.__setattr__(self, "coords", np.array([x, y], dtype=float))
         object.__setattr__(self, "name", name)
+        object.__setattr__(self, "style", style)
 
     @property
     def x(self) -> float:
@@ -196,14 +192,14 @@ class Segment:
         name: Optional, name of the line segment.
     """
 
-    def __init__(self, p1: Point, p2: Point, name: str | None = None, style: StyleOptions | None = None):
+    def __init__(self, p1: Point, p2: Point, name: str | None = None, style: StyleOptions = StyleOptions()):
         """Initialize a line with two points.
 
         Args:
             p1: First endpoint of the line segment.
             p2: Second endpoint of the line segment.
             name: Optional, name of the line segment.
-            style: Optional, style of the line segment.
+            style: Style options for rendering the segment.
         """
         self.p1 = p1
         self.p2 = p2
@@ -624,7 +620,7 @@ class Rect:
         width: float,
         height: float,
         name: str | None = None,
-        style: StyleOptions | None = None,
+        style: StyleOptions = StyleOptions(),
     ):
         self.origin = origin
         self.width = width
@@ -642,13 +638,14 @@ class Circle:
         name: Optional, name of the circle.
     """
 
-    def __init__(self, center: Point, radius: float, name: str | None = None):
+    def __init__(self, center: Point, radius: float, name: str | None = None, style: StyleOptions = StyleOptions()):
         """Initialize a circle with center point and radius.
 
         Args:
             center: The center point of the circle.
             radius: The radius of the circle (must be positive).
             name: Optional, name of the circle.
+            style: Style options for rendering the circle.
 
         Raises:
             ValueError: If the radius is not positive.
@@ -659,6 +656,7 @@ class Circle:
         self.center = center
         self.radius = radius
         self.name = name
+        self.style = style
 
     def __str__(self) -> str:
         if self.name:
@@ -947,7 +945,7 @@ class CubicBezier:
         p3: End point of the curve.
     """
 
-    def __init__(self, p0: Point, p1: Point, p2: Point, p3: Point, name: str | None = None):
+    def __init__(self, p0: Point, p1: Point, p2: Point, p3: Point, name: str | None = None, style: StyleOptions = StyleOptions()):
         """Initialize a cubic Bezier curve with four control points.
 
         Args:
@@ -956,12 +954,14 @@ class CubicBezier:
             p2: Second control point.
             p3: End point of the curve.
             name: The name of the curve.
+            style: Style options for rendering the curve.
         """
         self.p0 = p0
         self.p1 = p1
         self.p2 = p2
         self.p3 = p3
         self.name = name
+        self.style = style
 
     def __str__(self) -> str:
         return f"CubicBezier(name={self.name}, p0={self.p0}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
