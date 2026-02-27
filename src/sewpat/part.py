@@ -8,6 +8,7 @@ from .geometry import (
     InfoBox,
     CubicBezier,
     _miter_join,
+    _intersect_lines,
 )
 from .units import CM, MM
 import numpy as np
@@ -399,6 +400,58 @@ class PatternPart:
         # --- miter-join corner stitching -------------------------------------
         new_geoms: list[Segment | CubicBezier] = list(offset_geoms)
         n = len(new_geoms)
+
+        def _end_tangent(g: Segment | CubicBezier) -> np.ndarray:
+            """Unit tangent at the *end* of g (pointing away from start)."""
+            if isinstance(g, Segment):
+                d = g.p2.coords - g.p1.coords
+            else:
+                d = g.tangent_at_t(1.0)
+            norm = float(np.linalg.norm(d))
+            return d / norm if norm > 1e-12 else d
+
+        def _start_tangent(g: Segment | CubicBezier) -> np.ndarray:
+            """Unit tangent at the *start* of g (pointing toward end)."""
+            if isinstance(g, Segment):
+                d = g.p2.coords - g.p1.coords
+            else:
+                d = g.tangent_at_t(0.0)
+            norm = float(np.linalg.norm(d))
+            return d / norm if norm > 1e-12 else d
+
+        def _miter_corner(
+            ga: Segment | CubicBezier,
+            gb: Segment | CubicBezier,
+            miter_limit: float = 4.0,
+        ) -> Point:
+            """Miter corner for any combination of Segment / CubicBezier.
+
+            Extends the end-tangent of *ga* and the start-tangent of *gb* as
+            infinite lines and returns their intersection.  Falls back to a
+            bevel midpoint when the lines are parallel or the miter extension
+            exceeds *miter_limit* × the gap between the two endpoints.
+            """
+            end_a = _end(ga)
+            start_b = _start(gb)
+            gap = float(np.linalg.norm(end_a.coords - start_b.coords))
+
+            ta = _end_tangent(ga)  # direction leaving ga
+            tb = _start_tangent(gb)  # direction entering gb
+
+            # Normal vectors (perpendicular to tangents) for _intersect_lines
+            na = np.array([-ta[1], ta[0]])
+            nb = np.array([-tb[1], tb[0]])
+
+            pt = _intersect_lines(end_a.coords, na, start_b.coords, nb)
+            if pt is None:
+                return Point(*(0.5 * (end_a.coords + start_b.coords)))
+
+            miter_dist = float(np.linalg.norm(pt - end_a.coords))
+            if gap > 1e-9 and miter_dist / gap > miter_limit:
+                return Point(*(0.5 * (end_a.coords + start_b.coords)))
+
+            return Point(*pt)
+
         if n > 1:
             for i in range(n):
                 j = (i + 1) % n
@@ -408,11 +461,7 @@ class PatternPart:
                 start_b = _start(gb)
                 # Only apply miter-join when the gap is non-trivial (> 0.01 mm)
                 if end_a.distance_to(start_b) > 0.01:
-                    if isinstance(ga, Segment) and isinstance(gb, Segment):
-                        corner = _miter_join(ga, gb)
-                    else:
-                        # For curves use a simple midpoint bevel
-                        corner = Point(*(0.5 * (end_a.coords + start_b.coords)))
+                    corner = _miter_corner(ga, gb)
                     new_geoms[i] = _with_endpoints(ga, _start(ga), corner)
                     new_geoms[j] = _with_endpoints(gb, corner, _end(gb))
 

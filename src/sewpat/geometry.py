@@ -71,7 +71,7 @@ def _solve_quadratic(a: float, b: float, c: float) -> list[float]:
         return [x2, x1]
 
 
-def _intersect_lines(
+def _intersect_lines(  # noqa: N802  (exported for use in part.py)
     pt1: np.ndarray, n1: np.ndarray, pt2: np.ndarray, n2: np.ndarray
 ) -> np.ndarray | None:
     """Find intersection of two lines represented by a point on the line and the unit normal.
