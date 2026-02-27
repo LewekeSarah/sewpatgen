@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from sewpat.style import StyleOptions, DEFAULT_STROKE_WIDTH_GRAIN
 
 

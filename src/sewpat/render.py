@@ -4,8 +4,6 @@ SVG Rendering module for sewing patterns.
 This module provides functions to render pattern parts and geometric elements
 to SVG files.
 """
-from __future__ import annotations
-
 import warnings
 from typing import Any, Callable
 

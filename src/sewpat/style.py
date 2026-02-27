@@ -5,7 +5,6 @@ This module is intentionally kept separate from both ``geometry.py`` and
 ``render.py`` so that geometry objects can reference ``StyleOptions`` without
 creating a circular import.
 """
-from __future__ import annotations
 
 from typing import Any
 

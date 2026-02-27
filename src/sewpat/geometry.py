@@ -4,8 +4,6 @@
 This module provides classes for fundamental 2D geometric primitives such as
 points, lines, segments, rays, and circles for use in CAD applications.
 """
-from __future__ import annotations
-
 import math
 import numpy as np
 from dataclasses import dataclass
