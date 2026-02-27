@@ -1,4 +1,5 @@
-""" Person related information required for pattern construction """
+"""Person related information required for pattern construction"""
+
 import copy
 from dataclasses import dataclass
 from enum import Enum
@@ -7,7 +8,8 @@ from sewpat.units import CM
 
 
 class Gender(Enum):
-    """ Some pattern have gender-specific adjustments"""
+    """Some pattern have gender-specific adjustments"""
+
     male = "male"
     female = "female"
     boy = "boy"
@@ -54,7 +56,11 @@ class PersonAnalyser:
 
     def _set_alt(self):
         if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
-            self.person.AlT = self.person.BrU / 10 + 11 * CM if self.person.AlT is None else self.person.AlT
+            self.person.AlT = (
+                self.person.BrU / 10 + 11 * CM
+                if self.person.AlT is None
+                else self.person.AlT
+            )
         if self.person.AlT is None:
             raise NotImplementedError(
                 "Matching AlT formula for given bustline is not yet implemented."
@@ -62,7 +68,11 @@ class PersonAnalyser:
 
     def _set_ard(self):
         if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
-            self.person.ArD = self.person.BrU / 8 - 1.5 * CM if self.person.ArD is None else self.person.ArD
+            self.person.ArD = (
+                self.person.BrU / 8 - 1.5 * CM
+                if self.person.ArD is None
+                else self.person.ArD
+            )
         if self.person.ArD is None:
             raise NotImplementedError(
                 "Matching ArD formula for given bustline is not yet implemented."
@@ -70,7 +80,11 @@ class PersonAnalyser:
 
     def _set_brb(self):
         if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
-            self.person.BrB = self.person.BrU / 4 - 4.0 * CM if self.person.BrB is None else self.person.BrB
+            self.person.BrB = (
+                self.person.BrU / 4 - 4.0 * CM
+                if self.person.BrB is None
+                else self.person.BrB
+            )
         if self.person.BrB is None:
             raise NotImplementedError(
                 "Matching BrB formula for given bustline is not yet implemented."
@@ -78,7 +92,11 @@ class PersonAnalyser:
 
     def _set_rüb(self):
         if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
-            self.person.RüB = self.person.BrU / 8 + 5.5 * CM if self.person.RüB is None else self.person.RüB
+            self.person.RüB = (
+                self.person.BrU / 8 + 5.5 * CM
+                if self.person.RüB is None
+                else self.person.RüB
+            )
         if self.person.RüB is None:
             raise NotImplementedError(
                 "Matching formula for given bustline is not yet implemented."
@@ -95,7 +113,9 @@ class PersonAnalyser:
         person_balanced = copy.deepcopy(self.person)
         if self.balance is not None:
             for key, val in self.balance.__dict__.items():
-                person_balanced.__setattr__(key, person_balanced.__getattribute__(key) + val)
+                person_balanced.__setattr__(
+                    key, person_balanced.__getattribute__(key) + val
+                )
         if person_balanced.gender == Gender.female:
             if (person_balanced.VL - person_balanced.RüL) > self.optimal_balance:
                 raise ValueError("VL and RüB are not properly balanced")
@@ -112,4 +132,3 @@ class PersonAnalyser:
             raise NotImplementedError(
                 "Matching balance for given bustline is not yet implemented."
             )
-

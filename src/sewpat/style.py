@@ -90,5 +90,3 @@ STYLE_HEM = StyleOptions(
 STYLE_SEAM = StyleOptions(
     dash_array=[5.0, 2.0],
 )
-
-

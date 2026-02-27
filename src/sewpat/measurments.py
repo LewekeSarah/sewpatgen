@@ -87,9 +87,15 @@ def make_blouse_measurements(
     person = PersonAnalyser(person, balance).get_balanced_person()
 
     measurements = {key: val for key, val in person.__dict__.items() if val is not None}
-    allowances = {key: val for key, val in allowance.__dict__.items() if val is not None}
+    allowances = {
+        key: val for key, val in allowance.__dict__.items() if val is not None
+    }
     width_instead_update = {"TaU", "BrU", "HüU"}
-    for key in set(measurements.keys()).intersection(allowances.keys()).difference(width_instead_update):
+    for key in (
+        set(measurements.keys())
+        .intersection(allowances.keys())
+        .difference(width_instead_update)
+    ):
         measurements[key] += allowances[key]
     for perimeter, width in zip(["TaU", "BrU", "HüU"], ["TaW", "BrW", "HüW"]):
         measurements[width] = measurements[perimeter] + getattr(allowance, perimeter)
@@ -102,9 +108,15 @@ def make_measurements_trouser(
     person: Person, allowance: Allowance, balance: BalanceAdjustments = None
 ) -> TrouserMeasurements:
     measurements = {key: val for key, val in person.__dict__.items() if val is not None}
-    allowances = {key: val for key, val in allowance.__dict__.items() if val is not None}
+    allowances = {
+        key: val for key, val in allowance.__dict__.items() if val is not None
+    }
     width_instead_update = {"TaU", "HüU"}
-    for key in set(measurements.keys()).intersection(allowances.keys()).difference(width_instead_update):
+    for key in (
+        set(measurements.keys())
+        .intersection(allowances.keys())
+        .difference(width_instead_update)
+    ):
         measurements[key] += allowances[key]
     for perimeter, width in zip(["TaU", "HüU"], ["TaW", "HüW"]):
         measurements[width] = measurements[perimeter]

@@ -18,12 +18,13 @@ from .geometry import (
     Circle,
     Line,
     Rect,
+    Triangle,
     CubicBezier,
     intersect,
     segment_to_intersection,
 )
 from .units import MM, CM, INCH
-from .part import PatternPart
+from .part import PatternPart, PatternElement, Pattern
 from .style import StyleOptions, DEFAULT_STROKE_WIDTH, DEFAULT_STROKE_WIDTH_GRAIN
 
 __all__ = [
@@ -34,6 +35,7 @@ __all__ = [
     "Circle",
     "Line",
     "Rect",
+    "Triangle",
     "CubicBezier",
     # Geometry helpers
     "intersect",
@@ -44,6 +46,8 @@ __all__ = [
     "INCH",
     # Pattern
     "PatternPart",
+    "PatternElement",
+    "Pattern",
     # Style
     "StyleOptions",
     "DEFAULT_STROKE_WIDTH",

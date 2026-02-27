@@ -4,10 +4,11 @@
 This module provides classes for fundamental 2D geometric primitives such as
 points, lines, segments, rays, and circles for use in CAD applications.
 """
+
 import math
 import numpy as np
 from dataclasses import dataclass
-from sewpat.style import StyleOptions
+from typing import Union
 from sewpat.units import MM, CM
 
 
@@ -110,19 +111,17 @@ class Point:
     coords: np.ndarray
     name: str | None = None
 
-    def __init__(self, x: float, y: float, name: str | None = None, style: StyleOptions = StyleOptions()):
+    def __init__(self, x: float, y: float, name: str | None = None):
         """Initialize a point with x and y coordinates.
 
         Args:
             x: The x-coordinate of the point.
             y: The y-coordinate of the point.
             name: Optional, name of the point.
-            style: Style options for rendering the point.
         """
         # Use object.__setattr__ to set values in a frozen dataclass
         object.__setattr__(self, "coords", np.array([x, y], dtype=float))
         object.__setattr__(self, "name", name)
-        object.__setattr__(self, "style", style)
 
     @property
     def x(self) -> float:
@@ -192,19 +191,17 @@ class Segment:
         name: Optional, name of the line segment.
     """
 
-    def __init__(self, p1: Point, p2: Point, name: str | None = None, style: StyleOptions = StyleOptions()):
+    def __init__(self, p1: Point, p2: Point, name: str | None = None):
         """Initialize a line with two points.
 
         Args:
             p1: First endpoint of the line segment.
             p2: Second endpoint of the line segment.
             name: Optional, name of the line segment.
-            style: Style options for rendering the segment.
         """
         self.p1 = p1
         self.p2 = p2
         self.name = name
-        self.style = style
 
     def __str__(self) -> str:
         if self.name:
@@ -620,13 +617,55 @@ class Rect:
         width: float,
         height: float,
         name: str | None = None,
-        style: StyleOptions = StyleOptions(),
     ):
         self.origin = origin
         self.width = width
         self.height = height
         self.name = name
-        self.style = style
+
+
+class Triangle:
+    """A triangle defined by three points.
+
+    Used for notch symbols on sewing patterns: a small filled triangle
+    standing on the seam edge and pointing inward.
+
+    Attributes:
+        p1: First vertex (base left).
+        p2: Second vertex (base right).
+        p3: Third vertex (tip, pointing inward).
+        name: Optional label.
+    """
+
+    def __init__(self, p1: Point, p2: Point, p3: Point, name: str | None = None):
+        self.p1 = p1
+        self.p2 = p2
+        self.p3 = p3
+        self.name = name
+
+
+class InfoBox:
+    """A text info box displayed at a given position.
+
+    Typically placed at the centroid of a pattern part, showing the part
+    name as a header and optional notes (e.g. seam allowance information).
+
+    Attributes:
+        position: Centre point of the info box.
+        header: Bold header text (usually the part name).
+        notes: Optional list of additional lines shown below the header.
+    """
+
+    def __init__(
+        self,
+        position: Point,
+        header: str,
+        notes: "list[str] | None" = None,
+    ):
+        self.position = position
+        self.header = header
+        self.notes: list[str] = notes if notes is not None else []
+        self.name: str | None = None
 
 
 class Circle:
@@ -638,14 +677,13 @@ class Circle:
         name: Optional, name of the circle.
     """
 
-    def __init__(self, center: Point, radius: float, name: str | None = None, style: StyleOptions = StyleOptions()):
+    def __init__(self, center: Point, radius: float, name: str | None = None):
         """Initialize a circle with center point and radius.
 
         Args:
             center: The center point of the circle.
             radius: The radius of the circle (must be positive).
             name: Optional, name of the circle.
-            style: Style options for rendering the circle.
 
         Raises:
             ValueError: If the radius is not positive.
@@ -656,7 +694,6 @@ class Circle:
         self.center = center
         self.radius = radius
         self.name = name
-        self.style = style
 
     def __str__(self) -> str:
         if self.name:
@@ -870,8 +907,16 @@ def _solve_cubic(a: float, b: float, c: float, d: float) -> list[float]:
     if discriminant > eps:
         # One real root
         sqrt_disc = math.sqrt(discriminant)
-        u = (-q / 2 + sqrt_disc) ** (1/3) if (-q / 2 + sqrt_disc) >= 0 else -(abs(-q / 2 + sqrt_disc) ** (1/3))
-        v = (-q / 2 - sqrt_disc) ** (1/3) if (-q / 2 - sqrt_disc) >= 0 else -(abs(-q / 2 - sqrt_disc) ** (1/3))
+        u = (
+            (-q / 2 + sqrt_disc) ** (1 / 3)
+            if (-q / 2 + sqrt_disc) >= 0
+            else -(abs(-q / 2 + sqrt_disc) ** (1 / 3))
+        )
+        v = (
+            (-q / 2 - sqrt_disc) ** (1 / 3)
+            if (-q / 2 - sqrt_disc) >= 0
+            else -(abs(-q / 2 - sqrt_disc) ** (1 / 3))
+        )
         roots.append(u + v - b / 3)
     elif abs(discriminant) < eps:
         # Two or three real roots
@@ -880,21 +925,25 @@ def _solve_cubic(a: float, b: float, c: float, d: float) -> list[float]:
             roots.append(-b / 3)
         else:
             # One single and one double root
-            u = (-q / 2) ** (1/3) if (-q / 2) >= 0 else -(abs(-q / 2) ** (1/3))
+            u = (-q / 2) ** (1 / 3) if (-q / 2) >= 0 else -(abs(-q / 2) ** (1 / 3))
             roots.extend([2 * u - b / 3, -u - b / 3])
     else:
         # Three distinct real roots
-        rho = math.sqrt(-(p / 3) ** 3)
+        rho = math.sqrt(-((p / 3) ** 3))
         theta = math.acos(-q / 2 / rho)
 
         for k in range(3):
-            root = 2 * (rho ** (1/3)) * math.cos((theta + 2 * math.pi * k) / 3) - b / 3
+            root = (
+                2 * (rho ** (1 / 3)) * math.cos((theta + 2 * math.pi * k) / 3) - b / 3
+            )
             roots.append(root)
 
     return roots
 
 
-def _intersect_bezier_line(bezier: CubicBezier, line_point: np.ndarray, line_dir: np.ndarray) -> list[float]:
+def _intersect_bezier_line(
+    bezier: CubicBezier, line_point: np.ndarray, line_dir: np.ndarray
+) -> list[float]:
     """Find intersection parameters t where a cubic Bezier intersects a line.
 
     Args:
@@ -920,7 +969,12 @@ def _intersect_bezier_line(bezier: CubicBezier, line_point: np.ndarray, line_dir
     a0 = bezier.p0.coords
     a1 = 3 * (bezier.p1.coords - bezier.p0.coords)
     a2 = 3 * (bezier.p2.coords - 2 * bezier.p1.coords + bezier.p0.coords)
-    a3 = bezier.p3.coords - 3 * bezier.p2.coords + 3 * bezier.p1.coords - bezier.p0.coords
+    a3 = (
+        bezier.p3.coords
+        - 3 * bezier.p2.coords
+        + 3 * bezier.p1.coords
+        - bezier.p0.coords
+    )
 
     # Distance from line_point to each coefficient projected onto line_perp
     d0 = np.dot(a0 - line_point, line_perp)
@@ -945,7 +999,9 @@ class CubicBezier:
         p3: End point of the curve.
     """
 
-    def __init__(self, p0: Point, p1: Point, p2: Point, p3: Point, name: str | None = None, style: StyleOptions = StyleOptions()):
+    def __init__(
+        self, p0: Point, p1: Point, p2: Point, p3: Point, name: str | None = None
+    ):
         """Initialize a cubic Bezier curve with four control points.
 
         Args:
@@ -954,14 +1010,12 @@ class CubicBezier:
             p2: Second control point.
             p3: End point of the curve.
             name: The name of the curve.
-            style: Style options for rendering the curve.
         """
         self.p0 = p0
         self.p1 = p1
         self.p2 = p2
         self.p3 = p3
         self.name = name
-        self.style = style
 
     def __str__(self) -> str:
         return f"CubicBezier(name={self.name}, p0={self.p0}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
@@ -982,15 +1036,19 @@ class CubicBezier:
         mt2 = mt * mt
         mt3 = mt2 * mt
 
-        x = (mt3 * self.p0.x +
-             3 * mt2 * t * self.p1.x +
-             3 * mt * t2 * self.p2.x +
-             t3 * self.p3.x)
+        x = (
+            mt3 * self.p0.x
+            + 3 * mt2 * t * self.p1.x
+            + 3 * mt * t2 * self.p2.x
+            + t3 * self.p3.x
+        )
 
-        y = (mt3 * self.p0.y +
-             3 * mt2 * t * self.p1.y +
-             3 * mt * t2 * self.p2.y +
-             t3 * self.p3.y)
+        y = (
+            mt3 * self.p0.y
+            + 3 * mt2 * t * self.p1.y
+            + 3 * mt * t2 * self.p2.y
+            + t3 * self.p3.y
+        )
 
         return Point(x, y)
 
@@ -1008,13 +1066,17 @@ class CubicBezier:
         mt = 1.0 - t
         mt2 = mt * mt
 
-        dx = (3 * mt2 * (self.p1.x - self.p0.x) +
-              6 * mt * t * (self.p2.x - self.p1.x) +
-              3 * t2 * (self.p3.x - self.p2.x))
+        dx = (
+            3 * mt2 * (self.p1.x - self.p0.x)
+            + 6 * mt * t * (self.p2.x - self.p1.x)
+            + 3 * t2 * (self.p3.x - self.p2.x)
+        )
 
-        dy = (3 * mt2 * (self.p1.y - self.p0.y) +
-              6 * mt * t * (self.p2.y - self.p1.y) +
-              3 * t2 * (self.p3.y - self.p2.y))
+        dy = (
+            3 * mt2 * (self.p1.y - self.p0.y)
+            + 6 * mt * t * (self.p2.y - self.p1.y)
+            + 3 * t2 * (self.p3.y - self.p2.y)
+        )
 
         return np.array([dx, dy])
 
@@ -1165,7 +1227,9 @@ def _intersect_circle_circle(c1: Circle, c2: Circle) -> list[Point]:
     return [Point(*p3), Point(*p4)]
 
 
-GEOMETRIC_TYPE = Point | Line | Ray | Circle | Segment | CubicBezier
+GEOMETRIC_TYPE = Union[
+    Point, Line, Ray, Circle, Segment, Rect, Triangle, InfoBox, CubicBezier
+]
 
 
 def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:

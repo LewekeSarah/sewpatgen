@@ -1,12 +1,11 @@
 from dataclasses import dataclass
 
-from sewpat import PatternPart, Point
-from sewpat.basic_shapes import get_square, get_precision_point
-from sewpat.geometry import Rect, Segment, segment_to_intersection
+from sewpat import Pattern, PatternPart, Point
+from sewpat.geometry import Rect, Segment
 from sewpat.units import CM
-from sewpat.style import STYLE_GRAINLINE, STYLE_HEM, STYLE_SEAM
+from sewpat.style import STYLE_HEM, STYLE_SEAM, StyleOptions
 from sewpat.pages import DinA4
-from sewpat.render import export_pattern_part_svg_mm, StyleOptions
+from sewpat.render import export_pattern_svg_mm
 
 
 @dataclass
@@ -19,86 +18,54 @@ class DrawstringPouchConfig:
     flip_opening: float
 
 
-def make_drawstring_pouch(model: DrawstringPouchConfig):
-    ## STEP 0:
-    # Add size control
-    square_start = Point(0.2 * model.width, 0.5 * model.height, "p1")
-    elems = get_square(square_start, edge_length=5 * CM)
+def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
+    pattern = Pattern(name="Drawstring Pouch")
+
+    # -----------------------------------------------------------------------
+    # Part 1: Main body
+    # -----------------------------------------------------------------------
+    body = PatternPart(name="body")
+    pattern.add_part(body)
+
+    ## STEP 0: Reference square for print-scale verification
+    pattern.set_reference_square(
+        origin=Point(0.2 * model.width, 0.5 * model.height),
+    )
 
     # SVG coordinates: x increases right, y increases down
 
-    ## STEP 1
-    # Anchor: top left
-    top_left = Point(1.5 * CM, 1.5 * CM, "p1")
+    ## STEP 1: Anchor: top left
+    top_left = pattern.anchor
 
-    ## STEP 2
-    # Basic Rectangle
+    ## STEP 2: Basic Rectangle
     bottom_left = top_left.translate(0, model.height)
     top_right = top_left.translate(model.width, 0)
     bottom_right = bottom_left.translate(model.width, 0)
-    elems.append(
-        Segment(
-            bottom_left,
-            top_left,
-            style=STYLE_SEAM,
-            name=f"Höhe {model.height / CM:.0f} cm",
-        )
-    )
-    elems.append(
-        Segment(
-            top_left,
-            top_right,
-            style=STYLE_HEM,
-            name=f"Breite {model.width / CM:.0f} cm",
-        )
-    )
-    elems.append(Segment(top_right, bottom_right, style=STYLE_SEAM))
-    elems.append(
-        Segment(bottom_right, bottom_left, style=STYLE_SEAM, name="Wendeöffnung")
-    )
-    precision_points = get_precision_point(bottom_left) + get_precision_point(
-        bottom_right
-    )
-    elems = elems + precision_points
 
-    ## STEP 3
-    # Drawstring channel — shown as a dashed rectangle inset from the top edge
-    ds1_top_left = top_left.translate(0, model.drawstring_margin)
-    ds1_top_right = top_right.translate(0, model.drawstring_margin)
-    ds1_bottom_left = top_left.translate(
-        0, (model.drawstring_margin + model.drawstring_height)
+    body.append(
+        Segment(bottom_left, top_left),
+        style=STYLE_SEAM,
     )
-    ds1_bottom_right = top_right.translate(
-        0, (model.drawstring_margin + model.drawstring_height)
+    body.append(
+        Segment(top_left, top_right),
+        style=STYLE_HEM,
     )
-    drawstring_style = StyleOptions(dash_array=[5.0, 2.0])
-    elems.append(
-        Rect(
-            origin=ds1_top_left,
-            width=model.width,
-            height=model.drawstring_height,
-            name="drawstring / Tunnelzug",
-            style=drawstring_style,
-        )
+    body.append(Segment(top_right, bottom_right), style=STYLE_SEAM)
+    body.append(
+        Segment(bottom_right, bottom_left, name="Wendeöffnung"), style=STYLE_SEAM
     )
 
-    # STEP 3
-    # Add grainline and marks
-    # The grainline runs vertically through the horizontal centre of the piece,
-    # from 2 cm below the top edge to 2 cm above the bottom edge.
+    body.add_precision_points(bottom_left, bottom_right)
+
+    ## STEP 3: Grainline
     grain_padding = 2 * CM
-    grain_x = top_left.x + model.width / 2
-    elems.append(
-        Segment(
-            Point(grain_x, top_left.y + grain_padding),
-            Point(grain_x, bottom_left.y - grain_padding),
-            name="grainline / Fadenlauf",
-            style=STYLE_GRAINLINE,
-        )
+    grain_x = top_left.x + model.width / 4 * 3
+    body.add_grainline(
+        start=Point(grain_x, top_left.y + grain_padding),
+        end=Point(grain_x, bottom_left.y - grain_padding),
     )
 
-    # STEP 4
-    # Add Seam Allowance
+    ## STEP 4: Seam Allowance
     top_left_sa = top_left.translate(-model.seam_allowance, -model.seam_allowance)
     bottom_left_sa = bottom_left.translate(-model.seam_allowance, model.seam_allowance)
     top_right_sa = top_right.translate(model.seam_allowance, -model.seam_allowance)
@@ -106,50 +73,65 @@ def make_drawstring_pouch(model: DrawstringPouchConfig):
 
     sa_width = model.width + 2 * model.seam_allowance
     sa_height = model.height + 2 * model.seam_allowance
-    elems.append(
+    body.append(
         Rect(
             origin=top_left_sa,
             width=sa_width,
             height=sa_height,
-            name=f"Nahtzugabe {model.seam_allowance / CM:.0f} cm",
-        )
+        ),
     )
 
-    # Keep virtual edge segments for mark-intersection arithmetic (not rendered)
+    body.add_info_box(
+        notes=[
+            f"Nahtzugabe {model.seam_allowance / CM:.0f} cm",
+            "2x gegengleich Außenstoff",
+            "2x gegengleich Futterstoff, optional",
+            f"Höhe {model.height / CM:.0f} cm",
+            f"Breite {model.width / CM:.0f} cm",
+        ]
+    )
+
+    # Virtual edge segments for mark-intersection arithmetic (not rendered)
     left_edge = Segment(bottom_left_sa, top_left_sa)
     right_edge = Segment(top_right_sa, bottom_right_sa)
     bottom_edge = Segment(bottom_right_sa, bottom_left_sa)
 
     # Add marks
-    _, s1 = segment_to_intersection(
-        ds1_bottom_left.translate(-0.5 * CM, 0), -left_edge.unit_normal, left_edge
+    ds1_top_left = top_left.translate(0, model.drawstring_margin)
+    ds1_top_right = top_right.translate(0, model.drawstring_margin)
+    ds1_bottom_left = top_left.translate(
+        0, model.drawstring_margin + model.drawstring_height
     )
-    _, s2 = segment_to_intersection(
-        ds1_top_left.translate(-0.5 * CM, 0), -left_edge.unit_normal, left_edge
+    ds1_bottom_right = top_right.translate(
+        0, model.drawstring_margin + model.drawstring_height
     )
-    _, s3 = segment_to_intersection(
-        ds1_bottom_right.translate(0.5 * CM, 0), -right_edge.unit_normal, right_edge
-    )
-    _, s4 = segment_to_intersection(
-        ds1_top_right.translate(0.5 * CM, 0), -right_edge.unit_normal, right_edge
-    )
-    node = bottom_right_sa.translate(
-        -(model.width - model.flip_opening) / 2 - model.seam_allowance, -0.5 * CM
-    )
-    s5 = Segment(node, node.translate(0, 0.5 * CM))
-    s6 = Segment(
-        node.translate(-model.flip_opening, 0),
-        node.translate(-model.flip_opening, 0.5 * CM),
-    )
-    elems.append(s1)
-    elems.append(s2)
-    elems.append(s3)
-    elems.append(s4)
-    elems.append(s5)
-    elems.append(s6)
 
+    flip_left = bottom_right_sa.translate(
+        -(model.width - model.flip_opening) / 2 - model.seam_allowance, 0
+    )
+    flip_right = flip_left.translate(-model.flip_opening, 0)
 
-    return PatternPart(name="", elements=elems)
+    body.add_notches(flip_left, flip_right, segment=bottom_edge)
+
+    # -----------------------------------------------------------------------
+    # Part 2: Drawstring channel
+    # -----------------------------------------------------------------------
+    drawstring = PatternPart(name="drawstring")
+    pattern.add_part(drawstring)
+
+    drawstring.append(
+        Rect(
+            origin=ds1_top_left,
+            width=model.width,
+            height=model.drawstring_height,
+            name="drawstring / Tunnelzug",
+        ),
+        style=StyleOptions(dash_array=[5.0, 2.0]),
+    )
+
+    drawstring.add_notches(ds1_bottom_left, ds1_top_left, segment=left_edge)
+    drawstring.add_notches(ds1_bottom_right, ds1_top_right, segment=right_edge)
+    return pattern
 
 
 if __name__ == "__main__":
@@ -161,11 +143,21 @@ if __name__ == "__main__":
         seam_allowance=1 * CM,
         flip_opening=9 * CM,
     )
-    part = make_drawstring_pouch(drawstring_pouch)
+    pattern = make_drawstring_pouch(drawstring_pouch)
 
-    export_pattern_part_svg_mm(
-        part,
+    # Export complete pattern (body + drawstring channel)
+    export_pattern_svg_mm(
+        pattern,
         filename="items/drawstring_pouch.svg",
         width_mm=DinA4.height,
         height_mm=DinA4.width,
+    )
+
+    # Export body only (without drawstring channel markings)
+    export_pattern_svg_mm(
+        pattern,
+        filename="items/drawstring_pouch_body_only.svg",
+        width_mm=DinA4.height,
+        height_mm=DinA4.width,
+        parts=["body"],
     )

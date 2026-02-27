@@ -57,7 +57,7 @@ def demonstrate_points():
     # Rotate a point
     center = Point(0, 0)
     p4 = Point(5, 0)
-    p4_rotated = p4.rotate(center, math.pi/2)  # 90 degrees
+    p4_rotated = p4.rotate(center, math.pi / 2)  # 90 degrees
     print(f"Point {p4} rotated 90° around origin: {p4_rotated}")
 
 
@@ -165,7 +165,7 @@ def demonstrate_circles():
 
     # Points on circle
     point0 = circle1.point_at_angle(0)  # Point on the right (3 o'clock)
-    point90 = circle1.point_at_angle(math.pi/2)  # Point at the top (12 o'clock)
+    point90 = circle1.point_at_angle(math.pi / 2)  # Point at the top (12 o'clock)
 
     print(f"Point on circle 1 at 0°: {point0}")
     print(f"Point on circle 1 at 90°: {point90}")
@@ -173,12 +173,16 @@ def demonstrate_circles():
     # Check if point is on circle
     test_point = Point(3, 4)  # 3-4-5 triangle, should be on circle 1
     print(f"Is point {test_point} on circle 1? {circle1.contains_point(test_point)}")
-    print(f"Is point {test_point} inside circle 1? {circle1.contains_point_inside(test_point)}")
+    print(
+        f"Is point {test_point} inside circle 1? {circle1.contains_point_inside(test_point)}"
+    )
 
     # Circle-circle intersection
     intersections = circle1.intersect_with(circle2)
     if len(intersections) == 2:
-        print(f"Circle 1 and Circle 2 intersect at two points: {intersections[0]} and {intersections[1]}")
+        print(
+            f"Circle 1 and Circle 2 intersect at two points: {intersections[0]} and {intersections[1]}"
+        )
     elif len(intersections) == 1:
         print(f"Circle 1 and Circle 2 intersect at one point: {intersections[0]}")
     else:
@@ -188,9 +192,13 @@ def demonstrate_circles():
     line = Segment(Point(-10, 0), Point(10, 0))  # Horizontal line through origin
     intersections = circle1.intersect_with(line)
     if len(intersections) == 2:
-        print(f"Circle 1 and horizontal line intersect at two points: {intersections[0]} and {intersections[1]}")
+        print(
+            f"Circle 1 and horizontal line intersect at two points: {intersections[0]} and {intersections[1]}"
+        )
     elif len(intersections) == 1:
-        print(f"Circle 1 and horizontal line intersect at one point: {intersections[0]}")
+        print(
+            f"Circle 1 and horizontal line intersect at one point: {intersections[0]}"
+        )
     else:
         print("Circle 1 and horizontal line do not intersect")
 
@@ -211,12 +219,14 @@ def demonstrate_cad_example():
     corner_radius = 1
 
     # Define the rectangle corners (before rounding) using NumPy arrays
-    corners = np.array([
-        [0, rect_height],             # top_left
-        [rect_width, rect_height],    # top_right
-        [0, 0],                       # bottom_left
-        [rect_width, 0]               # bottom_right
-    ])
+    corners = np.array(
+        [
+            [0, rect_height],  # top_left
+            [rect_width, rect_height],  # top_right
+            [0, 0],  # bottom_left
+            [rect_width, 0],  # bottom_right
+        ]
+    )
 
     top_left = Point(*corners[0])
     top_right = Point(*corners[1])
@@ -224,20 +234,33 @@ def demonstrate_cad_example():
     bottom_right = Point(*corners[3])
 
     # Create circles for the rounded corners
-    c1 = Circle(Point(corner_radius, rect_height - corner_radius), corner_radius)  # Top-left
-    c2 = Circle(Point(rect_width - corner_radius, rect_height - corner_radius), corner_radius)  # Top-right
+    c1 = Circle(
+        Point(corner_radius, rect_height - corner_radius), corner_radius
+    )  # Top-left
+    c2 = Circle(
+        Point(rect_width - corner_radius, rect_height - corner_radius), corner_radius
+    )  # Top-right
     c3 = Circle(Point(corner_radius, corner_radius), corner_radius)  # Bottom-left
-    c4 = Circle(Point(rect_width - corner_radius, corner_radius), corner_radius)  # Bottom-right
+    c4 = Circle(
+        Point(rect_width - corner_radius, corner_radius), corner_radius
+    )  # Bottom-right
 
     # Create connecting lines
-    top_line = Segment(Point(corner_radius, rect_height), Point(rect_width - corner_radius, rect_height))
-    right_line = Segment(Point(rect_width, corner_radius), Point(rect_width, rect_height - corner_radius))
+    top_line = Segment(
+        Point(corner_radius, rect_height),
+        Point(rect_width - corner_radius, rect_height),
+    )
+    right_line = Segment(
+        Point(rect_width, corner_radius), Point(rect_width, rect_height - corner_radius)
+    )
     bottom_line = Segment(Point(corner_radius, 0), Point(rect_width - corner_radius, 0))
     left_line = Segment(Point(0, corner_radius), Point(0, rect_height - corner_radius))
 
     # Print out the object definition
     print("Rectangle with rounded corners:")
-    print(f"  Width: {rect_width}, Height: {rect_height}, Corner Radius: {corner_radius}")
+    print(
+        f"  Width: {rect_width}, Height: {rect_height}, Corner Radius: {corner_radius}"
+    )
     print(f"  Top line: {top_line}")
     print(f"  Right line: {right_line}")
     print(f"  Bottom line: {bottom_line}")
@@ -249,8 +272,11 @@ def demonstrate_cad_example():
 
     # Calculate total perimeter
     perimeter = (
-        top_line.length + right_line.length + bottom_line.length + left_line.length +
-        2 * math.pi * corner_radius  # Four quarter circles = one full circle
+        top_line.length
+        + right_line.length
+        + bottom_line.length
+        + left_line.length
+        + 2 * math.pi * corner_radius  # Four quarter circles = one full circle
     )
 
     print(f"  Total perimeter: {perimeter:.2f}")
