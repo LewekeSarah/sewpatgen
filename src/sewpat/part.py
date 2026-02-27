@@ -1,9 +1,9 @@
-from dataclasses import dataclass
-from typing import List
+
+from dataclasses import dataclass, field
 from .geometry import GEOMETRIC_TYPE
 
 
 @dataclass
 class PatternPart:
     name: str
-    elements: List[GEOMETRIC_TYPE]
+    elements: list[GEOMETRIC_TYPE] = field(default_factory=list)

@@ -1,14 +1,10 @@
 from sewpat import PatternPart, Point
 from sewpat.basic_shapes import get_square, get_precision_point
-from sewpat.geometry import Segment, MM, CM, segment_to_intersection
-from sewpat.line_styles import (
-    get_grainline_style,
-    get_fold_style,
-    get_hem_style,
-    get_seam_style,
-)
+from sewpat.geometry import Segment, segment_to_intersection
+from sewpat.units import MM, CM
+from sewpat.style import STYLE_GRAINLINE, STYLE_FOLD, STYLE_HEM, STYLE_SEAM
 from sewpat.pages import DinA4
-from sewpat.render import render_pattern_part, StyleOptions
+from sewpat.render import export_pattern_part_svg_mm, StyleOptions
 
 
 def make_legend():
@@ -33,24 +29,24 @@ def make_legend():
             ),
             name="precision point",
         ),
-        Segment(left_p1, right_p1, name="grainline", style=get_grainline_style()),
+        Segment(left_p1, right_p1, name="grainline", style=STYLE_GRAINLINE),
         Segment(
             left_p1.translate(0, 1.5 * CM),
             right_p1.translate(0, 1.5 * CM),
             name="fold of fabric",
-            style=get_fold_style(),
+            style=STYLE_FOLD,
         ),
         Segment(
             left_p1.translate(0, 3 * CM),
             right_p1.translate(0, 3 * CM),
             name="hem",
-            style=get_hem_style(),
+            style=STYLE_HEM,
         ),
         Segment(
             left_p1.translate(0, 4.5 * CM),
             right_p1.translate(0, 4.5 * CM),
             name="seam / stitch",
-            style=get_seam_style(),
+            style=STYLE_SEAM,
         ),
     ]
 
@@ -69,6 +65,4 @@ def make_legend():
 
 if __name__ == "__main__":
     part = make_legend()
-
-    d = render_pattern_part(part, DinA4.width, DinA4.height, font_size=10)
-    d.save_svg("legend.svg")
+    export_pattern_part_svg_mm(part, filename="legend.svg", height_mm=DinA4.height, width_mm=DinA4.width)

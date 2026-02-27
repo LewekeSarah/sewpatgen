@@ -2,528 +2,270 @@
 SVG Rendering module for sewing patterns.
 
 This module provides functions to render pattern parts and geometric elements
-using the drawSvg library.
+to SVG files.
 """
-from enum import Enum
-from typing import Dict, List, Optional, Tuple, Union, Any
+import warnings
+from typing import Any, Callable
 
-import drawsvg as draw
-
-from sewpat.geometry import Point, Line, Segment, Ray, Circle, CubicBezier, intersect
+from sewpat.geometry import Point, Segment, Circle, Rect, CubicBezier
 from sewpat.part import PatternPart
+from sewpat.style import StyleOptions, DEFAULT_STROKE_WIDTH, DEFAULT_STROKE_WIDTH_GRAIN, DEFAULT_FONT_SIZE_MM
 
-class LineEndStyle(Enum):
-    arrow = "arrow"
+__all__ = [
+    "StyleOptions",
+    "export_pattern_part_svg_mm",
+]
 
-class StyleOptions:
-    """Style options for rendering pattern elements."""
+# ---------------------------------------------------------------------------
+# Arrow marker
+# ---------------------------------------------------------------------------
 
-    def __init__(
-        self,
-        stroke_color: str = "black",
-        stroke_width: float = 0.5,
-        fill_color: str = "none",
-        dash_array: Optional[List[float]] = None,
-        opacity: float = 1.0,
-        marker_end: Optional[str] = None,
-        text_anchor: str = "start",
-        font_size: float = 12,
-    ):
-        """Initialize style options.
+# Colour used for the arrowhead fill (e.g. on grainlines).
+_ARROW_FILL_COLOR = "grey"
 
-        Args:
-            stroke_color: Color of the stroke (outline).
-            stroke_width: Width of the stroke in SVG units.
-            fill_color: Fill color for closed shapes.
-            dash_array: List of values defining the dash pattern, or None for solid line.
-            opacity: Opacity value between 0.0 (transparent) and 1.0 (opaque).
-            marker_end: Line end style
-            text_anchor: Anchor style
-            font_size: Font size
-        """
-        self.stroke_color = stroke_color
-        self.stroke_width = stroke_width
-        self.fill_color = fill_color
-        self.dash_array = dash_array
-        self.opacity = opacity
-        self.marker_end = LineEndStyle(marker_end).value if marker_end else None
-        self.font_size = font_size
-        self.text_anchor = text_anchor
+# SVG <defs> block defining a reusable arrowhead marker.
+# - markerUnits="userSpaceOnUse" keeps the marker size in the same mm-based
+#   user coordinate space as the rest of the drawing (Inkscape-safe).
+# - orient="auto-start-reverse" flips the marker 180° when used as marker-start,
+#   so the arrowhead points *away* from the line (upward on a vertical grainline).
+# - The path M0,0 L0,6 L8,3 Z is a right-pointing triangle; the reference point
+#   refX=8,refY=3 places its tip exactly on the line endpoint.
+_ARROW_DEFS = (
+    '<defs>'
+    '<marker id="arrow" markerWidth="8" markerHeight="6" '
+    'refX="0" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse">'
+    f'<path d="M0,0 L0,6 L8,3 Z" fill="{_ARROW_FILL_COLOR}" />'
+    '</marker>'
+    '</defs>'
+)
 
-    def as_dict(self) -> Dict[str, Any]:
-        """Convert style options to a dictionary for drawSvg.
+# ---------------------------------------------------------------------------
+# Default style registry
+# ---------------------------------------------------------------------------
 
-        Returns:
-            Dictionary with style attributes.
-        """
-        style_dict = {
-            "stroke": self.stroke_color,
-            "stroke-width": self.stroke_width,
-            "fill": self.fill_color,
-            "opacity": self.opacity,
-            "marker_end": self.marker_end,
-            "font_size": self.font_size,
-            "text_anchor": self.text_anchor,
-        }
-
-        if self.dash_array:
-            style_dict["stroke-dasharray"] = ",".join(map(str, self.dash_array))
-
-        return style_dict
+_DEFAULT_STYLES: dict[str, StyleOptions] = {
+    "segment":        StyleOptions(),
+    "point":          StyleOptions(fill_color="black", stroke_width=0.1),
+    "circle":         StyleOptions(),
+    "cubicbezier":    StyleOptions(),
+    "bezier_control": StyleOptions(stroke_color="red", fill_color="red", stroke_width=0.3),
+}
 
 
-def render_geometric_element(
-    element: Union[Point, Line, Segment, Ray, Circle, CubicBezier],
-    drawing: draw.Drawing,
-    style: StyleOptions = StyleOptions(),
-    viewport_bounds: Optional[Tuple[float, float, float, float]] = None,
-    point_radius: float = 5.0,
-    show_bezier_control_points: bool = False,
-    control_point_style: Optional[StyleOptions] = None,
-) -> None:
-    """Render a geometric element to the SVG drawing.
+# ---------------------------------------------------------------------------
+# Private per-element rendering helpers
+# ---------------------------------------------------------------------------
 
-    Args:
-        element: The geometric element to render.
-        drawing: The drawSvg drawing to render to.
-        style: Style options for rendering.
-        viewport_bounds: Optional (min_x, min_y, max_x, max_y) defining the visible area.
-        point_radius: Radius to use when rendering points.
-        show_bezier_control_points: Whether to show control points and lines for Bezier curves.
-        control_point_style: Style for control points and control lines.
-    """
-    style_dict = style.as_dict()
+def _svg_text(x: float, y: float, font_size_mm: float, text: str, **extra: str) -> str:
+    """Return an SVG ``<text>`` element."""
+    attrs = f'x="{x}" y="{y}" font-size="{font_size_mm}" fill="black"'
+    for key, value in extra.items():
+        attrs += f' {key}="{value}"'
+    return f'<text {attrs}>{text}</text>'
 
-    if isinstance(element, Point):
-        drawing.append(draw.Circle(element.x, element.y, point_radius, **style_dict))
 
-    elif isinstance(element, Segment):
-        if style_dict["marker_end"] == LineEndStyle.arrow.value:
-            arrow = draw.Marker(-0.1, -0.51, 1.8 , 1, scale=4, orient='auto')
-            arrow.append(draw.Lines(-0.1 , 1, -0.1 , -1, 1.8 , 0, fill=style_dict["stroke"], close=True))
-            style_dict["marker_end"] = arrow
+def _common_stroke_attrs(style_dict: dict[str, Any], *, force_fill: str | None = None) -> str:
+    """Build common stroke/fill/opacity SVG attribute string from a style dict."""
+    stroke = style_dict.get("stroke", "black") or "black"
+    stroke_width = style_dict.get("stroke-width", 0.5)
+    fill = force_fill if force_fill is not None else style_dict.get("fill", "none")
+    opacity = style_dict.get("opacity", 1.0)
+    dasharray = style_dict.get("stroke-dasharray")
 
-        p = draw.Line(
-            element.p1.x, element.p1.y, element.p2.x, element.p2.y, **style_dict
+    attrs = f'stroke="{stroke}" stroke-width="{stroke_width}mm" fill="{fill}" opacity="{opacity}"'
+    if dasharray:
+        attrs += f' stroke-dasharray="{dasharray}"'
+    return attrs
+
+
+def _render_cubic_bezier(
+    element: CubicBezier,
+    style_dict: dict[str, Any],
+    font_size_mm: float,
+    show_control_points: bool,
+    control_style_dict: dict[str, Any],
+) -> list[str]:
+    """Return SVG elements for a CubicBezier curve."""
+    nodes: list[str] = []
+
+    path_data = (
+        f'M {element.p0.x},{element.p0.y} '
+        f'C {element.p1.x},{element.p1.y} '
+        f'{element.p2.x},{element.p2.y} '
+        f'{element.p3.x},{element.p3.y}'
+    )
+    attrs = _common_stroke_attrs(style_dict, force_fill="none")
+    nodes.append(f'<path d="{path_data}" {attrs} />')
+
+    if getattr(element, "name", None):
+        nodes.append(_svg_text(element.p0.x, element.p0.y, font_size_mm, element.name))
+
+    if show_control_points:
+        c_stroke = control_style_dict.get("stroke", "red")
+        c_fill = control_style_dict.get("fill", "red")
+        c_width = control_style_dict.get("stroke-width", 0.3)
+        for p_start, p_end in [(element.p0, element.p1), (element.p2, element.p3)]:
+            nodes.append(
+                f'<line x1="{p_start.x}" y1="{p_start.y}" x2="{p_end.x}" y2="{p_end.y}" '
+                f'stroke="{c_stroke}" stroke-width="{c_width}mm" fill="none" stroke-dasharray="2,2" />'
+            )
+        for pt in [element.p0, element.p1, element.p2, element.p3]:
+            nodes.append(
+                f'<circle cx="{pt.x}" cy="{pt.y}" r="1mm" '
+                f'stroke="{c_stroke}" fill="{c_fill}" stroke-width="{c_width}mm" />'
+            )
+
+    return nodes
+
+
+def _render_segment(
+    element: Segment,
+    style_dict: dict[str, Any],
+    font_size_mm: float,
+) -> list[str]:
+    """Return SVG elements for a Segment."""
+    nodes: list[str] = []
+    attrs = _common_stroke_attrs(style_dict, force_fill="none")
+    if style_dict.get("arrow-start"):
+        attrs += ' marker-start="url(#arrow)"'
+    nodes.append(
+        f'<line x1="{element.p1.x}" y1="{element.p1.y}" '
+        f'x2="{element.p2.x}" y2="{element.p2.y}" {attrs} />'
+    )
+    if getattr(element, "name", None):
+        mid_x = (element.p1.x + element.p2.x) / 2
+        mid_y = (element.p1.y + element.p2.y) / 2
+        nodes.append(_svg_text(mid_x, mid_y, font_size_mm, element.name))
+    return nodes
+
+
+def _render_circle(element: Circle, style_dict: dict[str, Any]) -> list[str]:
+    """Return SVG elements for a Circle."""
+    attrs = _common_stroke_attrs(style_dict)
+    return [
+        f'<circle cx="{element.center.x}" cy="{element.center.y}" r="{element.radius}mm" {attrs} />'
+    ]
+
+
+def _render_rect(element: Rect, style_dict: dict[str, Any], font_size_mm: float) -> list[str]:
+    """Return SVG elements for a Rect."""
+    nodes: list[str] = []
+    # Element-level style overrides the passed style_dict when available.
+    effective = element.style.as_dict() if element.style is not None else style_dict
+    stroke_attrs = _common_stroke_attrs(effective)
+
+    nodes.append(
+        f'<rect x="{element.origin.x}" y="{element.origin.y}" '
+        f'width="{element.width}" height="{element.height}" {stroke_attrs} />'
+    )
+
+    if element.name:
+        cx = element.origin.x + element.width / 2
+        cy = element.origin.y + element.height / 2
+        nodes.append(
+            _svg_text(cx, cy, font_size_mm, element.name,
+                      **{"text-anchor": "middle", "dominant-baseline": "middle"})
         )
-        drawing.append(p)
-        if element.name:
-            drawing.append(
-                draw.Text(
-                    element.name,
-                    style_dict["font_size"],
-                    text_anchor=style_dict["text_anchor"],
-                    fill="black",
-                    path=p,
-                )
-            )
-
-    elif isinstance(element, Circle):
-        drawing.append(
-            draw.Circle(
-                element.center.x, element.center.y, element.radius, **style_dict
-            )
-        )
-
-    elif isinstance(element, CubicBezier):
-        # Render cubic Bezier curve as SVG path
-        path_data = f"M {element.p0.x},{element.p0.y} C {element.p1.x},{element.p1.y} {element.p2.x},{element.p2.y} {element.p3.x},{element.p3.y}"
-
-        # Remove fill from style for curves (keep stroke only)
-        bezier_style = style_dict.copy()
-        if bezier_style.get("fill", "none") != "none":
-            bezier_style["fill"] = "none"
-
-        drawing.append(draw.Path(d=path_data, **bezier_style))
-
-        if element.name:
-            drawing.append(
-                draw.Text(
-                    element.name,
-                    style_dict["font_size"],
-                    text_anchor=style_dict["text_anchor"],
-                    fill="black",
-                    path=draw.Line(element.p0.x, element.p0.y, element.p3.x, element.p3.y),
-                )
-            )
-
-        # Optionally show control points and control lines
-        if show_bezier_control_points:
-            if control_point_style is None:
-                control_point_style = StyleOptions(
-                    stroke_color="red",
-                    fill_color="red",
-                    stroke_width=0.5
-                )
-
-            control_style_dict = control_point_style.as_dict()
-            line_style_dict = control_point_style.as_dict()
-            line_style_dict["fill"] = "none"
-            line_style_dict["stroke_dasharray"] = "2,2"
-
-            # Draw control lines
-            drawing.append(draw.Line(
-                element.p0.x, element.p0.y,
-                element.p1.x, element.p1.y,
-                **line_style_dict
-            ))
-            drawing.append(draw.Line(
-                element.p2.x, element.p2.y,
-                element.p3.x, element.p3.y,
-                **line_style_dict
-            ))
-
-            # Draw control points
-            drawing.append(draw.Circle(element.p0.x, element.p0.y, point_radius, **control_style_dict))
-            drawing.append(draw.Circle(element.p1.x, element.p1.y, point_radius, **control_style_dict))
-            drawing.append(draw.Circle(element.p2.x, element.p2.y, point_radius, **control_style_dict))
-            drawing.append(draw.Circle(element.p3.x, element.p3.y, point_radius, **control_style_dict))
-
-    elif isinstance(element, Line) or isinstance(element, Ray):
-        # For infinite or semi-infinite lines, we need to clip to viewport
-        if viewport_bounds is None:
-            # Use drawing dimensions as default viewport
-            min_x, min_y = -drawing.width / 2, -drawing.height / 2
-            max_x, max_y = drawing.width / 2, drawing.height / 2
-        else:
-            min_x, min_y, max_x, max_y = viewport_bounds
-
-        # Extend viewport slightly to ensure lines reach edges
-        padding = 10
-        min_x -= padding
-        min_y -= padding
-        max_x += padding
-        max_y += padding
-
-        if isinstance(element, Line):
-            # For infinite line, find intersections with viewport bounds
-            points = []
-
-            # Create viewport edges as segments
-            edges = [
-                Segment(Point(min_x, min_y), Point(max_x, min_y)),  # bottom
-                Segment(Point(max_x, min_y), Point(max_x, max_y)),  # right
-                Segment(Point(max_x, max_y), Point(min_x, max_y)),  # top
-                Segment(Point(min_x, max_y), Point(min_x, min_y)),  # left
-            ]
-
-            # Find intersections with each edge
-            for edge in edges:
-                intersection = intersect(element, edge)
-                if intersection:
-                    points.extend(intersection)
-
-            # If we found at least 2 points, draw the line segment between them
-            if len(points) >= 2:
-                drawing.append(
-                    draw.Line(
-                        points[0].x, points[0].y, points[1].x, points[1].y, **style_dict
-                    )
-                )
-
-        elif isinstance(element, Ray):
-            # For ray, start at origin and find intersection with viewport
-            origin = element.origin
-
-            # Create viewport edges as segments
-            edges = [
-                Segment(Point(min_x, min_y), Point(max_x, min_y)),  # bottom
-                Segment(Point(max_x, min_y), Point(max_x, max_y)),  # right
-                Segment(Point(max_x, max_y), Point(min_x, max_y)),  # top
-                Segment(Point(min_x, max_y), Point(min_x, min_y)),  # left
-            ]
-
-            # Find the first intersection
-            for edge in edges:
-                intersection = intersect(element, edge)
-                if len(intersection) > 0:
-                    drawing.append(
-                        draw.Line(
-                            origin.x,
-                            origin.y,
-                            intersection[0].x,
-                            intersection[0].y,
-                            **style_dict,
-                        )
-                    )
-                    break
+    return nodes
 
 
-def render_pattern_part(
-    pattern_part: PatternPart,
-    width: float = 500,
-    height: float = 500,
-    margin: float = 20,
-    show_points: bool = True,
-    style_map: Optional[Dict[str, StyleOptions]] = None,
-    font_size: int = 24,
-    show_bezier_control_points: bool = False,
-) -> draw.Drawing:
-    """Render a pattern part to an SVG drawing.
+def _render_point(element: Point, style_dict: dict[str, Any], font_size_mm: float) -> list[str]:
+    """Return SVG elements for a Point."""
+    nodes: list[str] = []
+    attrs = _common_stroke_attrs(style_dict, force_fill=style_dict.get("fill", "black"))
+    nodes.append(f'<circle cx="{element.x}" cy="{element.y}" r="1mm" {attrs} />')
+    if element.name:
+        nodes.append(_svg_text(element.x, element.y, font_size_mm, element.name))
+    return nodes
 
-    Args:
-        pattern_part: The pattern part to render.
-        width: Width of the SVG canvas in units.
-        height: Height of the SVG canvas in units.
-        margin: Margin around the pattern in units.
-        show_points: Whether to show control points.
-        style_map: Dictionary mapping element types to style options.
-        font_size: Font size to use.
-        show_bezier_control_points: Whether to show Bezier control points and control lines.
 
-    Returns:
-        A drawSvg Drawing object with the rendered pattern.
-    """
-    # Create a new drawing with origin at center
-    drawing = draw.Drawing(width, height, origin="center")
+# ---------------------------------------------------------------------------
+# Renderer registry
+# ---------------------------------------------------------------------------
 
-    # Default styles if not provided
-    default_styles = {
-        "segment": StyleOptions(stroke_color="black", stroke_width=1.0),
-        "point": StyleOptions(
-            stroke_color="black", fill_color="black", stroke_width=0.1
+def _make_renderers(
+    font_size_mm: float,
+    show_bezier_control_points: bool,
+    control_style_dict: dict[str, Any],
+    show_points: bool,
+) -> dict[type, Callable[[Any, dict[str, Any]], list[str]]]:
+    """Build a mapping from geometry type to its render callable."""
+    return {
+        CubicBezier: lambda el, sd: _render_cubic_bezier(
+            el, sd, font_size_mm, show_bezier_control_points, control_style_dict
         ),
-        "circle": StyleOptions(stroke_color="black", stroke_width=1.0),
-        "line": StyleOptions(stroke_color="gray", stroke_width=0.75, dash_array=[5, 5]),
-        "ray": StyleOptions(stroke_color="gray", stroke_width=0.75, dash_array=[5, 5]),
-        "cubicbezier": StyleOptions(stroke_color="black", stroke_width=1.0),
-        "bezier_control": StyleOptions(stroke_color="red", fill_color="red", stroke_width=0.5),
+        Segment: lambda el, sd: _render_segment(el, sd, font_size_mm),
+        Circle: lambda el, sd: _render_circle(el, sd),
+        Rect: lambda el, sd: _render_rect(el, sd, font_size_mm),
+        Point: lambda el, sd: _render_point(el, sd, font_size_mm) if show_points else [],
     }
 
-    # Override with provided styles
+
+# ---------------------------------------------------------------------------
+# Public export function
+# ---------------------------------------------------------------------------
+
+def export_pattern_part_svg_mm(
+    pattern_part: PatternPart,
+    filename: str,
+    width_mm: float = 210,
+    height_mm: float = 297,
+    margin_mm: float = 10,
+    style_map: dict[str, StyleOptions] | None = None,
+    show_points: bool = True,
+    show_bezier_control_points: bool = False,
+) -> None:
+    """Export a PatternPart as an SVG file with mm units for precise printing.
+
+    Args:
+        pattern_part: The PatternPart to export.
+        filename: Output filename for the SVG.
+        width_mm: Width of the SVG canvas in mm.
+        height_mm: Height of the SVG canvas in mm.
+        margin_mm: Margin around the canvas in mm.
+        style_map: Optional mapping of element type names to StyleOptions overrides.
+            Unknown keys emit a warning and are ignored.
+        show_points: Whether to render Point elements.
+        show_bezier_control_points: Whether to render Bezier control point handles.
+
+    Note:
+        Font size is controlled per element via ``StyleOptions(font_size_mm=...)``.
+        The fallback is ``DEFAULT_FONT_SIZE_MM``.
+    """
+    # Merge caller overrides into a copy of the defaults.
+    styles = {**_DEFAULT_STYLES}
     if style_map:
         for k, v in style_map.items():
-            if k in default_styles:
-                default_styles[k] = v
-
-    # Calculate viewport bounds
-    # In a real implementation, you'd calculate this based on the actual pattern elements
-    viewport_bounds = (
-        -width / 2 + margin,
-        -height / 2 + margin,
-        width / 2 - margin,
-        height / 2 - margin,
-    )
-
-    # Render each element with appropriate style
-    for element in pattern_part.elements:
-        element_type = element.__class__.__name__.lower()
-        if isinstance(element, Segment):
-            if element.style is not None:
-                style = element.style
+            if k in styles:
+                styles[k] = v
             else:
-                style = default_styles.get(element_type, default_styles["segment"])
-        else:
-            style = default_styles.get(element_type, default_styles["segment"])
+                warnings.warn(
+                    f"style_map key {k!r} does not match any known element type "
+                    f"({list(styles.keys())}); it will be ignored.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
-        # Get control point style for Bezier curves
-        control_style = default_styles.get("bezier_control", None)
+    control_style_dict = styles["bezier_control"].as_dict()
 
-        render_geometric_element(
-            element,
-            drawing,
-            style,
-            viewport_bounds,
-            show_bezier_control_points=show_bezier_control_points,
-            control_point_style=control_style
+    svg_nodes: list[str] = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{width_mm}mm" height="{height_mm}mm" '
+        f'viewBox="0 0 {width_mm} {height_mm}">',
+        _ARROW_DEFS,
+        _svg_text(margin_mm, margin_mm, DEFAULT_FONT_SIZE_MM, pattern_part.name),
+    ]
+
+    for element in pattern_part.elements:
+        style = element.style
+        renderers = _make_renderers(
+            style.font_size_mm, show_bezier_control_points, control_style_dict, show_points
         )
+        renderer = renderers.get(type(element))
+        if renderer is not None:
+            svg_nodes.extend(renderer(element, style.as_dict()))
 
-    # Add title/name
-    drawing.append(
-        draw.Text(
-            pattern_part.name,
-            font_size,
-            -width / 2 + margin,
-            height / 2 - margin,
-            fill="black",
-        )
-    )
+    svg_nodes.append("</svg>")
 
-    return drawing
-
-
-def save_pattern_part_svg(pattern_part: PatternPart, filename: str, **kwargs) -> None:
-    """Render a pattern part and save it to an SVG file.
-
-    Args:
-        pattern_part: The pattern part to render.
-        filename: Output filename for the SVG.
-        **kwargs: Additional arguments passed to render_pattern_part.
-    """
-    drawing = render_pattern_part(pattern_part, **kwargs)
-    drawing.save_svg(filename)
-
-
-def bezier_to_svg_path(bezier: CubicBezier) -> str:
-    """Convert a cubic Bezier curve to SVG path data string.
-
-    Args:
-        bezier: The cubic Bezier curve to convert.
-
-    Returns:
-        SVG path data string in the format "M x,y C x1,y1 x2,y2 x,y"
-    """
-    return f"M {bezier.p0.x},{bezier.p0.y} C {bezier.p1.x},{bezier.p1.y} {bezier.p2.x},{bezier.p2.y} {bezier.p3.x},{bezier.p3.y}"
-
-
-def create_bezier_path_element(bezier: CubicBezier, style: StyleOptions) -> draw.Path:
-    """Create a drawSvg Path element from a cubic Bezier curve.
-
-    Args:
-        bezier: The cubic Bezier curve to convert.
-        style: Style options for the path.
-
-    Returns:
-        A drawSvg Path element.
-    """
-    path_data = bezier_to_svg_path(bezier)
-    style_dict = style.as_dict()
-
-    # Ensure fill is set to none for curves
-    if style_dict.get("fill", "none") != "none":
-        style_dict["fill"] = "none"
-
-    return draw.Path(d=path_data, **style_dict)
-
-
-def render_bezier_with_samples(
-    bezier: CubicBezier,
-    drawing: draw.Drawing,
-    style: StyleOptions,
-    num_samples: int = 50,
-    show_sample_points: bool = False
-) -> None:
-    """Render a Bezier curve using line segments for better compatibility.
-
-    This is useful when SVG path support is limited or for debugging purposes.
-
-    Args:
-        bezier: The cubic Bezier curve to render.
-        drawing: The drawSvg drawing to render to.
-        style: Style options for rendering.
-        num_samples: Number of sample points to use for approximation.
-        show_sample_points: Whether to show the sample points as small circles.
-    """
-    style_dict = style.as_dict()
-
-    # Generate sample points along the curve
-    prev_point = bezier.point_at_t(0.0)
-
-    for i in range(1, num_samples + 1):
-        t = i / num_samples
-        curr_point = bezier.point_at_t(t)
-
-        # Draw line segment
-        drawing.append(draw.Line(
-            prev_point.x, prev_point.y,
-            curr_point.x, curr_point.y,
-            **style_dict
-        ))
-
-        # Optionally show sample points
-        if show_sample_points:
-            point_style = style_dict.copy()
-            point_style["fill"] = style_dict["stroke"]
-            drawing.append(draw.Circle(
-                curr_point.x, curr_point.y, 1.0, **point_style
-            ))
-
-        prev_point = curr_point
-
-
-def get_bezier_bounds(bezier: CubicBezier) -> Tuple[float, float, float, float]:
-    """Get the bounding box of a Bezier curve.
-
-    Args:
-        bezier: The cubic Bezier curve.
-
-    Returns:
-        Tuple of (min_x, min_y, max_x, max_y).
-    """
-    min_pt, max_pt = bezier.bounding_box()
-    return min_pt.x, min_pt.y, max_pt.x, max_pt.y
-
-
-if __name__ == "__main__":
-    # Example usage
-
-    def create_sample_pattern() -> PatternPart:
-        """Create a sample pattern part for demonstration.
-
-        Returns:
-            A sample pattern part with some geometric elements.
-        """
-        part = PatternPart("Sample Bodice", [])
-
-        # Add some geometric elements
-        part.elements.append(Point(0, 0))
-        part.elements.append(Point(100, 0))
-        part.elements.append(Point(100, 150))
-        part.elements.append(Point(0, 150))
-
-        # Add segments to form a rectangle
-        part.elements.append(Segment(Point(0, 0), Point(100, 0)))
-        part.elements.append(Segment(Point(100, 0), Point(100, 150)))
-        part.elements.append(Segment(Point(100, 150), Point(0, 150)))
-        part.elements.append(Segment(Point(0, 150), Point(0, 0)))
-
-        # Add a dart
-        part.elements.append(Segment(Point(50, 0), Point(50, 40)))
-        part.elements.append(Segment(Point(50, 40), Point(40, 0)))
-        part.elements.append(Segment(Point(50, 40), Point(60, 0)))
-
-        # Add a curved neckline
-        c = Circle(Point(50, 150), 25)
-        part.elements.append(c)
-
-        # Add cubic Bezier curves for demonstration
-        bezier1 = CubicBezier(
-            Point(10, 100),   # Start point
-            Point(30, 120),   # First control point
-            Point(70, 120),   # Second control point
-            Point(90, 100)    # End point
-        )
-        part.elements.append(bezier1)
-
-        # Add another Bezier curve with different curvature
-        bezier2 = CubicBezier(
-            Point(10, 80),    # Start point
-            Point(20, 60),    # First control point
-            Point(80, 60),    # Second control point
-            Point(90, 80)     # End point
-        )
-        part.elements.append(bezier2)
-
-        l1 = Segment(Point(0, 50), Point(100, 50))
-        l2 = Segment(Point(0, 20), Point(100, 20))
-        l3 = Segment(Point(0, 0), Point(100, 100))
-        l4 = Segment(Point(0, 80), Point(100, 5))
-
-        part.elements.append(l1)
-        part.elements.append(l2)
-        part.elements.append(l3)
-        part.elements.append(l4)
-
-        part.elements.extend(intersect(l1, l2))
-        part.elements.extend(intersect(l1, l3))
-        part.elements.extend(intersect(l1, l4))
-        part.elements.extend(intersect(l2, l3))
-        part.elements.extend(intersect(l2, l4))
-        part.elements.extend(intersect(l3, l4))
-
-        r = Ray(Point(60, 160), [1.0, 1.0])
-        part.elements.extend(intersect(c, Segment(Point(100, 150), Point(0, 150))))
-        part.elements.append(r)
-        part.elements.extend(intersect(c, r))
-        L = Line(Point(40, 150), [1.0, -0.3])
-        part.elements.append(L)
-        part.elements.extend(intersect(c, L))
-
-        L2 = Segment(Point(30, 125), Point(60, 125))
-        part.elements.append(L2)
-        part.elements.extend(intersect(c, L2))
-
-        return part
-
-    sample_part = create_sample_pattern()
-    save_pattern_part_svg(sample_part, "sample_pattern.svg", show_bezier_control_points=True)
+    with open(filename, "w") as f:
+        f.write("\n".join(svg_nodes))

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from sewpat.geometry import CM
+from sewpat.units import CM
 from sewpat.person import Gender, Person, BalanceAdjustments, PersonAnalyser
 
 
@@ -17,7 +17,7 @@ class Allowance:
     SrH: float = None
 
     def __post_init__(self):
-        if (self.RüB is not None) & (self.ArD is not None) & (self.BrB is not None):
+        if (self.RüB is not None) and (self.ArD is not None) and (self.BrB is not None):
             self.BrU = 2 * (self.RüB + self.ArD + self.BrB)
 
 
@@ -92,9 +92,7 @@ def make_blouse_measurements(
     for key in set(measurements.keys()).intersection(allowances.keys()).difference(width_instead_update):
         measurements[key] += allowances[key]
     for perimeter, width in zip(["TaU", "BrU", "HüU"], ["TaW", "BrW", "HüW"]):
-        measurements[width] = measurements[perimeter] + allowance.__getattribute__(
-            perimeter
-        )
+        measurements[width] = measurements[perimeter] + getattr(allowance, perimeter)
     measurements.pop("KöH")
 
     return BlouseMeasurements(**measurements)
@@ -111,12 +109,12 @@ def make_measurements_trouser(
     for perimeter, width in zip(["TaU", "HüU"], ["TaW", "HüW"]):
         measurements[width] = measurements[perimeter]
         if perimeter in allowances.keys():
-            measurements[width] += allowances[key]
+            measurements[width] += allowances[perimeter]
     measurements.pop("KöH")
 
     if balance is not None:
         for key, val in balance.__dict__.items():
-            measurements[key] += balance.__getattribute__(key)
+            measurements[key] += getattr(balance, key)
 
     trouser_keys = ["TaU", "HüU", "HüT", "SiH", "SrH", "TaW", "HüW"]
     trouser_dict = {
