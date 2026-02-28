@@ -22,6 +22,7 @@ from .geometry import (
     CubicBezier,
     intersect,
     segment_to_intersection,
+    seam_length,
 )
 from .units import MM, CM, INCH
 from .part import PatternPart, PatternElement, Pattern
@@ -36,6 +37,9 @@ from .style import (
     STYLE_CUT,
     STYLE_STITCH,
     STYLE_CENTER_LINE,
+    STYLE_WAISTBAND,
+    STYLE_SEAM_ALLOWANCE,
+    STYLE_DEBUG_RED,
 )
 
 __all__ = [
@@ -51,6 +55,7 @@ __all__ = [
     # Geometry helpers
     "intersect",
     "segment_to_intersection",
+    "seam_length",
     # Units
     "MM",
     "CM",
@@ -69,5 +74,8 @@ __all__ = [
     "STYLE_HEM",
     "STYLE_CUT",
     "STYLE_STITCH",
+    "STYLE_WAISTBAND",
     "STYLE_CENTER_LINE",
+    "STYLE_SEAM_ALLOWANCE",
+    "STYLE_DEBUG_RED",
 ]

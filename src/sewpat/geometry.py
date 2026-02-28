@@ -1,135 +1,70 @@
-"""
-2D Geometry Module for CAD Operations.
-
-This module provides classes for fundamental 2D geometric primitives such as
-points, lines, segments, rays, and circles for use in CAD applications.
-"""
+"""2D geometry primitives for sewing pattern generation."""
 
 import math
 import numpy as np
 from dataclasses import dataclass
 from sewpat.units import MM, CM
+import shapely.geometry as _sg
+
+from svgpathtools import CubicBezier as _SvgCubicBezier
 
 
 def _solve_quadratic(a: float, b: float, c: float) -> list[float]:
-    """Solve a quadratic equation ax^2 + bx + c = 0 in a numerically stable way.
-
-    Uses a numerically stable algorithm to find solutions by avoiding
-    subtractive cancellation.
-
-    Args:
-        a: Coefficient of the quadratic term.
-        b: Coefficient of the linear term.
-        c: Constant term.
-
-    Returns:
-        list[float]: A list containing 0, 1, or 2 solutions.
-    """
-    # TODO: https://cnrs.hal.science/hal-04116310v1/document
-    # Check if this is actually a linear equation
+    """Solve ax² + bx + c = 0. Used by CubicBezier.bounding_box()."""
     if abs(a) < 1e-14:
-        # Linear equation: bx + c = 0
-        if abs(b) < 1e-14:  # All coefficients are essentially zero
-            return []
-        return [-c / b]
-
-    # Compute discriminant
+        return [] if abs(b) < 1e-14 else [-c / b]
     discriminant = b * b - 4 * a * c
-
-    # No real solutions
     if discriminant < 0:
         return []
-
-    # One real solution (repeated root)
     if abs(discriminant) < 1e-14:
         return [-b / (2 * a)]
-
-    # Two real solutions - use numerically stable algorithm
-    # Instead of the standard formula x = (-b ± sqrt(discriminant)) / (2*a)
-    # Use q = -0.5 * (b + sign(b) * sqrt(discriminant))
-    # Then x1 = q/a and x2 = c/q
-    sqrt_discriminant = math.sqrt(discriminant)
-
-    if b >= 0:
-        q = -0.5 * (b + sqrt_discriminant)
-    else:
-        q = -0.5 * (b - sqrt_discriminant)
-
-    x1 = q / a
-    x2 = c / q
-
-    # Return solutions in ascending order
-    if x1 <= x2:
-        return [x1, x2]
-    else:
-        return [x2, x1]
+    s = math.sqrt(discriminant)
+    q = -0.5 * (b + s) if b >= 0 else -0.5 * (b - s)
+    x1, x2 = q / a, c / q
+    return [x1, x2] if x1 <= x2 else [x2, x1]
 
 
 def _intersect_lines(
     pt1: np.ndarray, n1: np.ndarray, pt2: np.ndarray, n2: np.ndarray
 ) -> np.ndarray | None:
-    """Find intersection of two lines represented by a point on the line and the unit normal.
+    """Find intersection of two infinite lines given a point and unit normal each.
 
-    Args:
-        pt1: Point on first line.
-        n1: Unit normal of first line.
-        pt2: Point on second line.
-        n2: Unit normal of second line.
+    Uses Shapely's robust GEOS backend instead of manual Cramer's rule.
 
     Returns:
-        np.ndarray | None: Intersection between the two lines if they are not parallel.
+        np.ndarray | None: Intersection point, or None if lines are parallel.
     """
-    c1 = np.dot(pt1, n1)
-    c2 = np.dot(pt2, n2)
-
-    # System of equations for intersection (x, y):
-    # a1 * x + b1 * y = c1
-    # a2 * x + b2 * y = c2
-    determinant = n1[0] * n2[1] - n2[0] * n1[1]
-
-    if abs(determinant) < 1e-14:
-        # Lines are parallel or coincident
+    # Convert normal → direction (rotate 90°)
+    d1 = np.array([n1[1], -n1[0]])
+    d2 = np.array([n2[1], -n2[0]])
+    far = 1e9
+    line1 = _sg.LineString([pt1 - far * d1, pt1 + far * d1])
+    line2 = _sg.LineString([pt2 - far * d2, pt2 + far * d2])
+    result = line1.intersection(line2)
+    if result.is_empty or result.geom_type != "Point":
         return None
-
-    # Solve the system of equations using Cramer's rule
-    x = (n2[1] * c1 - n1[1] * c2) / determinant
-    y = (n1[0] * c2 - n2[0] * c1) / determinant
-
-    return np.array([x, y])
+    return np.array([result.x, result.y])
 
 
 @dataclass(frozen=True)
 class Point:
-    """A 2D point with x and y coordinates stored as a NumPy array.
-
-    Attributes:
-        coords: NumPy array containing [x, y] coordinates.
-        name: Optional, name of the point.
-    """
+    """A 2D point (frozen dataclass). Coordinates stored as a NumPy array."""
 
     coords: np.ndarray
     name: str | None = None
 
     def __init__(self, x: float, y: float, name: str | None = None):
-        """Initialize a point with x and y coordinates.
-
-        Args:
-            x: The x-coordinate of the point.
-            y: The y-coordinate of the point.
-            name: Optional, name of the point.
-        """
-        # Use object.__setattr__ to set values in a frozen dataclass
         object.__setattr__(self, "coords", np.array([x, y], dtype=float))
         object.__setattr__(self, "name", name)
 
     @property
     def x(self) -> float:
-        """Get the x coordinate."""
+        """x coordinate."""
         return float(self.coords[0])
 
     @property
     def y(self) -> float:
-        """Get the y coordinate."""
+        """y coordinate."""
         return float(self.coords[1])
 
     def __str__(self) -> str:
@@ -145,59 +80,21 @@ class Point:
         else:
             return float(np.linalg.norm(self.coords - other))
 
-    def translate(self, dx: float, dy: float) -> "Point":
-        """Return a new point translated by the given vector.
+    def translate(self, dx: float, dy: float) -> Point:
+        """Return a copy translated by (dx, dy)."""
+        return Point(*(self.coords + np.array([dx, dy])))
 
-        Args:
-            dx: Translation distance along the x-axis.
-            dy: Translation distance along the y-axis.
-
-        Returns:
-            Point: A new point translated by the specified vector.
-        """
-        translation = np.array([dx, dy])
-        return Point(*(self.coords + translation))
-
-    def rotate(self, center: "Point", angle_rad: float) -> "Point":
-        """Rotate the point around a specified center.
-
-        Args:
-            center: The center point of rotation.
-            angle_rad: Angle of rotation in radians (positive is counter-clockwise).
-
-        Returns:
-            Point: A new point representing the rotated position.
-        """
-        # Create rotation matrix
-        cos_a = math.cos(angle_rad)
-        sin_a = math.sin(angle_rad)
-        rotation_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
-
-        # Translate to origin, rotate, and translate back
-        translated = self.coords - center.coords
-        rotated = rotation_matrix @ translated
-        result = rotated + center.coords
-
-        return Point(*result)
+    def rotate(self, center: Point, angle_rad: float) -> Point:
+        """Return a copy rotated by *angle_rad* around *center* (counter-clockwise)."""
+        cos_a, sin_a = math.cos(angle_rad), math.sin(angle_rad)
+        rot = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+        return Point(*(rot @ (self.coords - center.coords) + center.coords))
 
 
 class Segment:
-    """A line segment between two points (from p1 to p2).
-
-    Attributes:
-        p1: Start point of the line segment.
-        p2: End point of the line segment.
-        name: Optional, name of the line segment.
-    """
+    """A line segment from p1 to p2."""
 
     def __init__(self, p1: Point, p2: Point, name: str | None = None):
-        """Initialize a line with two points.
-
-        Args:
-            p1: First endpoint of the line segment.
-            p2: Second endpoint of the line segment.
-            name: Optional, name of the line segment.
-        """
         self.p1 = p1
         self.p2 = p2
         self.name = name
@@ -208,123 +105,114 @@ class Segment:
         else:
             return f"Segment(p1={self.p1}, p2={self.p2})"
 
+    def __repr__(self) -> str:
+        return self.__str__()
+
+    @property
+    def start(self) -> Point:
+        """Start point of the segment (alias for p1)."""
+        return self.p1
+
+    @property
+    def end(self) -> Point:
+        """End point of the segment (alias for p2)."""
+        return self.p2
+
     @property
     def length(self) -> float:
-        """Calculate the length of the line segment.
-
-        Returns:
-            float: The Euclidean length of the line segment.
-        """
+        """Euclidean length."""
         return self.p1.distance_to(self.p2)
 
     @property
     def direction_unnormalized(self) -> np.ndarray:
-        """Return the direction vector of the line segment (not normalized).
-
-        Returns:
-            np.ndarray: The non-normalized direction of the line segment.
-        """
+        """Direction vector (not normalised)."""
         return self.p2.coords - self.p1.coords
 
     @property
     def unit_direction(self) -> np.ndarray:
-        """Return the normalized direction vector of the line segment.
-
-        Returns:
-            np.ndarray: The normalized direction of the line segment.
-        """
-        dir_vec = self.p2.coords - self.p1.coords
-        return dir_vec / np.linalg.norm(dir_vec)
+        """Normalised direction vector."""
+        d = self.p2.coords - self.p1.coords
+        return d / np.linalg.norm(d)
 
     @property
     def unit_normal(self) -> np.ndarray:
-        """Return the normalized direction vector perpendicular to the line segment.
-
-        The perpendicular direction is to the left of the line direction.
-
-        Returns:
-            np.ndarray: The normalized direction perpendicular to the line segment.
-        """
-        dir_vec = self.p2.coords - self.p1.coords
-        dir_vec = dir_vec / np.linalg.norm(dir_vec)
-        return np.array([-dir_vec[1], dir_vec[0]])
+        """Unit normal (left-hand perpendicular of the direction vector)."""
+        d = self.unit_direction
+        return np.array([-d[1], d[0]])
 
     @property
     def midpoint(self) -> Point:
-        """Calculate the midpoint of the line segment.
-
-        Returns:
-            Point: The midpoint of the line segment.
-        """
+        """Midpoint of the segment."""
         return Point(*(0.5 * (self.p1.coords + self.p2.coords)))
 
+    def point_at_t(self, t: float) -> Point:
+        """Return the point at parameter *t* ∈ [0, 1] (0 = p1, 1 = p2)."""
+        assert (0 <= t) and (t <= 1), f"{t = } expected in [0, 1]"
+        return Point(*((1.0 - t) * self.p1.coords + t * self.p2.coords))
+
     def point_at_rel_dist(self, rel_pos: float) -> Point:
-        """Calculate a point on the line segment given its relative position.
-
-        Args:
-            rel_pos: Relative position on the line segment in [0, 1]. A position
-            of 0 corresponds to p1.
-
-        Returns:
-            Point: Position on the line segment.
-        """
-        assert (0 <= rel_pos) and (rel_pos <= 1), f"{rel_pos = } expected in [0, 1]"
-        return Point(*((1.0 - rel_pos) * self.p1.coords + rel_pos * self.p2.coords))
+        """Deprecated alias for ``point_at_t()``. Use ``point_at_t()`` instead."""
+        return self.point_at_t(rel_pos)
 
     def point_perpendicular(
         self,
-        distance_to_obj: float,
+        distance: float,
+        arc_length: float | None = None,
+        t: float | None = None,
+        # Deprecated kwargs — kept for backward compatibility
+        distance_to_obj: float | None = None,
         distance_on_obj: float | None = None,
         rel_pos_on_obj: float | None = None,
     ) -> Point:
-        """Calculates a point at a given perpendicular distance from the line segment.
+        """Return a point offset perpendicularly from the segment.
 
-        This method finds a point that is perpendicular to the line segment at a specified
-        position along the line segment, with a given distance from the line segment.
-
-        Args:
-            distance_to_obj: Perpendicular distance from the line segment to the point.
-                Positive values are to the left of the line direction, negative values to the right.
-            distance_on_obj: Optional; absolute distance along the line segment from p1.
-                If provided, rel_pos_on_obj must be None.
-            rel_pos_on_obj: Optional; relative position along the line from 0.0 (at p1) to 1.0 (at p2).
-                If provided, distance_on_obj must be None.
-
-        Returns:
-            Point: A new point at the specified perpendicular distance from the line segment.
+        Positive *distance* = left of travel direction (p1→p2), negative = right.
+        Position is given by *t* (0–1) or *arc_length* (mm from p1); defaults to midpoint.
 
         Raises:
-            ValueError: If both or neither of distance_on_obj and rel_pos_on_obj are provided.
-            AssertionError: If rel_pos_on_obj is provided, but not in range [0, 1].
-
-        Examples:
-            # Point 5 units perpendicular from the midpoint of the line
-            >>> line = Line(Point(0, 0), [10, 0])
-            >>> point = line.point_perpendicular(5, rel_pos_on_obj=0.5)
-            >>> print(point)
-            Point(5, 5)
+            ValueError: If both *arc_length* and *t* are given.
         """
-        if ((distance_on_obj is None) and (rel_pos_on_obj is None)) or (
-            (distance_on_obj is not None) and (rel_pos_on_obj is not None)
-        ):
-            raise ValueError(
-                "exactly one of distance_on_obj and rel_pos_on_obj has to be set"
+        import warnings as _warnings
+
+        # ── Backward-compat shim ─────────────────────────────────────────────
+        if distance_to_obj is not None:
+            _warnings.warn(
+                "The 'distance_to_obj' keyword argument is deprecated. "
+                "Use the positional 'distance' argument instead.",
+                DeprecationWarning,
+                stacklevel=2,
             )
-
-        if distance_on_obj:
-            dir = self.unit_direction
-            base = self.p1.coords + distance_on_obj * dir
+            distance = distance_to_obj
+        if distance_on_obj is not None:
+            _warnings.warn(
+                "The 'distance_on_obj' keyword argument is deprecated. "
+                "Use 'arc_length' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            arc_length = distance_on_obj
+        if rel_pos_on_obj is not None:
+            _warnings.warn(
+                "The 'rel_pos_on_obj' keyword argument is deprecated. "
+                "Use 't' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            t = rel_pos_on_obj
+        # ── Resolve position ─────────────────────────────────────────────────
+        if arc_length is not None and t is not None:
+            raise ValueError("Specify at most one of 'arc_length' and 't'.")
+        if arc_length is not None:
+            base = self.p1.coords + arc_length * self.unit_direction
+        elif t is not None:
+            assert 0.0 <= t <= 1.0, f"t = {t} must be in [0, 1]"
+            base = (1.0 - t) * self.p1.coords + t * self.p2.coords
         else:
-            assert (0 <= rel_pos_on_obj) and (
-                rel_pos_on_obj <= 1.0
-            ), f"rel_pos_on_obj = {rel_pos_on_obj} required in [0, 1]"
-            base = (
-                1.0 - rel_pos_on_obj
-            ) * self.p1.coords + rel_pos_on_obj * self.p2.coords
+            base = 0.5 * (self.p1.coords + self.p2.coords)
 
-        return Point(*(base + self.unit_normal * distance_to_obj))
+        return Point(*(base + self.unit_normal * distance))
 
-    def project_point(self, point: "Point") -> "Point":
+    def project_point(self, point: Point) -> Point:
         """Return the orthogonal projection of *point* onto this segment's line.
 
         The result is the closest point on the infinite line through p1 and p2.
@@ -341,26 +229,44 @@ class Segment:
         t = float(np.dot(point.coords - p1, d) / np.dot(d, d))
         return Point(*(p1 + t * d))
 
-    def contains_point(self, point: Point, tolerance: float = 1e-12) -> bool:
-        """Check if a point lies on the line segment.
+    def contains_point(self, point: Point, tolerance: float = 1e-9) -> bool:
+        """Return True if *point* lies on the segment within *tolerance* mm (uses Shapely GEOS)."""
+        ls = _sg.LineString([(self.p1.x, self.p1.y), (self.p2.x, self.p2.y)])
+        return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
-        Args:
-            point: The point to check.
-            tolerance: The maximum distance allowed for the point to be considered on the line.
+    def point_at_length(self, arc_length: float) -> Point:
+        """Return the point at *arc_length* mm from p1. Raises ValueError if out of range."""
+        total = self.length
+        if arc_length < 0 or arc_length > total + 1e-9:
+            raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
+        return self.point_at_rel_dist(arc_length / total)
 
-        Returns:
-            bool: True if the point lies on the line segment within tolerance, False otherwise.
+    def bounding_box(self) -> tuple[Point, Point]:
+        """Return the axis-aligned bounding box as ``(min_point, max_point)``."""
+        min_x = min(self.p1.x, self.p2.x)
+        min_y = min(self.p1.y, self.p2.y)
+        max_x = max(self.p1.x, self.p2.x)
+        max_y = max(self.p1.y, self.p2.y)
+        return Point(min_x, min_y), Point(max_x, max_y)
+
+    def offset(self, distance: float, center: Point | None = None) -> Segment:
+        """Return a new Segment offset perpendicularly by *distance* mm.
+
+        Direction is away from *center* (outward) when given; otherwise the
+        sign of *distance* controls the direction (positive = left of travel).
         """
-        # Check if dist(p1, p) + dist(p2, p) == length(line)
-        delta1 = self.p1.coords - point.coords
-        delta2 = self.p2.coords - point.coords
-        delta = self.p2.coords - self.p1.coords
-        d1 = math.sqrt(np.dot(delta1, delta1))
-        d2 = math.sqrt(np.dot(delta2, delta2))
-        line_length = math.sqrt(np.dot(delta, delta))
-
-        # Check if point is collinear and within segment bounds
-        return abs(d1 + d2 - line_length) < tolerance
+        normal = self.unit_normal  # points left of travel direction
+        if center is not None:
+            mid = 0.5 * (self.p1.coords + self.p2.coords)
+            # Flip if normal points toward the interior (toward center)
+            if np.dot(normal, mid - center.coords) < 0:
+                normal = -normal
+            offset_vec = normal * abs(distance)
+        else:
+            offset_vec = normal * distance
+        new_p1 = Point(*(self.p1.coords + offset_vec))
+        new_p2 = Point(*(self.p2.coords + offset_vec))
+        return Segment(new_p1, new_p2, name=self.name)
 
 
 class Ray:
@@ -410,47 +316,21 @@ class Ray:
 
     @property
     def unit_direction(self) -> np.ndarray:
-        """Return the normalized direction vector of the line.
-
-        Returns:
-            np.ndarray: The normalized direction of the line.
-        """
+        """Normalised direction vector."""
         return self.direction
 
     @property
     def unit_normal(self) -> np.ndarray:
-        """Return the normalized direction vector perpendicular to the ray.
-
-        The perpendicular direction is to the left of the ray direction.
-
-        Returns:
-            np.ndarray: The normalized direction perpendicular to the ray.
-        """
+        """Unit normal (left-hand perpendicular of the direction vector)."""
         dir_vec = self.direction
         return np.array([-dir_vec[1], dir_vec[0]])
 
     def point_at_distance(self, distance: float) -> Point:
-        """Return a point on the ray at the given distance from the origin.
-
-        Args:
-            distance: The distance from the origin.
-
-        Returns:
-            Point: A point on the ray at the specified distance from the origin.
-        """
-        point_coords = self.origin.coords + self.direction * distance
-        return Point(*point_coords)
+        """Return the point at *distance* mm along the ray from the origin."""
+        return Point(*(self.origin.coords + self.direction * distance))
 
     def contains_point(self, point: Point, tolerance: float = 1e-14) -> bool:
-        """Check if a point lies on the ray.
-
-        Args:
-            point: The point to check.
-            tolerance: The maximum angular deviation allowed.
-
-        Returns:
-            bool: True if the point lies on the ray within tolerance, False otherwise.
-        """
+        """Return True if *point* lies on the ray within *tolerance*."""
         # Vector from origin to point
         v = point.coords - self.origin.coords
 
@@ -470,25 +350,13 @@ class Ray:
         # and point is in the right direction
         return abs(dot_product - 1.0) < tolerance
 
-    def point_perpendicular(
-        self, distance_to_obj: float, distance_on_obj: float
-    ) -> Point:
-        """Calculates a point at a given perpendicular distance from the ray.
+    def point_perpendicular(self, distance: float, arc_length: float) -> Point:
+        """Return a point offset perpendicularly by *distance* at *arc_length* along the ray.
 
-        This method finds a point that is perpendicular to the ray at a specified position
-        along the ray, with a given distance from the ray.
-
-        Args:
-            distance_to_obj: Perpendicular distance from the line to the point.
-                Positive values are to the left of the line direction, negative values to the right.
-            distance_on_obj: Absolute distance along the ray from origin.
-
-        Returns:
-            Point: A new point at the specified perpendicular distance from the ray.
+        Positive *distance* = left of direction, negative = right.
         """
-        dir = self.direction
-        base = self.origin.coords + distance_on_obj * dir
-        return Point(*(base + self.unit_normal * distance_to_obj))
+        base = self.origin.coords + arc_length * self.direction
+        return Point(*(base + self.unit_normal * distance))
 
 
 class Line:
@@ -538,47 +406,22 @@ class Line:
 
     @property
     def unit_direction(self) -> np.ndarray:
-        """Return the normalized direction vector of the line.
-
-        Returns:
-            np.ndarray: The normalized direction of the line.
-        """
+        """Normalized direction vector of the line."""
         return self.direction
 
     @property
     def unit_normal(self) -> np.ndarray:
-        """Return the normalized direction vector perpendicular to the line.
-
-        The perpendicular direction is to the left of the line direction.
-
-        Returns:
-            np.ndarray: The normalized direction perpendicular to the line.
-        """
+        """Unit normal (left-hand perpendicular of the direction vector)."""
         dir_vec = self.direction
         return np.array([-dir_vec[1], dir_vec[0]])
 
     def point_at_distance(self, distance: float) -> Point:
-        """Return a point on the line at the given distance from the base point.
-
-        Args:
-            distance: The distance from the base point.
-
-        Returns:
-            Point: A point on the line at the specified distance from the base point.
-        """
+        """Return the point at *distance* mm along the line from the base point."""
         point_coords = self.point.coords + self.direction * distance
         return Point(*point_coords)
 
     def contains_point(self, point: Point, tolerance: float = 1e-14) -> bool:
-        """Check if a point lies on the ray.
-
-        Args:
-            point: The point to check.
-            tolerance: The maximum angular deviation allowed.
-
-        Returns:
-            bool: True if the point lies on the ray within tolerance, False otherwise.
-        """
+        """Return True if *point* lies on the line within *tolerance*."""
         # Vector from origin to point
         v = point.coords - self.point.coords
 
@@ -596,25 +439,13 @@ class Line:
         # Check if vectors are parallel (dot product near 1)
         return abs(abs(dot_product) - 1.0) < tolerance
 
-    def point_perpendicular(
-        self, distance_to_obj: float, distance_on_obj: float
-    ) -> Point:
-        """Calculates a point at a given perpendicular distance from the line.
+    def point_perpendicular(self, distance: float, arc_length: float) -> Point:
+        """Return a point offset perpendicularly by *distance* at *arc_length* along the line.
 
-        This method finds a point that is perpendicular to the line at a specified position
-        along the line, with a given distance from the line.
-
-        Args:
-            distance_to_obj: Perpendicular distance from the line to the point.
-                Positive values are to the left of the line direction, negative values to the right.
-            distance_on_obj: Absolute distance along the line from base point.
-
-        Returns:
-            Point: A new point at the specified perpendicular distance from the line.
+        Positive *distance* = left of direction, negative = right.
         """
-        dir = self.direction
-        base = self.point.coords + distance_on_obj * dir
-        return Point(*(base + self.unit_normal * distance_to_obj))
+        base = self.point.coords + arc_length * self.direction
+        return Point(*(base + self.unit_normal * distance))
 
 
 class Rect:
@@ -639,6 +470,14 @@ class Rect:
         self.height = height
         self.name = name
 
+    def __str__(self) -> str:
+        if self.name:
+            return f"Rect(name={self.name}, origin={self.origin}, width={self.width:.6g}, height={self.height:.6g})"
+        return f"Rect(origin={self.origin}, width={self.width:.6g}, height={self.height:.6g})"
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class Triangle:
     """A triangle defined by three points.
@@ -659,6 +498,16 @@ class Triangle:
         self.p3 = p3
         self.name = name
 
+    def __str__(self) -> str:
+        if self.name:
+            return (
+                f"Triangle(name={self.name}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
+            )
+        return f"Triangle(p1={self.p1}, p2={self.p2}, p3={self.p3})"
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class InfoBox:
     """A text info box displayed at a given position.
@@ -676,12 +525,18 @@ class InfoBox:
         self,
         position: Point,
         header: str,
-        notes: "list[str] | None" = None,
+        notes: list[str] | None = None,
     ):
         self.position = position
         self.header = header
         self.notes: list[str] = notes if notes is not None else []
         self.name: str | None = None
+
+    def __str__(self) -> str:
+        return f"InfoBox(header={self.header!r}, position={self.position})"
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class Circle:
@@ -719,140 +574,54 @@ class Circle:
 
     @property
     def area(self) -> float:
-        """Calculate the area of the circle.
-
-        Returns:
-            float: The area of the circle.
-        """
+        """Area of the circle."""
         return math.pi * self.radius * self.radius
 
     @property
     def diameter(self) -> float:
-        """Calculate the diameter of the circle.
-
-        Returns:
-            float: The diameter of the circle.
-        """
+        """Diameter of the circle."""
         return 2 * self.radius
 
     @property
     def circumference(self) -> float:
-        """Calculate the circumference of the circle.
-
-        Returns:
-            float: The circumference of the circle.
-        """
+        """Circumference of the circle."""
         return 2 * math.pi * self.radius
 
     def contains_point(self, point: Point, tolerance: float = 1e-14) -> bool:
-        """Check if a point lies on the circle boundary.
-
-        Args:
-            point: The point to check.
-            tolerance: Maximum distance from the circle boundary allowed.
-
-        Returns:
-            bool: True if the point is on the circle boundary within tolerance, False otherwise.
-        """
-        distance = self.center.distance_to(point)
-        return abs(distance - self.radius) < tolerance
+        """Return True if *point* lies on the circle boundary within *tolerance*."""
+        return abs(self.center.distance_to(point) - self.radius) < tolerance
 
     def contains_point_inside(
         self, point: Point, include_boundary: bool = True
     ) -> bool:
-        """Check if a point is inside the circle.
-
-        Args:
-            point: The point to check.
-            include_boundary: If True, points on the boundary are considered inside.
-
-        Returns:
-            bool: True if the point is inside the circle (and on boundary if include_boundary),
-                 False otherwise.
-        """
-        distance = self.center.distance_to(point)
-        if include_boundary:
-            return distance <= self.radius
-        return distance < self.radius
+        """Return True if *point* is inside (or on) the circle."""
+        d = self.center.distance_to(point)
+        return d <= self.radius if include_boundary else d < self.radius
 
     def point_at_angle(self, angle_rad: float) -> Point:
-        """Get a point on the circle at the given angle.
-
-        Args:
-            angle_rad: Angle in radians. 0 is along the positive x-axis,
-                      increasing counterclockwise.
-
-        Returns:
-            Point: A point on the circle at the specified angle.
-        """
-        point_coords = self.center.coords + self.radius * np.array(
-            [math.cos(angle_rad), math.sin(angle_rad)]
+        """Return the point on the circle at the given angle (radians, CCW from +x)."""
+        return Point(
+            *(
+                self.center.coords
+                + self.radius * np.array([math.cos(angle_rad), math.sin(angle_rad)])
+            )
         )
-        return Point(*point_coords)
 
-    def _intersect_with_circle(self, other: "Circle") -> List[Point]:
-        """Find intersection points with another circle.
-
-        Args:
-            other: Another circle to check for intersections.
-
-        Returns:
-            List[Point]: List of intersection points (empty if no intersections).
-        """
-        # Calculate distance between centers using NumPy for efficiency
-        center_vector = other.center.coords - self.center.coords
-        d = np.linalg.norm(center_vector)
-
-        # Check for no intersection or one circle inside the other
-        if d > self.radius + other.radius:
-            return []  # Circles are too far apart
-
-        if d < abs(self.radius - other.radius):
-            return []  # One circle is inside the other
-
-        if (abs(d) < 1e-14) and (abs(self.radius - other.radius) < 1e-14):
-            return []  # Circles are coincident
-
-        # Handle the case of circles touching at exactly one point
-        if abs(d - (self.radius + other.radius)) < 1e-14:  # External touch
-            # Calculate the point of tangency
-            t = self.radius / (self.radius + other.radius)
-            point_coords = self.center.coords + t * (
-                other.center.coords - self.center.coords
-            )
-            return [Point(*point_coords)]
-
-        if abs(d - abs(self.radius - other.radius)) < 1e-14:  # Internal touch
-            # Calculate the point of tangency
-            if self.radius > other.radius:
-                t = self.radius / (self.radius - other.radius)
-            else:
-                t = -self.radius / (other.radius - self.radius)
-
-            point_coords = self.center.coords + t * (
-                other.center.coords - self.center.coords
-            )
-            return [Point(*point_coords)]
-
-        # Calculate intersection points
-        # Law of cosines to find the angle
-        a = (self.radius * self.radius - other.radius * other.radius + d * d) / (2 * d)
-        h = math.sqrt(self.radius * self.radius - a * a)
-
-        # Direction vector from self.center to other.center
+    def _intersect_with_circle(self, other: Circle) -> list[Point]:
+        """Find intersection points with another circle (exact analytical solution)."""
+        d = float(np.linalg.norm(self.center.coords - other.center.coords))
+        r1, r2 = self.radius, other.radius
+        if d > r1 + r2 or d < abs(r1 - r2) or d < 1e-14:
+            return []
+        a = (r1 * r1 - r2 * r2 + d * d) / (2 * d)
+        h_sq = r1 * r1 - a * a
+        h = math.sqrt(max(h_sq, 0.0))
         direction = (other.center.coords - self.center.coords) / d
-
-        # Find the point P2 which is 'a' away from self.center on the line to other.center
-        p2 = self.center.coords + a * direction
-
-        # Compute the perpendicular vector
+        mid = self.center.coords + a * direction
         perp = np.array([-direction[1], direction[0]])
-
-        # Calculate the intersection points
-        p3 = p2 + h * perp
-        p4 = p2 - h * perp
-
-        return [Point(*p3), Point(*p4)]
+        if h < 1e-14:
+            return [Point(*mid)]
+        return [Point(*(mid + h * perp)), Point(*(mid - h * perp))]
 
 
 def _intersect_linear_linear(
@@ -863,143 +632,27 @@ def _intersect_linear_linear(
     check1: bool,
     check2: bool,
 ) -> list[Point]:
-    """Find the intersection point between two linear objects (i.e., segments, lines, rays).
+    """Find the intersection point between two linear objects using Shapely."""
+    far = 1e9
 
-    Args:
-        p1: Point on object 1.
-        p2: Point on object 2.
-        a: Object 1.
-        b: Object 2.
-        check1: Determines whether contains_point() is checked on object 1.
-        check2: Determines whether contains_point() is checked on object 2.
+    def _to_shapely(obj: Segment | Ray | Line) -> _sg.LineString:
+        if isinstance(obj, Segment):
+            return _sg.LineString([(obj.p1.x, obj.p1.y), (obj.p2.x, obj.p2.y)])
+        elif isinstance(obj, Ray):
+            end = obj.origin.coords + far * obj.unit_direction
+            return _sg.LineString([(obj.origin.x, obj.origin.y), (end[0], end[1])])
+        else:  # Line
+            start = obj.point.coords - far * obj.unit_direction
+            end = obj.point.coords + far * obj.unit_direction
+            return _sg.LineString([(start[0], start[1]), (end[0], end[1])])
 
-    Returns:
-        list[Point]: List containing the intersection point, or empty list if no intersection.
-    """
-    pt = _intersect_lines(p1, a.unit_normal, p2, b.unit_normal)
-
-    if pt is None:
+    result = _to_shapely(a).intersection(_to_shapely(b))
+    if result.is_empty or result.geom_type != "Point":
         return []
-
-    intersection = Point(*pt)
-    if (check1 and not a.contains_point(intersection)) or (
-        check2 and not b.contains_point(intersection)
-    ):
+    pt = Point(result.x, result.y)
+    if (check1 and not a.contains_point(pt)) or (check2 and not b.contains_point(pt)):
         return []
-
-    return [intersection]
-
-
-def _solve_cubic(a: float, b: float, c: float, d: float) -> list[float]:
-    """Solve a cubic equation ax³ + bx² + cx + d = 0.
-
-    Args:
-        a, b, c, d: Coefficients of the cubic equation.
-
-    Returns:
-        List of real roots.
-    """
-    eps = 1e-10
-
-    if abs(a) < eps:
-        # Degenerate to quadratic
-        return _solve_quadratic(b, c, d)
-
-    # Normalize coefficients
-    b /= a
-    c /= a
-    d /= a
-
-    # Substitute x = t - b/3 to eliminate quadratic term
-    # Results in t³ + pt + q = 0
-    p = c - b * b / 3
-    q = d - b * c / 3 + 2 * b * b * b / 27
-
-    # Use Cardano's formula
-    discriminant = (q / 2) ** 2 + (p / 3) ** 3
-
-    roots = []
-
-    if discriminant > eps:
-        # One real root
-        sqrt_disc = math.sqrt(discriminant)
-        u = (
-            (-q / 2 + sqrt_disc) ** (1 / 3)
-            if (-q / 2 + sqrt_disc) >= 0
-            else -(abs(-q / 2 + sqrt_disc) ** (1 / 3))
-        )
-        v = (
-            (-q / 2 - sqrt_disc) ** (1 / 3)
-            if (-q / 2 - sqrt_disc) >= 0
-            else -(abs(-q / 2 - sqrt_disc) ** (1 / 3))
-        )
-        roots.append(u + v - b / 3)
-    elif abs(discriminant) < eps:
-        # Two or three real roots
-        if abs(q) < eps:
-            # Triple root
-            roots.append(-b / 3)
-        else:
-            # One single and one double root
-            u = (-q / 2) ** (1 / 3) if (-q / 2) >= 0 else -(abs(-q / 2) ** (1 / 3))
-            roots.extend([2 * u - b / 3, -u - b / 3])
-    else:
-        # Three distinct real roots
-        rho = math.sqrt(-((p / 3) ** 3))
-        theta = math.acos(-q / 2 / rho)
-
-        for k in range(3):
-            root = (
-                2 * (rho ** (1 / 3)) * math.cos((theta + 2 * math.pi * k) / 3) - b / 3
-            )
-            roots.append(root)
-
-    return roots
-
-
-def _intersect_bezier_line(
-    bezier: CubicBezier, line_point: np.ndarray, line_dir: np.ndarray
-) -> list[float]:
-    """Find intersection parameters t where a cubic Bezier intersects a line.
-
-    Args:
-        bezier: The cubic Bezier curve.
-        line_point: A point on the line.
-        line_dir: Direction vector of the line (should be normalized).
-
-    Returns:
-        List of t parameters where intersections occur.
-    """
-    # Line equation: P = line_point + s * line_dir
-    # Bezier equation: B(t) = (1-t)³P₀ + 3(1-t)²tP₁ + 3(1-t)t²P₂ + t³P₃
-    #
-    # For intersection: B(t) lies on the line
-    # We can use the implicit line equation: (P - line_point) × line_dir = 0
-    # where × is the 2D cross product (determinant)
-
-    # Get perpendicular to line direction for implicit form
-    line_perp = np.array([-line_dir[1], line_dir[0]])
-
-    # Coefficients for the cubic equation in t
-    # B(t) = a₃t³ + a₂t² + a₁t + a₀ where:
-    a0 = bezier.p0.coords
-    a1 = 3 * (bezier.p1.coords - bezier.p0.coords)
-    a2 = 3 * (bezier.p2.coords - 2 * bezier.p1.coords + bezier.p0.coords)
-    a3 = (
-        bezier.p3.coords
-        - 3 * bezier.p2.coords
-        + 3 * bezier.p1.coords
-        - bezier.p0.coords
-    )
-
-    # Distance from line_point to each coefficient projected onto line_perp
-    d0 = np.dot(a0 - line_point, line_perp)
-    d1 = np.dot(a1, line_perp)
-    d2 = np.dot(a2, line_perp)
-    d3 = np.dot(a3, line_perp)
-
-    # Solve cubic equation: d₃t³ + d₂t² + d₁t + d₀ = 0
-    return _solve_cubic(d3, d2, d1, d0)
+    return [pt]
 
 
 class CubicBezier:
@@ -1036,6 +689,19 @@ class CubicBezier:
     def __str__(self) -> str:
         return f"CubicBezier(name={self.name}, p0={self.p0}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
 
+    def __repr__(self) -> str:
+        return self.__str__()
+
+    @property
+    def start(self) -> Point:
+        """Start point of the curve (alias for p0)."""
+        return self.p0
+
+    @property
+    def end(self) -> Point:
+        """End point of the curve (alias for p3)."""
+        return self.p3
+
     def point_at_t(self, t: float) -> Point:
         """Evaluate the Bezier curve at parameter t.
 
@@ -1068,63 +734,61 @@ class CubicBezier:
 
         return Point(x, y)
 
+    def _svg(self) -> _SvgCubicBezier:
+        """Return an equivalent svgpathtools CubicBezier for delegated calculations."""
+        return _SvgCubicBezier(
+            complex(self.p0.x, self.p0.y),
+            complex(self.p1.x, self.p1.y),
+            complex(self.p2.x, self.p2.y),
+            complex(self.p3.x, self.p3.y),
+        )
+
+    @property
+    def length(self) -> float:
+        """Exact arc length via Gauss-Legendre quadrature (delegated to svgpathtools)."""
+        return self._svg().length()
+
     def tangent_at_t(self, t: float) -> np.ndarray:
-        """Compute the tangent vector at parameter t.
+        """Tangent vector at *t* (not normalised), via svgpathtools B'(t)."""
+        d = self._svg().derivative(t)
+        return np.array([d.real, d.imag])
 
-        Args:
-            t: Parameter value, typically between 0 and 1.
+    def normal_at_t(self, t: float) -> np.ndarray:
+        """Unit normal at *t*: 90° counter-clockwise from the tangent (left of travel)."""
+        n = self._svg().normal(t)
+        return np.array([n.real, n.imag])
 
-        Returns:
-            Tangent vector as numpy array.
-        """
-        # Derivative of cubic Bezier: B'(t) = 3(1-t)²(P₁-P₀) + 6(1-t)t(P₂-P₁) + 3t²(P₃-P₂)
-        t2 = t * t
-        mt = 1.0 - t
-        mt2 = mt * mt
+    def point_at_length(self, arc_length: float) -> Point:
+        """Return the point at *arc_length* mm from p0 (uses svgpathtools.ilength). Raises ValueError if out of range."""
+        total = self.length
+        if arc_length < 0 or arc_length > total + 1e-9:
+            raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
+        t = self._svg().ilength(arc_length)
+        return self.point_at_t(t)
 
-        dx = (
-            3 * mt2 * (self.p1.x - self.p0.x)
-            + 6 * mt * t * (self.p2.x - self.p1.x)
-            + 3 * t2 * (self.p3.x - self.p2.x)
+    def split(self, t: float) -> tuple["CubicBezier", "CubicBezier"]:
+        """Split at *t* into (left, right) using de Casteljau (delegated to svgpathtools)."""
+        left, right = self._svg().split(t)
+        return (
+            CubicBezier(
+                Point(left.start.real, left.start.imag),
+                Point(left.control1.real, left.control1.imag),
+                Point(left.control2.real, left.control2.imag),
+                Point(left.end.real, left.end.imag),
+            ),
+            CubicBezier(
+                Point(right.start.real, right.start.imag),
+                Point(right.control1.real, right.control1.imag),
+                Point(right.control2.real, right.control2.imag),
+                Point(right.end.real, right.end.imag),
+            ),
         )
-
-        dy = (
-            3 * mt2 * (self.p1.y - self.p0.y)
-            + 6 * mt * t * (self.p2.y - self.p1.y)
-            + 3 * t2 * (self.p3.y - self.p2.y)
-        )
-
-        return np.array([dx, dy])
-
-    def length_approx(self, num_segments: int = 100) -> float:
-        """Approximate the length of the Bezier curve using line segments.
-
-        Args:
-            num_segments: Number of line segments to use for approximation.
-
-        Returns:
-            Approximate length of the curve.
-        """
-        total_length = 0.0
-        prev_point = self.point_at_t(0.0)
-
-        for i in range(1, num_segments + 1):
-            t = i / num_segments
-            curr_point = self.point_at_t(t)
-            total_length += prev_point.distance_to(curr_point)
-            prev_point = curr_point
-
-        return total_length
 
     def bounding_box(self) -> tuple[Point, Point]:
-        """Compute the axis-aligned bounding box of the Bezier curve.
-
-        Returns:
-            Tuple of (min_point, max_point) defining the bounding box.
-        """
-        # Start with control points
-        x_coords = [self.p0.x, self.p1.x, self.p2.x, self.p3.x]
-        y_coords = [self.p0.y, self.p1.y, self.p2.y, self.p3.y]
+        """Compute the axis-aligned bounding box by finding B'(t)=0 extrema (not the control-point hull)."""
+        # Seed with the two curve endpoints only (they are always on the curve)
+        x_coords = [self.p0.x, self.p3.x]
+        y_coords = [self.p0.y, self.p3.y]
 
         # Find extrema by solving derivative = 0
         # For x: 3(1-t)²(P₁-P₀) + 6(1-t)t(P₂-P₁) + 3t²(P₃-P₂) = 0
@@ -1158,89 +822,240 @@ class CubicBezier:
 
         return Point(min_x, min_y), Point(max_x, max_y)
 
+    def point_perpendicular(self, distance: float, t: float) -> Point:
+        """Return a point offset by *distance* mm in the normal direction at *t*.
 
-def _intersect_linear_circle(
-    lin_pt: np.ndarray, dir: np.ndarray, circle: Circle
-) -> list[float]:
-    """Find the intersection point between a linear object (i.e., segments, lines, rays) and a circle.
+        Positive *distance* = left of travel direction, negative = right.
+        """
+        pt = self.point_at_t(t)
+        nor = self.normal_at_t(t)
+        return Point(pt.x + distance * nor[0], pt.y + distance * nor[1])
 
-    Args:
-        lin_pt: Point on linear object.
-        dir: Direction vector of linear object.
-        circle: Circle.
+    def contains_point(self, point: Point, tolerance: float = 0.01) -> bool:
+        """Return True if *point* is within *tolerance* mm of the curve (Shapely GEOS on 64-segment discretisation)."""
+        ls = _bezier_shapely(self)  # 64-segment discretisation
+        return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
-    Returns:
-        List[float]: List containing (relative) position of intersections along the linear object.
-    """
-    dc = lin_pt - circle.center.coords
+    def offset(
+        self,
+        distance: float,
+        center: Point | None = None,
+        hausdorff_limit: float = 1.5,
+    ) -> CubicBezier:
+        """Return an approximate offset curve using the hodograph approximation.
 
-    A = np.dot(dir, dir)
-    B = np.dot(dc, dir)
-    C = np.dot(dc, dc)
-
-    return _solve_quadratic(A, 2 * B, C - circle.radius**2)
-
-
-def _intersect_circle_circle(c1: Circle, c2: Circle) -> list[Point]:
-    """Find intersection points between two circles.
-
-    Args:
-        c1: First circle.
-        c2: Second circle.
-
-    Returns:
-        List[Point]: List of intersection points (empty if no intersections).
-    """
-    # Calculate distance between centers using NumPy for efficiency
-    center_vector = c2.center.coords - c1.center.coords
-    d = np.linalg.norm(center_vector)
-
-    # Check for no intersection or one circle inside the other
-    if d > c1.radius + c2.radius:
-        return []  # Circles are too far apart
-
-    if d < abs(c1.radius - c2.radius):
-        return []  # One circle is inside the other
-
-    if (abs(d) < 1e-14) and (abs(c1.radius - c2.radius) < 1e-14):
-        return []  # Circles are coincident
-
-    # Handle the case of circles touching at exactly one point
-    if abs(d - (c1.radius + c2.radius)) < 1e-14:  # External touch
-        # Calculate the point of tangency
-        t = c1.radius / (c1.radius + c2.radius)
-        point_coords = c1.center.coords + t * (c2.center.coords - c1.center.coords)
-        return [Point(*point_coords)]
-
-    if abs(d - abs(c1.radius - c2.radius)) < 1e-14:  # Internal touch
-        # Calculate the point of tangency
-        if c1.radius > c2.radius:
-            t = c1.radius / (c1.radius - c2.radius)
+        Direction is away from *center* when given; otherwise sign of *distance*
+        controls direction (positive = left of travel).  If the Hausdorff error
+        against the true parallel offset exceeds ``hausdorff_limit × |distance|``,
+        the curve is split at t=0.5 and the halves are re-joined automatically.
+        Set ``hausdorff_limit=math.inf`` to disable the quality check.
+        """
+        # Resolve signed scalar offset distance
+        if center is not None:
+            mid = self.point_at_t(0.5)
+            n_mid = self.normal_at_t(0.5)
+            sign = 1.0 if np.dot(n_mid, mid.coords - center.coords) >= 0 else -1.0
+            d = sign * abs(distance)
         else:
-            t = -c1.radius / (c2.radius - c1.radius)
+            d = distance
 
-        point_coords = c1.center.coords + t * (c2.center.coords - c1.center.coords)
-        return [Point(*point_coords)]
+        def _hodograph(curve: CubicBezier) -> CubicBezier:
+            """Shift each control point by the curve normal at its parameter."""
 
-    # Calculate intersection points
-    # Law of cosines to find the angle
-    a = (c1.radius * c1.radius - c2.radius * c2.radius + d * d) / (2 * d)
-    h = math.sqrt(c1.radius * c1.radius - a * a)
+            def _shifted(pt: Point, t: float) -> Point:
+                n = curve.normal_at_t(t)
+                return Point(pt.x + d * n[0], pt.y + d * n[1])
 
-    # Direction vector from c1.center to c2.center
-    direction = (c2.center.coords - c1.center.coords) / d
+            return CubicBezier(
+                _shifted(curve.p0, 0.0),
+                _shifted(curve.p1, 1 / 3),
+                _shifted(curve.p2, 2 / 3),
+                _shifted(curve.p3, 1.0),
+                name=curve.name,
+            )
 
-    # Find the point P2 which is 'a' away from c1.center on the line to c2.center
-    p2 = c1.center.coords + a * direction
+        approx = _hodograph(self)
 
-    # Compute the perpendicular vector
-    perp = np.array([-direction[1], direction[0]])
+        # Hausdorff quality check — compare the hodograph approximation against
+        # the true parallel offset (sampled point-by-point) rather than against
+        # the original curve.  Comparing against the original always yields ≈
+        # distance and never triggers the fallback.
+        if abs(distance) > 1e-9 and math.isfinite(hausdorff_limit):
+            ls_true = _true_offset_ls(self, d)
+            ls_off = _bezier_shapely(approx)
+            if ls_true.hausdorff_distance(ls_off) > hausdorff_limit * abs(distance):
+                # Split at midpoint and offset each half independently, then
+                # re-join: use the inner control points (p2 from the left half,
+                # p1 from the right half) which encode the geometry near the
+                # split point and produce a much better mid-curve approximation
+                # than the outer tangent-only control points.
+                left, right = self.split(0.5)
+                left_off = _hodograph(left)
+                right_off = _hodograph(right)
+                return CubicBezier(
+                    left_off.p0,
+                    left_off.p2,
+                    right_off.p1,
+                    right_off.p3,
+                    name=self.name,
+                )
 
-    # Calculate the intersection points
-    p3 = p2 + h * perp
-    p4 = p2 - h * perp
+        return approx
 
-    return [Point(*p3), Point(*p4)]
+    def offset_error(self, distance: float, center: Point | None = None) -> float:
+        """Return the Hausdorff distance (mm) between the hodograph approximation and the true parallel offset.
+
+        Values well below *distance* indicate a reliable approximation;
+        values above ``1.5 × distance`` suggest the curve is too tightly curved.
+        """
+        if center is not None:
+            mid = self.point_at_t(0.5)
+            n_mid = self.normal_at_t(0.5)
+            sign = 1.0 if np.dot(n_mid, mid.coords - center.coords) >= 0 else -1.0
+            d = sign * abs(distance)
+        else:
+            d = distance
+        approx = self.offset(distance, center=center, hausdorff_limit=math.inf)
+        ls_true = _true_offset_ls(self, d)
+        ls_off = _bezier_shapely(approx)
+        return float(ls_true.hausdorff_distance(ls_off))
+
+    def offset_adaptive(
+        self,
+        distance: float,
+        center: "Point | None" = None,
+        eps: float = 0.1,
+        _depth: int = 0,
+        _max_depth: int = 8,
+    ) -> "list[CubicBezier]":
+        """Return the offset curve as a list of Béziers, recursively split until Hausdorff error < *eps* mm.
+
+        Keeps splitting at t=0.5 until every sub-segment is within *eps* of the
+        true parallel offset.  Hard depth cap of *_max_depth* (default 8 = up to
+        256 segments) prevents infinite recursion on degenerate curves.
+        """
+        # Resolve signed distance (done once at top level; sub-calls pass
+        # center=None with the already-signed distance to avoid re-deriving it).
+        if center is not None:
+            mid = self.point_at_t(0.5)
+            n_mid = self.normal_at_t(0.5)
+            sign = 1.0 if np.dot(n_mid, mid.coords - center.coords) >= 0 else -1.0
+            d = sign * abs(distance)
+        else:
+            d = distance
+
+        # Hodograph approximation for this segment.
+        def _shifted(pt: "Point", t: float) -> "Point":
+            n = self.normal_at_t(t)
+            return Point(pt.x + d * n[0], pt.y + d * n[1])
+
+        approx = CubicBezier(
+            _shifted(self.p0, 0.0),
+            _shifted(self.p1, 1 / 3),
+            _shifted(self.p2, 2 / 3),
+            _shifted(self.p3, 1.0),
+            name=self.name,
+        )
+
+        # Base cases: depth limit or error within tolerance.
+        if _depth >= _max_depth:
+            return [approx]
+
+        ls_true = _true_offset_ls(self, d)
+        ls_off = _bezier_shapely(approx)
+        if ls_true.hausdorff_distance(ls_off) <= eps:
+            return [approx]
+
+        # Error too large — split and recurse.
+        left, right = self.split(0.5)
+        return left.offset_adaptive(
+            d, center=None, eps=eps, _depth=_depth + 1, _max_depth=_max_depth
+        ) + right.offset_adaptive(
+            d, center=None, eps=eps, _depth=_depth + 1, _max_depth=_max_depth
+        )
+
+
+def _intersect_bezier_bezier(
+    a: CubicBezier, b: CubicBezier, tol: float = 1e-12
+) -> list[Point]:
+    """Find intersections between two cubic Bézier curves.
+
+    Uses ``svgpathtools`` as a backend, which implements the numerically robust
+    Bézier-clipping algorithm (Sederberg & Nishita 1990).
+    """
+    svg_a = _SvgCubicBezier(
+        complex(a.p0.x, a.p0.y),
+        complex(a.p1.x, a.p1.y),
+        complex(a.p2.x, a.p2.y),
+        complex(a.p3.x, a.p3.y),
+    )
+    svg_b = _SvgCubicBezier(
+        complex(b.p0.x, b.p0.y),
+        complex(b.p1.x, b.p1.y),
+        complex(b.p2.x, b.p2.y),
+        complex(b.p3.x, b.p3.y),
+    )
+    intersections: list[Point] = []
+    for t1, _t2 in svg_a.intersect(svg_b):
+        pt = a.point_at_t(t1)
+        if not any(pt.distance_to(ex) < tol for ex in intersections):
+            intersections.append(pt)
+    return intersections
+
+
+def _bezier_shapely(b: CubicBezier, n: int = 64) -> _sg.LineString:
+    """Discretise a CubicBezier into a Shapely LineString with *n* segments."""
+    return _sg.LineString(
+        [(b.point_at_t(i / n).x, b.point_at_t(i / n).y) for i in range(n + 1)]
+    )
+
+
+def geom_to_shapely(g: Segment | CubicBezier) -> _sg.LineString:
+    """Convert a Segment or CubicBezier to a Shapely LineString.
+
+    Segments map to a 2-point LineString; CubicBeziers are discretised into
+    64 segments (sufficient for sub-0.1 mm accuracy on typical garment curves).
+
+    Useful for nearest-point queries via ``shapely.ops.nearest_points()``.
+    """
+    if isinstance(g, Segment):
+        return _sg.LineString([(g.p1.x, g.p1.y), (g.p2.x, g.p2.y)])
+    return _bezier_shapely(g)
+
+
+def _true_offset_ls(b: CubicBezier, d: float, n: int = 64) -> _sg.LineString:
+    """Sample the true parallel offset of *b* at signed distance *d* into a Shapely LineString."""
+    pts = []
+    for i in range(n + 1):
+        t = i / n
+        pt = b.point_at_t(t)
+        nor = b.normal_at_t(t)
+        pts.append((pt.x + d * nor[0], pt.y + d * nor[1]))
+    return _sg.LineString(pts)
+
+
+def _linear_shapely(obj: Segment | Ray | Line, far: float = 1e9) -> _sg.LineString:
+    """Convert a Segment, Ray or Line to a Shapely LineString."""
+    if isinstance(obj, Segment):
+        return _sg.LineString([(obj.p1.x, obj.p1.y), (obj.p2.x, obj.p2.y)])
+    elif isinstance(obj, Ray):
+        end = obj.origin.coords + far * obj.unit_direction
+        return _sg.LineString([(obj.origin.x, obj.origin.y), (end[0], end[1])])
+    else:  # Line
+        start = obj.point.coords - far * obj.unit_direction
+        end = obj.point.coords + far * obj.unit_direction
+        return _sg.LineString([(start[0], start[1]), (end[0], end[1])])
+
+
+def _shapely_to_points(result: _sg.base.BaseGeometry) -> list[Point]:
+    """Extract a list of Points from a Shapely intersection result."""
+    if result.is_empty:
+        return []
+    if result.geom_type == "Point":
+        return [Point(result.x, result.y)]
+    if result.geom_type in ("MultiPoint", "GeometryCollection"):
+        return [Point(g.x, g.y) for g in result.geoms if g.geom_type == "Point"]
+    return []
 
 
 GEOMETRIC_TYPE = (
@@ -1249,186 +1064,55 @@ GEOMETRIC_TYPE = (
 
 
 def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
-    """Find intersections between two geometrical objects.
+    """Find intersections between two geometric objects.
 
-    Args:
-        a: First object.
-        b: Second object.
+    Linear objects (Segment, Ray, Line) and circles are handled via Shapely's
+    GEOS backend.  Bézier–Bézier intersections use svgpathtools (Bézier-clipping).
+    Bézier–linear and Bézier–circle intersections discretise the curve and use
+    Shapely.
 
     Returns:
-        list[Point]: List containing intersections or empty list if there are no intersections.
+        list[Point]: Intersection points, or empty list if none.
     """
-    if isinstance(a, Segment):
-        if isinstance(b, Segment):
-            return _intersect_linear_linear(a.p1.coords, b.p1.coords, a, b, True, True)
-        elif isinstance(b, Ray):
-            return _intersect_linear_linear(
-                a.p1.coords, b.origin.coords, a, b, True, True
-            )
-        elif isinstance(b, Line):
-            return _intersect_linear_linear(
-                a.p1.coords, b.point.coords, a, b, True, False
-            )
-        elif isinstance(b, Circle):
-            t = _intersect_linear_circle(a.p1.coords, a.p2.coords - a.p1.coords, b)
-            return [a.point_at_rel_dist(ct) for ct in t if (0 <= ct) and (ct <= 1)]
-        elif isinstance(b, CubicBezier):
-            # Segment-Bezier intersection (swap and reuse Bezier-Segment logic)
-            return intersect(b, a)
-    elif isinstance(a, Ray):
-        if isinstance(b, Segment):
-            return _intersect_linear_linear(
-                b.p1.coords, a.origin.coords, b, a, True, True
-            )
-        elif isinstance(b, Ray):
-            return _intersect_linear_linear(
-                a.origin.coords, b.origin.coords, a, b, True, True
-            )
-        elif isinstance(b, Line):
-            return _intersect_linear_linear(
-                a.origin.coords, b.point.coords, a, b, True, False
-            )
-        elif isinstance(b, Circle):
-            t = _intersect_linear_circle(a.origin.coords, a.unit_direction, b)
-            return [
-                Point(*(a.origin.coords + ct * a.unit_direction))
-                for ct in t
-                if (0 <= ct)
-            ]
-        elif isinstance(b, CubicBezier):
-            # Ray-Bezier intersection (swap and reuse Bezier-Ray logic)
-            return intersect(b, a)
-    elif isinstance(a, Line):
-        if isinstance(b, Segment):
-            return _intersect_linear_linear(
-                b.p1.coords, a.point.coords, b, a, True, False
-            )
-        elif isinstance(b, Ray):
-            return _intersect_linear_linear(
-                b.origin.coords, a.point.coords, b, a, True, False
-            )
-        elif isinstance(b, Line):
-            return _intersect_linear_linear(
-                a.point.coords, b.point.coords, a, b, False, False
-            )
-        elif isinstance(b, Circle):
-            t = _intersect_linear_circle(a.point.coords, a.unit_direction, b)
-            return [Point(*(a.point.coords + ct * a.unit_direction)) for ct in t]
-        elif isinstance(b, CubicBezier):
-            # Line-Bezier intersection (swap and reuse Bezier-Line logic)
-            return intersect(b, a)
-    elif isinstance(a, Circle):
-        if isinstance(b, Segment):
-            t = _intersect_linear_circle(b.p1.coords, b.p2.coords - b.p1.coords, a)
-            return [b.point_at_rel_dist(ct) for ct in t if (0 <= ct) and (ct <= 1)]
-        elif isinstance(b, Ray):
-            t = _intersect_linear_circle(b.origin.coords, b.unit_direction, a)
-            return [
-                Point(*(b.origin.coords + ct * b.unit_direction))
-                for ct in t
-                if (0 <= ct)
-            ]
-        elif isinstance(b, Line):
-            t = _intersect_linear_circle(b.point.coords, b.unit_direction, a)
-            return [
-                Point(*(b.point.coords + ct * b.unit_direction))
-                for ct in t
-                if (0 <= ct)
-            ]
-        elif isinstance(b, Circle):
-            return _intersect_circle_circle(a, b)
-        elif isinstance(b, CubicBezier):
-            # Circle-Bezier intersection (swap and reuse Bezier-Circle logic)
-            return intersect(b, a)
-    elif isinstance(a, CubicBezier):
-        if isinstance(b, Segment):
-            # Bezier-Segment intersection
-            seg_dir = b.unit_direction
-            t_values = _intersect_bezier_line(a, b.p1.coords, seg_dir)
-            intersections = []
-            for t in t_values:
-                if 0 <= t <= 1:
-                    bezier_point = a.point_at_t(t)
-                    # Check if point lies on segment
-                    if b.contains_point(bezier_point):
-                        intersections.append(bezier_point)
-            return intersections
-        elif isinstance(b, Ray):
-            # Bezier-Ray intersection
-            t_values = _intersect_bezier_line(a, b.origin.coords, b.unit_direction)
-            intersections = []
-            for t in t_values:
-                if 0 <= t <= 1:
-                    bezier_point = a.point_at_t(t)
-                    # Check if point is in ray direction
-                    to_point = bezier_point.coords - b.origin.coords
-                    if np.dot(to_point, b.unit_direction) >= 0:
-                        intersections.append(bezier_point)
-            return intersections
-        elif isinstance(b, Line):
-            # Bezier-Line intersection
-            t_values = _intersect_bezier_line(a, b.point.coords, b.unit_direction)
-            return [a.point_at_t(t) for t in t_values if 0 <= t <= 1]
-        elif isinstance(b, Circle):
-            # Bezier-Circle intersection (approximate using sampling)
-            intersections = []
-            num_samples = 1000
-            prev_point = a.point_at_t(0)
+    # ── linear × linear ──────────────────────────────────────────────────────
+    if isinstance(a, (Segment, Ray, Line)) and isinstance(b, (Segment, Ray, Line)):
+        return _intersect_linear_linear(
+            None, None, a, b, isinstance(a, Segment), isinstance(b, Segment)
+        )
 
-            for i in range(1, num_samples + 1):
-                t = i / num_samples
-                curr_point = a.point_at_t(t)
+    # ── linear × circle ──────────────────────────────────────────────────────
+    if isinstance(a, (Segment, Ray, Line)) and isinstance(b, Circle):
+        circle_shape = _sg.Point(b.center.x, b.center.y).buffer(b.radius)
+        result = _linear_shapely(a).intersection(circle_shape.exterior)
+        return _shapely_to_points(result)
 
-                # Check if segment crosses circle boundary
-                prev_inside = b.contains_point_inside(prev_point)
-                curr_inside = b.contains_point_inside(curr_point)
+    if isinstance(a, Circle) and isinstance(b, (Segment, Ray, Line)):
+        return intersect(b, a)
 
-                if prev_inside != curr_inside:
-                    # Binary search for more precise intersection
-                    t_start = (i - 1) / num_samples
-                    t_end = t
+    # ── circle × circle ──────────────────────────────────────────────────────
+    if isinstance(a, Circle) and isinstance(b, Circle):
+        return a._intersect_with_circle(b)
 
-                    for _ in range(20):  # Binary search iterations
-                        t_mid = (t_start + t_end) / 2
-                        mid_point = a.point_at_t(t_mid)
-                        mid_inside = b.contains_point_inside(mid_point)
+    # ── Bézier × Bézier ──────────────────────────────────────────────────────
+    if isinstance(a, CubicBezier) and isinstance(b, CubicBezier):
+        return _intersect_bezier_bezier(a, b)
 
-                        if mid_inside == prev_inside:
-                            t_start = t_mid
-                        else:
-                            t_end = t_mid
+    # ── Bézier × linear ──────────────────────────────────────────────────────
+    if isinstance(a, CubicBezier) and isinstance(b, (Segment, Ray, Line)):
+        result = _bezier_shapely(a).intersection(_linear_shapely(b))
+        return _shapely_to_points(result)
 
-                    intersections.append(a.point_at_t((t_start + t_end) / 2))
+    if isinstance(a, (Segment, Ray, Line)) and isinstance(b, CubicBezier):
+        return intersect(b, a)
 
-                prev_point = curr_point
+    # ── Bézier × circle ──────────────────────────────────────────────────────
+    if isinstance(a, CubicBezier) and isinstance(b, Circle):
+        circle_shape = _sg.Point(b.center.x, b.center.y).buffer(b.radius)
+        result = _bezier_shapely(a).intersection(circle_shape.exterior)
+        return _shapely_to_points(result)
 
-            return intersections
-        elif isinstance(b, CubicBezier):
-            # Bezier-Bezier intersection (approximate using sampling)
-            intersections = []
-            num_samples = 200
-            tolerance = 1e-6
-
-            for i in range(num_samples + 1):
-                t1 = i / num_samples
-                point1 = a.point_at_t(t1)
-
-                for j in range(num_samples + 1):
-                    t2 = j / num_samples
-                    point2 = b.point_at_t(t2)
-
-                    if point1.distance_to(point2) < tolerance:
-                        # Check if this intersection is already found
-                        is_duplicate = False
-                        for existing in intersections:
-                            if existing.distance_to(point1) < tolerance:
-                                is_duplicate = True
-                                break
-
-                        if not is_duplicate:
-                            intersections.append(point1)
-
-            return intersections
+    if isinstance(a, Circle) and isinstance(b, CubicBezier):
+        return intersect(b, a)
 
     raise TypeError(f"Intersection not implemented for {type(a)} and {type(b)}")
 
@@ -1436,16 +1120,304 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
 def segment_to_intersection(
     start: Point, dir: np.ndarray, obj: GEOMETRIC_TYPE
 ) -> tuple[Point, Segment]:
-    """Creates a Segment from the given start point to the intersection with an object in given direction.
-
-    Args:
-        start: Start point of the new segment.
-        dir: Direction for finding intersection.
-        obj: Other object that is intersected by a ray from start in direction dir.
-
-    Returns:
-        Point: Intersection point with obj.
-        Segment: Segment from start to intersection with obj in direction dir.
-    """
+    """Create a Segment from start to the first intersection with obj in direction dir."""
     pt = intersect(Ray(start, dir), obj)[0]
     return pt, Segment(start, pt)
+
+
+# ---------------------------------------------------------------------------
+# Chain / offset helpers  (used by PatternPart.add_seam_allowance)
+# ---------------------------------------------------------------------------
+
+_CHAIN_SNAP = 0.5  # mm — endpoint-matching tolerance
+
+
+def geom_start(g: Segment | CubicBezier) -> Point:
+    """Return the start point of a Segment or CubicBezier."""
+    return g.start
+
+
+def geom_end(g: Segment | CubicBezier) -> Point:
+    """Return the end point of a Segment or CubicBezier."""
+    return g.end
+
+
+def with_endpoints(
+    g: Segment | CubicBezier, new_start: Point, new_end: Point
+) -> Segment | CubicBezier:
+    """Return a copy of *g* with replaced start and end points."""
+    if isinstance(g, Segment):
+        return Segment(new_start, new_end, name=g.name)
+    return CubicBezier(new_start, g.p1, g.p2, new_end, name=g.name)
+
+
+def build_chain(
+    geoms: list[Segment | CubicBezier],
+) -> list[Segment | CubicBezier]:
+    """Sort *geoms* into a single connected chain, reversing pieces as needed.
+
+    Walks through *geoms* greedily: the next piece whose start or end lies
+    within ``_CHAIN_SNAP`` mm of the current tail is appended (reversed if
+    necessary).  Any unconnected remainder is appended as-is.
+    """
+    chain = [geoms[0]]
+    remaining = list(geoms[1:])
+    while remaining:
+        tail = geom_end(chain[-1])
+        for i, g in enumerate(remaining):
+            if tail.distance_to(geom_start(g)) < _CHAIN_SNAP:
+                chain.append(remaining.pop(i))
+                break
+            elif tail.distance_to(geom_end(g)) < _CHAIN_SNAP:
+                rev: Segment | CubicBezier = (
+                    Segment(g.p2, g.p1, name=g.name)
+                    if isinstance(g, Segment)
+                    else CubicBezier(g.p3, g.p2, g.p1, g.p0, name=g.name)
+                )
+                chain.append(rev)
+                remaining.pop(i)
+                break
+        else:
+            chain.extend(remaining)  # gap — append remainder as-is
+            break
+    return chain
+
+
+def miter_corner(
+    ga: Segment | CubicBezier,
+    gb: Segment | CubicBezier,
+    sa_distance: float,
+    miter_limit: float = 4.0,
+) -> Point:
+    """Return the miter-join corner between the end of *ga* and the start of *gb*.
+
+    Extends the end-tangent of *ga* and the start-tangent of *gb* as infinite
+    lines and returns their intersection.  Falls back to the bevel midpoint
+    when:
+
+    * the lines are parallel,
+    * the miter extension exceeds *miter_limit* × *sa_distance*, or
+    * the corner is a **reflex** angle (interior angle > 180°, i.e. a
+      concave corner on the offset curve).  For reflex corners the miter
+      intersection would shoot inward and create a spike; using the bevel
+      midpoint keeps the offset curve well-behaved.
+    """
+
+    def _unit_tangent(g: Segment | CubicBezier, at_end: bool) -> np.ndarray:
+        d = (
+            g.end.coords - g.start.coords
+            if isinstance(g, Segment)
+            else (g.tangent_at_t(1.0) if at_end else g.tangent_at_t(0.0))
+        )
+        norm = float(np.linalg.norm(d))
+        return d / norm if norm > 1e-12 else d
+
+    end_a = geom_end(ga)
+    start_b = geom_start(gb)
+    ta = _unit_tangent(ga, at_end=True)
+    tb = _unit_tangent(gb, at_end=False)
+
+    bevel_mid = Point(*(0.5 * (end_a.coords + start_b.coords)))
+
+    pt = _intersect_lines(
+        end_a.coords,
+        np.array([-ta[1], ta[0]]),
+        start_b.coords,
+        np.array([-tb[1], tb[0]]),
+    )
+    if pt is None:
+        return bevel_mid
+
+    # Reflex-corner detection: if the intersection point lies *behind* the
+    # end of ga (i.e. in the opposite direction of ta) the corner is concave
+    # on the offset curve and the miter would punch inward, creating a spike.
+    # This check is winding-direction-independent: dot(pt - end_a, ta) < 0
+    # is true for reflex corners regardless of whether the outline is CW or CCW.
+    if float(np.dot(pt - end_a.coords, ta)) < 0.0:
+        return bevel_mid
+
+    if (
+        sa_distance > 1e-9
+        and float(np.linalg.norm(pt - end_a.coords)) > miter_limit * sa_distance
+    ):
+        return bevel_mid
+    return Point(*pt)
+
+
+def round_corner(
+    ga: "Segment | CubicBezier",
+    gb: "Segment | CubicBezier",
+) -> "CubicBezier | Point":
+    """Return a cubic Bézier arc approximation for a round join at a convex corner.
+
+    Constructs a cubic Bézier that approximates the circular arc connecting
+    ``geom_end(ga)`` to ``geom_start(gb)`` around the outside of the corner.
+    The arc centre is the intersection of the outward normals at the two
+    endpoints (i.e. the miter point).  Handle lengths follow the standard
+    **k = (4/3) tan(θ/4)** formula, giving a maximum radial error < 0.027 %
+    of the arc radius for included angles up to 90°.
+
+    Falls back to the bevel midpoint (as a :class:`Point`) for:
+
+    * parallel or anti-parallel tangents (degenerate corner),
+    * reflex (concave) corners where the arc would curve inward,
+    * degenerate geometry (zero chord, zero radius, …).
+
+    Args:
+        ga: The outgoing offset element whose *end* point is the arc start.
+        gb: The incoming offset element whose *start* point is the arc end.
+
+    Returns:
+        A :class:`CubicBezier` arc, or a :class:`Point` bevel midpoint
+        fallback.
+    """
+
+    def _unit_tangent(g: "Segment | CubicBezier", at_end: bool) -> np.ndarray:
+        d = (
+            g.end.coords - g.start.coords  # type: ignore[union-attr]
+            if isinstance(g, Segment)
+            else (g.tangent_at_t(1.0) if at_end else g.tangent_at_t(0.0))
+        )
+        norm = float(np.linalg.norm(d))
+        return d / norm if norm > 1e-12 else d
+
+    end_a = geom_end(ga)
+    start_b = geom_start(gb)
+    bevel_mid = Point(*(0.5 * (end_a.coords + start_b.coords)))
+
+    ta = _unit_tangent(ga, at_end=True)
+    tb = _unit_tangent(gb, at_end=False)
+
+    # Signed angle from ta to tb.  Positive → left turn (convex outward arc).
+    cross = float(ta[0] * tb[1] - ta[1] * tb[0])
+    dot_ = float(ta[0] * tb[0] + ta[1] * tb[1])
+    angle = math.atan2(cross, dot_)  # in (-π, π]
+
+    # Only produce an arc for convex corners (positive included angle ≤ π).
+    if angle <= 1e-6 or angle > math.pi - 1e-6:
+        return bevel_mid
+
+    # Arc centre: intersection of the outward normals at end_a and start_b.
+    # For a clockwise-wound offset curve (SVG y-down) the outward normal is
+    # the *right-hand* perpendicular of the tangent: (ta[1], -ta[0]).
+    na = np.array([ta[1], -ta[0]])
+    nb = np.array([tb[1], -tb[0]])
+    centre_pt = _intersect_lines(
+        end_a.coords,
+        na,
+        start_b.coords,
+        nb,
+    )
+    if centre_pt is None:
+        return bevel_mid
+
+    # Verify the arc centre is on the correct (outside) side of the corner.
+    if float(np.dot(centre_pt - end_a.coords, na)) < 0.0:
+        return bevel_mid
+
+    r = float(np.linalg.norm(centre_pt - end_a.coords))
+    if r < 1e-9:
+        return bevel_mid
+
+    # Verify start_b is also on the circle (sanity check).
+    r2 = float(np.linalg.norm(centre_pt - start_b.coords))
+    if abs(r2 - r) > r * 0.01:  # > 1 % discrepancy → degenerate
+        return bevel_mid
+
+    # k = (4/3) * tan(angle/4) → handle length = k * r (tangential, standard formula).
+    k = (4.0 / 3.0) * math.tan(angle / 4.0)
+    handle = k * r
+
+    # Control points along the tangent directions at each endpoint.
+    cp1 = Point(*(end_a.coords + handle * ta))
+    cp2 = Point(*(start_b.coords - handle * tb))
+
+    return CubicBezier(end_a, cp1, cp2, start_b)
+
+
+def buffer_chain(
+    geoms: list[Segment | CubicBezier],
+    distance: float,
+    join_style: int = 2,
+    mitre_limit: float = 4.0,
+) -> list[tuple[float, float]]:
+    """Buffer a connected chain of Segments outward by *distance* using Shapely.
+
+    Builds a Shapely Polygon from the chain, applies ``Polygon.buffer()``,
+    and returns the exterior ring as a list of (x, y) coordinate tuples.
+    Only valid for pure-segment chains; call ``build_chain`` first.
+
+    Args:
+        geoms: Connected chain of Segments (no CubicBeziers).
+        distance: Offset distance in mm (must be positive).
+        join_style: Shapely join style (2 = Miter, 1 = Round, 3 = Bevel).
+        mitre_limit: Maximum miter ratio before fallback to bevel.
+
+    Returns:
+        List of (x, y) coordinate tuples forming the buffered exterior ring.
+    """
+    ring_coords = [(geom_start(g).x, geom_start(g).y) for g in geoms]
+    poly = _sg.Polygon(ring_coords)
+    if not poly.is_valid:
+        poly = poly.buffer(0)
+    return list(
+        poly.buffer(
+            distance, join_style=join_style, mitre_limit=mitre_limit
+        ).exterior.coords
+    )
+
+
+def outline_polygon(
+    geoms: list[Segment | CubicBezier],
+    bezier_samples: int = 64,
+) -> _sg.Polygon | None:
+    """Build a Shapely Polygon from a list of Segments and CubicBeziers.
+
+    The geometries are first sorted into a connected ring via :func:`build_chain`
+    (which also reverses individual elements as needed).  Segments contribute
+    their start point; CubicBeziers are discretised into *bezier_samples* evenly
+    spaced points (default 64 for sub-mm accuracy on typical garment curves).
+    The endpoint of the last geometry is appended to close the ring precisely.
+    Returns ``None`` if fewer than 3 vertices are produced.
+    """
+    if not geoms:
+        return None
+    ordered = build_chain(geoms)
+    coords: list[tuple[float, float]] = []
+    for g in ordered:
+        if isinstance(g, Segment):
+            coords.append((g.start.x, g.start.y))
+        else:
+            for i in range(bezier_samples):
+                pt = g.point_at_t(i / bezier_samples)
+                coords.append((pt.x, pt.y))
+    # Append the endpoint of the last geometry so the ring closes accurately.
+    ep = geom_end(ordered[-1])
+    coords.append((ep.x, ep.y))
+    if len(coords) < 3:
+        return None
+    return _sg.Polygon(coords)
+
+
+def seam_length(geoms: list[Segment | CubicBezier]) -> float:
+    """Return the total arc length in mm of a list of Segments and/or CubicBeziers."""
+    total = 0.0
+    for g in geoms:
+        total += g.length
+    return total
+
+
+def offset_adaptive(
+    geom: "Segment | CubicBezier",
+    distance: float,
+    center: "Point | None" = None,
+    eps: float = 0.1,
+) -> "list[Segment | CubicBezier]":
+    """Offset *geom* outward by *distance* mm, splitting until Hausdorff error < *eps*.
+
+    Segments are offset in a single step; CubicBeziers delegate to
+    :meth:`CubicBezier.offset_adaptive` for recursive refinement.
+    """
+    if isinstance(geom, Segment):
+        return [geom.offset(distance, center=center)]
+    return geom.offset_adaptive(distance, center=center, eps=eps)

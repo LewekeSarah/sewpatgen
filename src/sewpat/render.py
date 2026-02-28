@@ -1,14 +1,21 @@
-"""
-SVG Rendering module for sewing patterns.
-
-This module provides functions to render pattern parts and geometric elements
-to SVG files.
-"""
+"""SVG rendering for sewing patterns."""
 
 import warnings
 from typing import Any, Callable
 
-from sewpat.geometry import Point, Segment, Circle, Rect, Triangle, InfoBox, CubicBezier
+import numpy as np
+
+from sewpat.geometry import (
+    Point,
+    Segment,
+    Circle,
+    Rect,
+    Triangle,
+    InfoBox,
+    CubicBezier,
+    geom_start,
+    geom_end,
+)
 
 from sewpat.part import PatternPart, PatternElement, Pattern
 from sewpat.style import (
@@ -238,19 +245,39 @@ def _render_info_box(element: InfoBox, style_dict: dict[str, Any]) -> list[str]:
 
 
 def _render_rect(element: Rect, style_dict: dict[str, Any]) -> list[str]:
-    """Return SVG elements for a Rect."""
+    """Return SVG elements for a Rect.
+
+    SVG has no native ``stroke-alignment: inside``, but the same result is
+    achieved by clipping the element to its own bounding box: the stroke is
+    painted centred on the boundary as usual, but everything outside the
+    declared rectangle is cut away, so the *outer* edge of the visible stroke
+    coincides exactly with the declared width/height.
+
+    A unique ``clipPath`` id is derived from the element's pixel-exact origin
+    so that multiple rects on the same canvas don't collide.
+    """
     nodes: list[str] = []
     font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
     stroke_attrs = _common_stroke_attrs(style_dict)
 
+    x, y = element.origin.x, element.origin.y
+    w, h = element.width, element.height
+
+    # Unique clip id — use integer representation of coords to avoid dots in ids
+    clip_id = f"rc_{int(round(x * 100))}_{int(round(y * 100))}_{int(round(w * 100))}_{int(round(h * 100))}"
+
     nodes.append(
-        f'<rect x="{element.origin.x}" y="{element.origin.y}" '
-        f'width="{element.width}" height="{element.height}" {stroke_attrs} />'
+        f'<clipPath id="{clip_id}">'
+        f'<rect x="{x}" y="{y}" width="{w}" height="{h}" /></clipPath>'
+    )
+    nodes.append(
+        f'<rect x="{x}" y="{y}" width="{w}" height="{h}" '
+        f'clip-path="url(#{clip_id})" {stroke_attrs} />'
     )
 
     if element.name:
-        cx = element.origin.x + element.width / 2
-        cy = element.origin.y + element.height / 2
+        cx = x + w / 2
+        cy = y + h / 2
         nodes.append(
             _svg_text(
                 cx,
@@ -296,20 +323,96 @@ def _make_renderers(
     }
 
 
+def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
+    """Serialize a sorted chain of Segment/CubicBezier objects into an SVG path string."""
+    if not geoms:
+        return ""
+
+    parts: list[str] = []
+    first_pt = geom_start(geoms[0])
+    parts.append(f"M {first_pt.x},{first_pt.y}")
+
+    for g in geoms:
+        if isinstance(g, Segment):
+            parts.append(f"L {g.p2.x},{g.p2.y}")
+        else:  # CubicBezier
+            parts.append(f"C {g.p1.x},{g.p1.y} {g.p2.x},{g.p2.y} {g.p3.x},{g.p3.y}")
+
+    last_pt = geom_end(geoms[-1])
+    if float(np.linalg.norm(last_pt.coords - first_pt.coords)) < 0.01:
+        parts.append("Z")
+
+    return " ".join(parts)
+
+
+def _render_seam_allowance_chain(
+    sa_elements: list["PatternElement"],
+    style_dict: dict[str, Any],
+) -> list[str]:
+    """Render all SA Segment/CubicBezier elements as one ``<path>`` for clean linejoin corners."""
+    geoms: list[Segment | CubicBezier] = [
+        e.geometry
+        for e in sa_elements
+        if isinstance(e.geometry, (Segment, CubicBezier))
+    ]
+    if not geoms:
+        return []
+
+    path_data = _geoms_to_path_data(geoms)
+    if not path_data:
+        return []
+
+    attrs = _common_stroke_attrs(style_dict, force_fill="none")
+    return [f'<path d="{path_data}" {attrs} />']
+
+
 def _render_elements(
-    elements: list[PatternElement],
+    elements: list["PatternElement"],
     svg_nodes: list[str],
     show_bezier_control_points: bool,
     show_points: bool,
+    styles: dict[str, StyleOptions] | None = None,
 ) -> None:
-    """Render a list of PatternElements into svg_nodes (in-place)."""
+    """Render PatternElements into *svg_nodes* in-place.
+
+    SA elements are collected and flushed as a single connected ``<path>`` at
+    the end so ``stroke-linejoin`` applies at every corner.
+    """
+    _TYPE_KEY = {
+        Segment: "segment",
+        CubicBezier: "cubicbezier",
+        Circle: "circle",
+        Point: "point",
+    }
+
+    sa_elements: list["PatternElement"] = []
+    sa_style_dict: dict[str, Any] | None = None
+
+    renderers = _make_renderers(show_bezier_control_points)
+
     for pat_elem in elements:
         element = pat_elem.geometry
+
+        # Collect SA geometry for grouped rendering — skip individual rendering.
+        if pat_elem.is_seam_allowance and isinstance(element, (Segment, CubicBezier)):
+            sa_elements.append(pat_elem)
+            if sa_style_dict is None:
+                sa_style_dict = pat_elem.style.as_dict()
+            continue
+
         if not show_points and isinstance(element, Point):
             continue
+
+        # Resolve effective style: use the per-element style unless it is still
+        # the plain default, in which case fall back to the type-level override
+        # from the resolved styles dict.
         style = pat_elem.style
+        if styles is not None:
+            type_key = _TYPE_KEY.get(type(element))
+            if type_key and style == StyleOptions():
+                style = styles.get(type_key, style)
+
         effective_name = pat_elem.get_name()
-        renderers = _make_renderers(show_bezier_control_points)
         renderer = renderers.get(type(element))
         if renderer is not None:
             original_name = getattr(element, "name", None)
@@ -331,6 +434,10 @@ def _render_elements(
             except (AttributeError, TypeError):
                 pass
 
+    # Render all SA elements as one connected path (clean corners via linejoin).
+    if sa_elements and sa_style_dict is not None:
+        svg_nodes.extend(_render_seam_allowance_chain(sa_elements, sa_style_dict))
+
 
 # ---------------------------------------------------------------------------
 # Public export functions
@@ -341,10 +448,7 @@ def _resolve_styles(
     style_map: dict[str, StyleOptions] | None,
     stacklevel: int = 3,
 ) -> dict[str, StyleOptions]:
-    """Merge *style_map* overrides into a copy of ``_DEFAULT_STYLES``.
-
-    Unknown keys emit a :class:`UserWarning` and are ignored.
-    """
+    """Merge *style_map* overrides into ``_DEFAULT_STYLES``; unknown keys emit a warning."""
     styles = {**_DEFAULT_STYLES}
     if style_map:
         for k, v in style_map.items():
@@ -368,8 +472,11 @@ def _build_svg(
     margin_mm: float,
     show_points: bool,
     show_bezier_control_points: bool,
+    show_seam_allowance: bool = True,
+    styles: dict[str, StyleOptions] | None = None,
 ) -> str:
     """Build and return the SVG string for one or more element groups."""
+    resolved = styles if styles is not None else _DEFAULT_STYLES
     svg_nodes: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{width_mm}mm" height="{height_mm}mm" '
@@ -379,11 +486,17 @@ def _build_svg(
     ]
 
     for elements in element_groups:
+        if show_seam_allowance:
+            # Hide seam-line notch copies — the SA-edge copy is shown instead.
+            visible = [e for e in elements if not e.is_seam_notch]
+        else:
+            visible = [e for e in elements if not e.is_seam_allowance]
         _render_elements(
-            elements,
+            visible,
             svg_nodes,
             show_bezier_control_points,
             show_points,
+            resolved,
         )
 
     svg_nodes.append("</svg>")
@@ -399,19 +512,19 @@ def export_pattern_part_svg_mm(
     style_map: dict[str, StyleOptions] | None = None,
     show_points: bool = True,
     show_bezier_control_points: bool = False,
+    show_seam_allowance: bool = True,
 ) -> None:
-    """Export a PatternPart as an SVG file with mm units for precise printing.
+    """Export a single PatternPart as an SVG file with mm units.
 
     Args:
-        pattern_part: The PatternPart to export.
-        filename: Output filename for the SVG.
-        width_mm: Width of the SVG canvas in mm.
-        height_mm: Height of the SVG canvas in mm.
-        margin_mm: Margin around the canvas in mm.
-        style_map: Optional mapping of element type names to StyleOptions overrides.
-            Unknown keys emit a warning and are ignored.
-        show_points: Whether to render Point elements.
-        show_bezier_control_points: Whether to render Bezier control point handles.
+        pattern_part: Part to export.
+        filename: Output SVG path.
+        width_mm / height_mm: Canvas size in mm.
+        margin_mm: Canvas margin in mm.
+        style_map: Element-type → StyleOptions overrides; unknown keys warn.
+        show_points: Render Point elements.
+        show_bezier_control_points: Render Bézier control-point handles.
+        show_seam_allowance: Include SA offset lines (default True).
     """
     styles = _resolve_styles(style_map)
     svg = _build_svg(
@@ -422,6 +535,8 @@ def export_pattern_part_svg_mm(
         margin_mm=margin_mm,
         show_points=show_points,
         show_bezier_control_points=show_bezier_control_points,
+        show_seam_allowance=show_seam_allowance,
+        styles=styles,
     )
     with open(filename, "w") as f:
         f.write(svg)
@@ -437,19 +552,20 @@ def export_pattern_svg_mm(
     show_points: bool = True,
     show_bezier_control_points: bool = False,
     parts: list[str] | None = None,
+    show_seam_allowance: bool = True,
 ) -> None:
     """Export a Pattern (all or selected parts) as a single SVG file.
 
     Args:
-        pattern: The Pattern to export.
-        filename: Output filename for the SVG.
-        width_mm: Width of the SVG canvas in mm.
-        height_mm: Height of the SVG canvas in mm.
-        margin_mm: Margin around the canvas in mm.
-        style_map: Optional mapping of element type names to StyleOptions overrides.
-        show_points: Whether to render Point elements.
-        show_bezier_control_points: Whether to render Bezier control point handles.
-        parts: Optional list of part names to include. If None, all parts are rendered.
+        pattern: Pattern to export.
+        filename: Output SVG path.
+        width_mm / height_mm: Canvas size in mm.
+        margin_mm: Canvas margin in mm.
+        style_map: Element-type → StyleOptions overrides; unknown keys warn.
+        show_points: Render Point elements.
+        show_bezier_control_points: Render Bézier control-point handles.
+        parts: Part names to include; ``None`` renders all parts.
+        show_seam_allowance: Include SA offset lines (default True).
     """
     styles = _resolve_styles(style_map)
 
@@ -473,6 +589,8 @@ def export_pattern_svg_mm(
         margin_mm=margin_mm,
         show_points=show_points,
         show_bezier_control_points=show_bezier_control_points,
+        show_seam_allowance=show_seam_allowance,
+        styles=styles,
     )
     with open(filename, "w") as f:
         f.write(svg)

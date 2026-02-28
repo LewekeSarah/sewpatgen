@@ -31,14 +31,13 @@ B(t) = (1-t)³P₀ + 3(1-t)²tP₁ + 3(1-t)t²P₂ + t³P₃
 - Returns: Point on the curve at parameter t
 
 #### `tangent_at_t(t: float) -> np.ndarray`
-Computes the tangent vector at parameter `t` using the derivative of the Bezier curve.
+Computes the tangent vector (B'(t)) at parameter `t` by delegating to `svgpathtools.derivative()`.
 - `t`: Parameter value (typically 0.0 to 1.0)
-- Returns: Tangent vector as numpy array
+- Returns: Tangent vector as numpy array (not normalised)
 
-#### `length_approx(num_segments: int = 100) -> float`
-Approximates the arc length of the curve by subdividing it into line segments.
-- `num_segments`: Number of segments for approximation (default: 100)
-- Returns: Approximate length of the curve
+#### `length() -> float`
+Computes the exact arc length of the curve using Gauss-Legendre quadrature (via `svgpathtools`).
+- Returns: Exact arc length in the same units as the control points
 
 #### `bounding_box() -> Tuple[Point, Point]`
 Computes the axis-aligned bounding box by finding extrema in x and y directions.
@@ -53,8 +52,8 @@ The `CubicBezier` class is fully integrated with the existing `intersect()` func
 1. **CubicBezier ↔ Line**: Exact intersection using cubic equation solving
 2. **CubicBezier ↔ Ray**: Exact intersection with ray direction filtering
 3. **CubicBezier ↔ Segment**: Exact intersection with segment bounds checking
-4. **CubicBezier ↔ Circle**: Approximate intersection using sampling method
-5. **CubicBezier ↔ CubicBezier**: Approximate intersection using sampling method
+4. **CubicBezier ↔ Circle**: Approximate intersection using binary-search sampling
+5. **CubicBezier ↔ CubicBezier**: Exact intersection using Bézier-clipping algorithm (Sederberg & Nishita 1990) via `svgpathtools`
 
 ### Usage Example
 
@@ -78,7 +77,15 @@ for pt in intersections:
     print(f"Intersection at: {pt}")
 ```
 
-## Implementation Details
+### svgpathtools-Backed Methods
+
+Several `CubicBezier` methods delegate to `svgpathtools` for numerically superior results:
+
+| Method | svgpathtools equivalent | Advantage |
+|---|---|---|
+| `length()` | `CubicBezier.length()` | Gauss-Legendre quadrature – exact, no sampling error |
+| `tangent_at_t(t)` | `CubicBezier.derivative(t)` | Analytic derivative, identical result |
+| `intersect(b)` (Bezier–Bezier) | `CubicBezier.intersect()` | Bézier-clipping algorithm – quadratic convergence |
 
 ### Bezier-Line Intersection Algorithm
 
@@ -98,18 +105,19 @@ The implementation includes a numerically stable cubic equation solver (`_solve_
 
 ### Approximate Intersection Methods
 
-For complex intersections (Bezier-Circle, Bezier-Bezier), the implementation uses:
-- High-resolution sampling along the curves
-- Distance-based intersection detection
-- Binary search refinement for improved accuracy
-- Duplicate detection to avoid reporting the same intersection multiple times
+For **Bezier–Circle** intersections, the implementation uses:
+- High-resolution sampling along the Bézier curve (1000 steps)
+- Sign-change detection on `contains_point_inside()`
+- Binary search refinement (20 iterations) for sub-mm accuracy
+
+**Bezier–Bezier** intersections are **exact**, not approximate – see the svgpathtools-backed methods table above.
 
 ## Performance Considerations
 
-- **Exact methods** (Line, Ray, Segment): Very fast, O(1) complexity
-- **Approximate methods** (Circle, Bezier): Slower due to sampling, but configurable precision
+- **Exact methods** (Line, Ray, Segment, Bezier–Bezier): Very fast, analytically derived
+- **Approximate methods** (Circle): Sampling-based, configurable via binary-search iterations
 - **Memory usage**: Minimal, only stores four control points
-- **Numerical stability**: Uses robust algorithms for cubic equation solving
+- **Numerical stability**: Uses robust algorithms; cubic solver uses Cardano's formula
 
 ## Integration with Existing Code
 

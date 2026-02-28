@@ -1,9 +1,7 @@
 """
 Style options for rendering sewing pattern elements.
 
-This module is intentionally kept separate from both ``geometry.py`` and
-``render.py`` so that geometry objects can reference ``StyleOptions`` without
-creating a circular import.
+Kept separate from geometry.py and render.py to avoid circular imports.
 """
 
 from enum import Enum
@@ -11,22 +9,16 @@ from typing import Any
 
 
 class Marker(str, Enum):
-    """Named markers that can be placed at either end of a line element.
+    """Named markers placed at line endpoints.
 
-    The string value of each member matches the SVG ``<marker id="...">``
-    defined in ``render.py``, so it can be used directly to build
-    ``marker-start="url(#<value>)"`` attributes.
+    String values match ``<marker id="…">`` in render.py.
 
     Members:
-        ARROW:    A filled triangular arrowhead pointing away from the line.
-        SCISSOR:  A pair of scissor blades indicating a cutting start/end point.
-        DISTANCE: An arrowhead with a perpendicular stop-bar; used for
-                  dimension/measurement annotations (start and end variants
-                  are selected automatically by position).
-        DOT:      A small filled circle; useful for button positions or
-                  match-point markers at line ends.
-        STOP:     A short perpendicular bar at the line end; useful for
-                  hem lines, dart ends, and adjustment lines.
+        ARROW:    Filled triangular arrowhead.
+        SCISSOR:  Scissor blades; indicates a cut start/end point.
+        DISTANCE: Arrowhead with perpendicular stop-bar for dimension lines.
+        DOT:      Small filled circle; button or match-point marker.
+        STOP:     Short perpendicular bar; hem lines, dart ends.
     """
 
     ARROW = "arrow"
@@ -37,8 +29,7 @@ class Marker(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# Stroke width constants — single source of truth for the whole library.
-# Override DEFAULT_STROKE_WIDTH here to change all pattern lines at once.
+# Stroke width constants
 # ---------------------------------------------------------------------------
 DEFAULT_STROKE_WIDTH: float = 0.5
 DEFAULT_STROKE_WIDTH_GRAIN: float = 0.2
@@ -63,25 +54,16 @@ class StyleOptions:
         font_size_mm: float = DEFAULT_FONT_SIZE_MM,
         font_weight: str = "normal",
         font_style: str = "normal",
+        seam_allowance: float = 0.0,
+        corner_join: str | None = None,
     ) -> None:
-        """Initialize style options.
-
+        """
         Args:
-            stroke_color: Color of the stroke (outline).
-            stroke_width: Width of the stroke in SVG units.
-            fill_color: Fill color for closed shapes.
-            dash_array: List of values defining the dash pattern, or None for a solid line.
-            dash_offset: Starting offset into the dash pattern (``stroke-dashoffset``).
-            opacity: Opacity value between 0.0 (transparent) and 1.0 (opaque).
-            stroke_linejoin: How line corners are joined (``"miter"``, ``"round"``, ``"bevel"``).
-            stroke_miterlimit: Limit on miter joins before they are bevelled.
-            marker_start: Optional :class:`Marker` to draw at the start of the element (p1).
-                Supported values: ``Marker.ARROW``, ``Marker.SCISSOR``.
-            marker_end: Optional :class:`Marker` to draw at the end of the element (p2).
-                Supported values: ``Marker.ARROW``, ``Marker.SCISSOR``.
-            font_size_mm: Font size in mm for the element label. Defaults to ``DEFAULT_FONT_SIZE_MM``.
-            font_weight: CSS font-weight for labels (``"normal"``, ``"bold"``).
-            font_style: CSS font-style for labels (``"normal"``, ``"italic"``).
+            seam_allowance: Per-element SA override in mm; ``0.0`` = use the
+                global distance passed to ``add_seam_allowance()``.
+            corner_join: Per-element corner-join override (``"miter"``,
+                ``"round"``, ``"bevel"``); ``None`` = use the part-wide default.
+            All other arguments map directly to the identically named SVG attributes.
         """
         self.stroke_color = stroke_color
         self.stroke_width = stroke_width
@@ -96,6 +78,21 @@ class StyleOptions:
         self.font_size_mm = font_size_mm
         self.font_weight = font_weight
         self.font_style = font_style
+        self.seam_allowance = seam_allowance
+        self.corner_join: str | None = corner_join
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, StyleOptions):
+            return NotImplemented
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self) -> str:
+        parts = []
+        defaults = StyleOptions()
+        for k, v in self.__dict__.items():
+            if v != getattr(defaults, k):
+                parts.append(f"{k}={v!r}")
+        return f"StyleOptions({', '.join(parts)})"
 
     def as_dict(self) -> dict[str, Any]:
         """Convert style options to a dictionary.
@@ -145,8 +142,15 @@ STYLE_FOLD = StyleOptions(
 
 STYLE_HEM = StyleOptions(
     stroke_color="black",
+    seam_allowance=25.0,  # 2.5 cm default hem allowance
+    dash_array=[10.0, 2.0],
+)
+
+STYLE_WAISTBAND = StyleOptions(
+    stroke_color="black",
     marker_start=Marker.STOP,
     marker_end=Marker.STOP,
+    seam_allowance=30.0,  # 3 cm default hem allowance
 )
 
 # Cutting Line — the outermost solid line; cut along this line.
@@ -170,4 +174,21 @@ STYLE_CENTER_LINE = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
     dash_array=[10.0, 2.0, 2.0, 2.0],
+)
+
+# Seam Allowance Line — thin solid outer line showing where to cut.
+# Drawn outside (and parallel to) the stitching line by the seam allowance
+# distance. No markers – the outline speaks for itself.
+STYLE_SEAM_ALLOWANCE = StyleOptions(
+    stroke_color="black",
+    stroke_width=DEFAULT_STROKE_WIDTH,
+)
+
+# Debug highlight — thick red solid line used to visually verify which
+# segments are selected for a seam-length comparison.  Import and apply
+# temporarily; remove once the measurement is confirmed correct.
+STYLE_DEBUG_RED = StyleOptions(
+    stroke_color="red",
+    stroke_width=1.5,
+    opacity=0.7,
 )

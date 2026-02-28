@@ -1,6 +1,6 @@
 [project]
 name = "sewpat"
-version = "0.1.0"
+version = "0.2.0"
 description = "Sewing pattern vector file generator"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -15,7 +15,11 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dependencies = ["numpy>=1.24.0"]
+dependencies = [
+    "numpy>=1.24.0",
+    "shapely>=2.0.0",
+    "svgpathtools>=1.7.2",
+]
 
 [build-system]
 requires = ["uv_build>=0.8.3,<0.9.0"]

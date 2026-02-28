@@ -304,17 +304,46 @@ class TestRenderRect(unittest.TestCase):
         svg = self._svg(Rect(Point(0, 0), width=10, height=20))
         self.assertIn("<rect ", svg)
 
-    def test_rect_attributes(self):
+    def test_rect_declared_dimensions_unchanged(self):
+        """The rect is rendered at its exact declared size — no inset."""
         svg = self._svg(Rect(Point(5, 3), width=12, height=8))
-        self.assertIn('x="5.0"', svg)
-        self.assertIn('y="3.0"', svg)
+        self.assertIn('x="5"', svg)
+        self.assertIn('y="3"', svg)
         self.assertIn('width="12"', svg)
         self.assertIn('height="8"', svg)
 
+    def test_rect_uses_clip_path(self):
+        """A clipPath is emitted so the stroke is clipped to the inside."""
+        svg = self._svg(Rect(Point(0, 0), width=30, height=30))
+        self.assertIn("<clipPath ", svg)
+        self.assertIn("clip-path=", svg)
+
+    def test_rect_clip_id_unique_per_position(self):
+        """Two rects at different origins produce different clip ids."""
+        part = PatternPart(name="p")
+        part.append(Rect(Point(0, 0), width=10, height=10))
+        part.append(Rect(Point(5, 5), width=10, height=10))
+        svg = _build_svg(
+            title="t",
+            element_groups=[part.elements],
+            width_mm=200,
+            height_mm=200,
+            margin_mm=5,
+            show_points=False,
+            show_bezier_control_points=False,
+        )
+        # Extract all clipPath ids and confirm they are distinct
+        import re
+
+        ids = re.findall(r'<clipPath id="([^"]+)"', svg)
+        self.assertEqual(len(ids), 2)
+        self.assertNotEqual(ids[0], ids[1])
+
     def test_rect_name_centred(self):
-        svg = self._svg(Rect(Point(0, 0), width=10, height=10, name="pocket"))
+        rect = Rect(Point(0, 0), width=10, height=10, name="pocket")
+        svg = self._svg(rect)
         self.assertIn("pocket", svg)
-        # centre x = 5.0, centre y = 5.0
+        # label centre is at declared width/2, height/2
         self.assertIn('x="5.0"', svg)
 
 
@@ -621,7 +650,7 @@ class TestExportPatternSvgMm(unittest.TestCase):
 
     def test_reference_square_always_rendered(self):
         pat = _simple_pattern()
-        pat.set_reference_square(origin=Point(5, 5), edge_length=3 * CM)
+        pat.add_reference_square(origin=Point(5, 5), edge_length=3 * CM)
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
         # Even with only one part selected the reference square must appear
@@ -632,7 +661,7 @@ class TestExportPatternSvgMm(unittest.TestCase):
 
     def test_reference_square_rendered_when_all_parts_selected(self):
         pat = _simple_pattern()
-        pat.set_reference_square(origin=Point(5, 5), edge_length=3 * CM)
+        pat.add_reference_square(origin=Point(5, 5), edge_length=3 * CM)
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
         export_pattern_svg_mm(pat, fname)

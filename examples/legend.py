@@ -74,7 +74,7 @@ def make_legend() -> Pattern:
     lines.add_notches(
         notch_p1.translate(0.25 * seg_len, 0),
         notch_p1.translate(0.75 * seg_len, 0),
-        segment=notch_seg,
+        seam_edge=notch_seg,
     )
 
     return legend
