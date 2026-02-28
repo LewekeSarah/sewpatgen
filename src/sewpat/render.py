@@ -240,19 +240,39 @@ def _render_info_box(element: InfoBox, style_dict: dict[str, Any]) -> list[str]:
 
 
 def _render_rect(element: Rect, style_dict: dict[str, Any]) -> list[str]:
-    """Return SVG elements for a Rect."""
+    """Return SVG elements for a Rect.
+
+    SVG has no native ``stroke-alignment: inside``, but the same result is
+    achieved by clipping the element to its own bounding box: the stroke is
+    painted centred on the boundary as usual, but everything outside the
+    declared rectangle is cut away, so the *outer* edge of the visible stroke
+    coincides exactly with the declared width/height.
+
+    A unique ``clipPath`` id is derived from the element's pixel-exact origin
+    so that multiple rects on the same canvas don't collide.
+    """
     nodes: list[str] = []
     font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
     stroke_attrs = _common_stroke_attrs(style_dict)
 
+    x, y = element.origin.x, element.origin.y
+    w, h = element.width, element.height
+
+    # Unique clip id — use integer representation of coords to avoid dots in ids
+    clip_id = f"rc_{int(round(x * 100))}_{int(round(y * 100))}_{int(round(w * 100))}_{int(round(h * 100))}"
+
     nodes.append(
-        f'<rect x="{element.origin.x}" y="{element.origin.y}" '
-        f'width="{element.width}" height="{element.height}" {stroke_attrs} />'
+        f'<clipPath id="{clip_id}">'
+        f'<rect x="{x}" y="{y}" width="{w}" height="{h}" /></clipPath>'
+    )
+    nodes.append(
+        f'<rect x="{x}" y="{y}" width="{w}" height="{h}" '
+        f'clip-path="url(#{clip_id})" {stroke_attrs} />'
     )
 
     if element.name:
-        cx = element.origin.x + element.width / 2
-        cy = element.origin.y + element.height / 2
+        cx = x + w / 2
+        cy = y + h / 2
         nodes.append(
             _svg_text(
                 cx,
