@@ -29,7 +29,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     pattern.add_part(body)
 
     ## STEP 0: Reference square for print-scale verification
-    pattern.set_reference_square(
+    pattern.add_reference_square(
         origin=Point(0.2 * model.width, 0.5 * model.height),
     )
 

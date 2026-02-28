@@ -63,6 +63,7 @@ class StyleOptions:
         font_size_mm: float = DEFAULT_FONT_SIZE_MM,
         font_weight: str = "normal",
         font_style: str = "normal",
+        seam_allowance: float = 0.0,
     ) -> None:
         """Initialize style options.
 
@@ -82,6 +83,12 @@ class StyleOptions:
             font_size_mm: Font size in mm for the element label. Defaults to ``DEFAULT_FONT_SIZE_MM``.
             font_weight: CSS font-weight for labels (``"normal"``, ``"bold"``).
             font_style: CSS font-style for labels (``"normal"``, ``"italic"``).
+            seam_allowance: Per-element seam allowance in mm.  When greater
+                than zero, this value overrides the global *distance* argument
+                passed to
+                :meth:`~sewpat.part.PatternPart.add_seam_allowance` for any
+                outline element that carries this style.  ``0.0`` (the
+                default) means "use the global default distance".
         """
         self.stroke_color = stroke_color
         self.stroke_width = stroke_width
@@ -96,6 +103,7 @@ class StyleOptions:
         self.font_size_mm = font_size_mm
         self.font_weight = font_weight
         self.font_style = font_style
+        self.seam_allowance = seam_allowance
 
     def as_dict(self) -> dict[str, Any]:
         """Convert style options to a dictionary.
@@ -145,8 +153,15 @@ STYLE_FOLD = StyleOptions(
 
 STYLE_HEM = StyleOptions(
     stroke_color="black",
+    seam_allowance=25.0,  # 2.5 cm default hem allowance
+    dash_array=[10.0, 2.0],
+)
+
+STYLE_WAISTBAND = StyleOptions(
+    stroke_color="black",
     marker_start=Marker.STOP,
     marker_end=Marker.STOP,
+    seam_allowance=30.0,  # 3 cm default hem allowance
 )
 
 # Cutting Line — the outermost solid line; cut along this line.

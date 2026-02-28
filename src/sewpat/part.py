@@ -362,6 +362,15 @@ class PatternPart:
             if isinstance(elem.geometry, (Segment, CubicBezier))
         ]
 
+        # Build a mapping from geometry id → per-element seam allowance so we
+        # can use it during the offset step below.
+        _elem_sa: dict[int, float] = {}
+        for elem in outline_elements:
+            if isinstance(elem.geometry, (Segment, CubicBezier)):
+                sa = getattr(elem.style, "seam_allowance", 0.0)
+                if sa > 0:
+                    _elem_sa[id(elem.geometry)] = sa
+
         SNAP = 0.5  # mm — tolerance for endpoint matching
 
         def _close(a: Point, b: Point) -> bool:
@@ -371,30 +380,39 @@ class PatternPart:
         # find the next piece whose start or end connects to the current tail.
         # Reverse the piece when it connects end-first so every element in the
         # chain runs start → end continuously.
+        # Also track original geometry id for per-element seam allowance lookup.
         chain: list[Segment | CubicBezier] = [geoms_raw[0]]
+        chain_ids: list[int] = [id(geoms_raw[0])]
         remaining = list(geoms_raw[1:])
+        remaining_ids = [id(g) for g in remaining]
         while remaining:
             tail = _end(chain[-1])
             found = False
             for i, g in enumerate(remaining):
                 if _close(tail, _start(g)):
                     chain.append(g)
+                    chain_ids.append(remaining_ids[i])
                     remaining.pop(i)
+                    remaining_ids.pop(i)
                     found = True
                     break
                 elif _close(tail, _end(g)):
                     chain.append(_reverse(g))
+                    chain_ids.append(remaining_ids[i])
                     remaining.pop(i)
+                    remaining_ids.pop(i)
                     found = True
                     break
             if not found:
                 # Gap in the outline — append remaining pieces as-is
                 chain.extend(remaining)
+                chain_ids.extend(remaining_ids)
                 break
 
         # --- offset each element in chain order ------------------------------
         offset_geoms: list[Segment | CubicBezier] = [
-            g.offset(distance, center) for g in chain
+            g.offset(_elem_sa.get(orig_id, distance), center)
+            for g, orig_id in zip(chain, chain_ids)
         ]
 
         # --- miter-join corner stitching -------------------------------------
@@ -485,7 +503,7 @@ class Pattern:
         parts: Ordered list of PatternPart objects.
         anchor: Top-left origin of the pattern on the page. Defaults to (1.5cm, 1.5cm).
         reference_square: Optional PatternElement rendered on every export to
-            verify print scale. Set via set_reference_square().
+            verify print scale. Set via add_reference_square().
     """
 
     def __init__(
@@ -499,7 +517,7 @@ class Pattern:
         self.reference_square: PatternElement | None = None
         self.anchor: Point = anchor if anchor is not None else Point(1.5 * CM, 1.5 * CM)
 
-    def set_reference_square(
+    def add_reference_square(
         self,
         origin: Point,
         edge_length: float = 3 * CM,

@@ -1,4 +1,11 @@
-from sewpat import Segment, PatternPart, Pattern, STYLE_STITCH, STYLE_HEM
+from sewpat import (
+    Segment,
+    PatternPart,
+    Pattern,
+    STYLE_STITCH,
+    STYLE_HEM,
+    STYLE_WAISTBAND,
+)
 from sewpat.geometry import (
     Point,
     intersect,
@@ -86,7 +93,7 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     bz_control3 = pt7.translate(0.2 * CM, 2.5 * CM)
     # Hilfsgeometrie Hosenausschnitt
     front.append(
-        Segment(pt6, pt0, name="Bund"), style=STYLE_HEM, is_outline=True
+        Segment(pt6, pt0, name="Bund"), style=STYLE_WAISTBAND, is_outline=True
     )  # pt6 -> pt0
     front.append(Segment(pt0, pt1), style=STYLE_STITCH, is_outline=True)  # pt0 -> pt1
 
@@ -110,7 +117,7 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     # add_seam_allowance will reorder/reverse them into a connected loop.
     front.append(Segment(pt1, pt14), style=STYLE_STITCH, is_outline=True)  # side seam
     front.append(Segment(pt14, pt33), style=STYLE_STITCH, is_outline=True)  # side → hem
-    front.append(Segment(pt33, pt32), style=STYLE_STITCH, is_outline=True)  # hem
+    front.append(Segment(pt33, pt32), style=STYLE_HEM, is_outline=True)  # hem
     front.append(
         Segment(pt32, pt15), style=STYLE_STITCH, is_outline=True
     )  # inner leg up
@@ -215,12 +222,12 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     back.append(
         Segment(pt25, pt30), style=STYLE_STITCH, is_outline=True
     )  # inner leg up → hem
-    back.append(Segment(pt30, pt31), style=STYLE_STITCH, is_outline=True)  # hem
+    back.append(Segment(pt30, pt31), style=STYLE_HEM, is_outline=True)  # hem
     back.append(
         Segment(pt18, pt31), style=STYLE_STITCH, is_outline=True
     )  # side seam (original direction)
     back.append(
-        Segment(pt17, pt18), style=STYLE_HEM, is_outline=True
+        Segment(pt17, pt18), style=STYLE_WAISTBAND, is_outline=True
     )  # Bund (original direction)
 
     # Fadenlauf Rückteil
@@ -293,7 +300,9 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     # -----------------------------------------------------------------------
     # Maßkontrollkästchen & Referenzquadrat
     # -----------------------------------------------------------------------
-    pattern_boy_trousers.set_reference_square(origin=pt0)
+    pattern_boy_trousers.add_reference_square(
+        origin=front.centroid.translate(-5 * CM, -17 * CM)
+    )
 
     return pattern_boy_trousers
 

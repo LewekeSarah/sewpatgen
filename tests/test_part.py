@@ -4,7 +4,7 @@ Covers:
   - PatternElement: creation, get_name (own name, geometry name, no name)
   - PatternPart: append, extend, centroid, add_grainline, add_info_box,
                  add_precision_points, add_notches
-  - Pattern: add_part, get_part, set_reference_square, anchor default
+  - Pattern: add_part, get_part, add_reference_square, anchor default
 """
 
 import math
@@ -394,30 +394,30 @@ class TestPattern(unittest.TestCase):
         with self.assertRaises(KeyError):
             pat.get_part("NonExistent")
 
-    def test_set_reference_square_default(self):
-        """set_reference_square creates a square element with the right size."""
+    def test_add_reference_square_default(self):
+        """add_reference_square creates a square element with the right size."""
         pat = Pattern(name="P")
         origin = Point(0, 0)
-        elem = pat.set_reference_square(origin)
+        elem = pat.add_reference_square(origin)
         self.assertIsNotNone(pat.reference_square)
         self.assertIs(pat.reference_square, elem)
         rect = cast(Rect, elem.geometry)
         self.assertAlmostEqual(rect.width, 3 * CM)
         self.assertAlmostEqual(rect.height, 3 * CM)
 
-    def test_set_reference_square_custom_edge_length(self):
-        """set_reference_square uses the provided edge_length."""
+    def test_add_reference_square_custom_edge_length(self):
+        """add_reference_square uses the provided edge_length."""
         pat = Pattern(name="P")
-        elem = pat.set_reference_square(Point(0, 0), edge_length=5 * CM)
+        elem = pat.add_reference_square(Point(0, 0), edge_length=5 * CM)
         rect = cast(Rect, elem.geometry)
         self.assertAlmostEqual(rect.width, 5 * CM)
         self.assertAlmostEqual(rect.height, 5 * CM)
 
-    def test_set_reference_square_custom_style(self):
-        """set_reference_square uses a custom style when provided."""
+    def test_add_reference_square_custom_style(self):
+        """add_reference_square uses a custom style when provided."""
         pat = Pattern(name="P")
         style = StyleOptions(stroke_color="red")
-        elem = pat.set_reference_square(Point(0, 0), style=style)
+        elem = pat.add_reference_square(Point(0, 0), style=style)
         self.assertIs(elem.style, style)
 
     def test_creation_with_parts(self):

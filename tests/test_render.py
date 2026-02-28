@@ -621,7 +621,7 @@ class TestExportPatternSvgMm(unittest.TestCase):
 
     def test_reference_square_always_rendered(self):
         pat = _simple_pattern()
-        pat.set_reference_square(origin=Point(5, 5), edge_length=3 * CM)
+        pat.add_reference_square(origin=Point(5, 5), edge_length=3 * CM)
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
         # Even with only one part selected the reference square must appear
@@ -632,7 +632,7 @@ class TestExportPatternSvgMm(unittest.TestCase):
 
     def test_reference_square_rendered_when_all_parts_selected(self):
         pat = _simple_pattern()
-        pat.set_reference_square(origin=Point(5, 5), edge_length=3 * CM)
+        pat.add_reference_square(origin=Point(5, 5), edge_length=3 * CM)
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
         export_pattern_svg_mm(pat, fname)
