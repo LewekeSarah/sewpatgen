@@ -1,3 +1,5 @@
+import shapely.geometry as _sg
+
 from .style import StyleOptions, STYLE_GRAINLINE, STYLE_SEAM_ALLOWANCE
 from .geometry import (
     Rect,
@@ -14,6 +16,7 @@ from .geometry import (
     buffer_chain,
     miter_corner,
     outline_polygon,
+    seam_length as _geom_seam_length,
 )
 from .units import CM, MM
 
@@ -131,6 +134,112 @@ class PatternPart:
         # Internal unit is mm², divide by 100 to get cm²
         return poly.area / 100.0
 
+    def bounding_box(self) -> "tuple[Point, Point] | None":
+        """Return the axis-aligned bounding box of the outline polygon.
+
+        Uses Shapely's ``Polygon.bounds`` to compute the tightest rectangle
+        that encloses all ``is_outline`` elements (including discretised
+        Bézier curves).  Useful for auto-layout and page-size checks.
+
+        Returns:
+            Tuple of ``(min_point, max_point)`` in mm, or ``None`` if no
+            outline polygon has been defined yet.
+        """
+        poly = self._outline_polygon()
+        if poly is None or poly.is_empty:
+            return None
+        minx, miny, maxx, maxy = poly.bounds
+        return Point(minx, miny), Point(maxx, maxy)
+
+    def seam_length(
+        self,
+        geoms_or_names: "list[Segment | CubicBezier | PatternElement | str]",
+    ) -> float:
+        """Return the total arc length (mm) of a named seam edge on this part.
+
+        Accepts any mix of:
+
+        * **``Segment`` / ``CubicBezier``** — geometry objects used directly.
+        * **``PatternElement``** — the return value of :meth:`append`; the
+          geometry is unwrapped automatically.  This is the most convenient
+          form when you hold the element reference from construction time::
+
+              elem = part.append(Segment(pt1, pt2), is_outline=True)
+              part.seam_length([elem])
+
+        * **``str``** — element name; all matching ``Segment``/``CubicBezier``
+          elements in this part are summed::
+
+              part.seam_length(["Seitennaht", "Seitensaum"])
+
+        Mixed lists are fine.
+
+        Typical use — compare front and back inseam before finalising::
+
+            front_len = front.seam_length([front_inner_leg])
+            back_len  = back.seam_length([back_inner_seam])
+            print(f"inseam Δ = {front_len - back_len:.1f} mm")
+
+        Args:
+            geoms_or_names: Any combination of ``Segment``, ``CubicBezier``,
+                ``PatternElement``, or name strings.
+
+        Returns:
+            Total arc length in mm.
+
+        Raises:
+            KeyError: If a name string does not match any element in this part.
+            TypeError: If an entry is none of the accepted types.
+        """
+        resolved: list[Segment | CubicBezier] = []
+        for item in geoms_or_names:
+            if isinstance(item, PatternElement):
+                if isinstance(item.geometry, (Segment, CubicBezier)):
+                    resolved.append(item.geometry)
+                # silently skip non-geometry elements (Points, Circles, …)
+            elif isinstance(item, (Segment, CubicBezier)):
+                resolved.append(item)
+            elif isinstance(item, str):
+                matches = [
+                    e.geometry
+                    for e in self.elements
+                    if e.get_name() == item
+                    and isinstance(e.geometry, (Segment, CubicBezier))
+                ]
+                if not matches:
+                    raise KeyError(
+                        f"No Segment/CubicBezier element named {item!r} in part {self.name!r}"
+                    )
+                resolved.extend(matches)
+            else:
+                raise TypeError(
+                    f"Expected Segment, CubicBezier, PatternElement, or str; "
+                    f"got {type(item).__name__}"
+                )
+        return _geom_seam_length(resolved)
+
+    def contains_point(self, point: Point) -> bool:
+        """Return True if *point* lies inside the outline polygon.
+
+        Uses Shapely's ``Polygon.contains()`` — points exactly on the boundary
+        return False (use ``covers()`` semantics if you need boundary inclusion,
+        but for pattern work strict interior is the right check).
+
+        Useful for validating that grainline endpoints, notch positions, or
+        info-box anchors actually sit inside the piece.
+
+        Args:
+            point: The point to test.
+
+        Returns:
+            True if *point* is strictly inside the outline, False otherwise or
+            if no outline polygon has been defined yet.
+        """
+        poly = self._outline_polygon()
+        if poly is None or poly.is_empty:
+            return False
+        return bool(poly.contains(_sg.Point(point.x, point.y)))
+
     def add_grainline(
         self,
         start: Point,
@@ -138,6 +247,12 @@ class PatternPart:
         name: str = "grainline / Fadenlauf",
     ) -> PatternElement:
         """Add a grainline to this pattern part.
+
+        If either endpoint lies outside the outline polygon the grainline is
+        automatically shortened: the segment is intersected with the outline
+        boundary and the out-of-bounds endpoint is replaced by the nearest
+        intersection point.  This keeps the grainline visually inside the
+        piece without requiring manual adjustment of the coordinates.
 
         The grainline is optional — not every part requires one.
 
@@ -149,6 +264,35 @@ class PatternPart:
         Returns:
             The created PatternElement.
         """
+        poly = self._outline_polygon()
+        if poly is not None and not poly.is_empty:
+            sg_line = _sg.LineString([(start.x, start.y), (end.x, end.y)])
+            start_inside = bool(poly.contains(_sg.Point(start.x, start.y)))
+            end_inside = bool(poly.contains(_sg.Point(end.x, end.y)))
+
+            if not start_inside or not end_inside:
+                # Find where the segment crosses the outline boundary
+                hits = sg_line.intersection(poly.boundary)
+                hit_pts: list[_sg.Point] = []
+                if hits.geom_type == "Point":
+                    hit_pts = [hits]
+                elif hits.geom_type in ("MultiPoint", "GeometryCollection"):
+                    hit_pts = [g for g in hits.geoms if g.geom_type == "Point"]
+
+                if hit_pts:
+                    # Sort intersections along the original direction
+                    def _dist_from_start(p: _sg.Point) -> float:
+                        return (p.x - start.x) ** 2 + (p.y - start.y) ** 2
+
+                    hit_pts.sort(key=_dist_from_start)
+
+                    if not start_inside:
+                        h = hit_pts[0]
+                        start = Point(h.x, h.y)
+                    if not end_inside:
+                        h = hit_pts[-1]
+                        end = Point(h.x, h.y)
+
         return self.append(Segment(start, end, name=name), style=STYLE_GRAINLINE)
 
     def add_info_box(
@@ -356,14 +500,24 @@ class PatternPart:
         # ── Mixed / Bézier path: per-element offset + corner stitching ────────
         center = self.centroid
         chain_mixed = build_chain(geoms)
-        elem_sa = {
-            id(e.geometry): getattr(e.style, "seam_allowance", 0.0)
+
+        # Build a lookup: endpoint-pair → per-element SA distance.
+        # Keying by frozenset of (start, end) coords means a segment that
+        # build_chain reversed still matches its original style entry.
+        def _ep_key(g: "Segment | CubicBezier") -> frozenset:
+            s, e = geom_start(g), geom_end(g)
+            return frozenset(
+                [(round(s.x, 6), round(s.y, 6)), (round(e.x, 6), round(e.y, 6))]
+            )
+
+        elem_sa: dict[frozenset, float] = {
+            _ep_key(e.geometry): getattr(e.style, "seam_allowance", 0.0)
             for e in outline_elements
             if isinstance(e.geometry, (Segment, CubicBezier))
             and getattr(e.style, "seam_allowance", 0.0) > 0
         }
         offset_geoms = [
-            g.offset(elem_sa.get(id(g), distance), center) for g in chain_mixed
+            g.offset(elem_sa.get(_ep_key(g), distance), center) for g in chain_mixed
         ]
         n = len(offset_geoms)
         for i in range(n):
@@ -411,25 +565,52 @@ class Pattern:
         origin: Point,
         edge_length: float = 3 * CM,
         style: StyleOptions | None = None,
+        part: "PatternPart | None" = None,
     ) -> PatternElement:
         """Set a reference square for print-scale verification.
 
         The square is rendered on every SVG export independently of which
         parts are selected.
 
+        If *part* is supplied (or the pattern has exactly one part) and the
+        square would fall outside that part's bounding box, the origin is
+        shifted so that the square fits snugly inside the bounding box with a
+        small padding.  This avoids the square being printed in empty space
+        when the pattern is positioned away from the page origin.
+
         Args:
-            origin: Top-left corner of the square.
+            origin: Preferred top-left corner of the square.
             edge_length: Side length of the square. Defaults to 3 cm.
             style: Optional style override. Defaults to StyleOptions().
+            part: Optional PatternPart used for auto-placement.  When omitted
+                and the pattern contains exactly one part, that part is used
+                automatically.
 
         Returns:
             The created PatternElement.
         """
         from .style import DEFAULT_STROKE_WIDTH
 
+        # Resolve which part to use for boundary checking
+        target_part: PatternPart | None = part
+        if target_part is None and len(self.parts) == 1:
+            target_part = self.parts[0]
+
+        final_origin = origin
+        if target_part is not None:
+            bb = target_part.bounding_box()
+            if bb is not None:
+                mn, mx = bb
+                pad = 2 * MM  # small gap from the boundary
+                ox, oy = origin.x, origin.y
+                # Clamp so the square stays within [mn+pad, mx-edge_length-pad]
+                ox = max(mn.x + pad, min(ox, mx.x - edge_length - pad))
+                oy = max(mn.y + pad, min(oy, mx.y - edge_length - pad))
+                final_origin = Point(ox, oy)
+
         elem = PatternElement(
             geometry=Rect(
-                origin=origin,
+                origin=final_origin,
                 width=edge_length,
                 height=edge_length,
                 name=f"{edge_length / CM:.0f}cm × {edge_length / CM:.0f}cm",

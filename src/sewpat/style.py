@@ -194,3 +194,12 @@ STYLE_SEAM_ALLOWANCE = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
 )
+
+# Debug highlight — thick red solid line used to visually verify which
+# segments are selected for a seam-length comparison.  Import and apply
+# temporarily; remove once the measurement is confirmed correct.
+STYLE_DEBUG_RED = StyleOptions(
+    stroke_color="red",
+    stroke_width=1.5,
+    opacity=0.7,
+)

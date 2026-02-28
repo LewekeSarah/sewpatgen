@@ -297,26 +297,23 @@ class Segment:
         t = float(np.dot(point.coords - p1, d) / np.dot(d, d))
         return Point(*(p1 + t * d))
 
-    def contains_point(self, point: Point, tolerance: float = 1e-12) -> bool:
+    def contains_point(self, point: Point, tolerance: float = 1e-9) -> bool:
         """Check if a point lies on the line segment.
+
+        Uses Shapely's GEOS backend (``LineString.distance()``) for robust
+        floating-point behaviour instead of the triangle-inequality check.
 
         Args:
             point: The point to check.
-            tolerance: The maximum distance allowed for the point to be considered on the line.
+            tolerance: The maximum distance (mm) allowed for the point to be
+                considered on the segment. Defaults to 1e-9 mm.
 
         Returns:
-            bool: True if the point lies on the line segment within tolerance, False otherwise.
+            bool: True if the point lies on the line segment within tolerance,
+                False otherwise.
         """
-        # Check if dist(p1, p) + dist(p2, p) == length(line)
-        delta1 = self.p1.coords - point.coords
-        delta2 = self.p2.coords - point.coords
-        delta = self.p2.coords - self.p1.coords
-        d1 = math.sqrt(np.dot(delta1, delta1))
-        d2 = math.sqrt(np.dot(delta2, delta2))
-        line_length = math.sqrt(np.dot(delta, delta))
-
-        # Check if point is collinear and within segment bounds
-        return abs(d1 + d2 - line_length) < tolerance
+        ls = _sg.LineString([(self.p1.x, self.p1.y), (self.p2.x, self.p2.y)])
+        return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
     def point_at_length(self, arc_length: float) -> "Point":
         """Return the point at a given arc length from p1 along the segment.
@@ -1111,10 +1108,11 @@ class CubicBezier:
         Mirrors ``Segment.contains_point()`` / ``Ray.contains_point()`` /
         ``Line.contains_point()`` for API consistency.
 
-        Because there is no closed-form inverse for a cubic Bézier, the check
-        is performed by finding the closest point on the curve via
-        ``point_at_length`` + binary search on the arc-length parameter and
-        comparing the distance.
+        Uses Shapely's GEOS ``LineString.distance()`` on a 64-segment
+        discretisation of the curve — a single C-level call that is
+        significantly faster than the previous 200-point Python scan with
+        binary search, while being accurate to well under 0.01 mm for typical
+        garment curves.
 
         Args:
             point: The point to test.
@@ -1125,33 +1123,8 @@ class CubicBezier:
             True if the closest point on the curve is within *tolerance* of
             *point*, False otherwise.
         """
-        # Coarse search: sample 200 points, keep the best t
-        best_t = 0.0
-        best_d = point.distance_to(self.p0)
-        for i in range(1, 201):
-            t = i / 200
-            d = point.distance_to(self.point_at_t(t))
-            if d < best_d:
-                best_d, best_t = d, t
-
-        # Early exit if already within tolerance
-        if best_d <= tolerance:
-            return True
-
-        # Refine with binary search around best_t (±1/200 bracket)
-        lo = max(0.0, best_t - 1 / 200)
-        hi = min(1.0, best_t + 1 / 200)
-        for _ in range(30):
-            m1 = lo + (hi - lo) / 3
-            m2 = hi - (hi - lo) / 3
-            if point.distance_to(self.point_at_t(m1)) < point.distance_to(
-                self.point_at_t(m2)
-            ):
-                hi = m2
-            else:
-                lo = m1
-        best_d = point.distance_to(self.point_at_t((lo + hi) / 2))
-        return best_d <= tolerance
+        ls = _bezier_shapely(self)  # 64-segment discretisation
+        return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
     def offset(self, distance: float, center: "Point | None" = None) -> "CubicBezier":
         """Return an approximate offset (parallel) curve shifted by *distance*.
@@ -1482,3 +1455,39 @@ def outline_polygon(
     if len(coords) < 3:
         return None
     return _sg.Polygon(coords)
+
+
+def seam_length(geoms: "list[Segment | CubicBezier]") -> float:
+    """Return the total arc length of a list of Segments and/or CubicBeziers.
+
+    Each element contributes its exact arc length:
+
+    * ``Segment`` — Euclidean distance between its two endpoints.
+    * ``CubicBezier`` — Gauss-Legendre quadrature via ``svgpathtools``
+      (the same method used internally by ``CubicBezier.length()``).
+
+    Typical use: compare a seam edge on the front piece against the
+    matching seam edge on the back piece before finalising a pattern.
+
+    Args:
+        geoms: Any mix of ``Segment`` and ``CubicBezier`` objects that
+            together form one seam edge.  The elements do not need to be
+            connected or sorted.
+
+    Returns:
+        Total arc length in mm.
+
+    Example::
+
+        front_inseam = [front_inner_leg]          # CubicBezier
+        back_inseam  = [back_inner_seam]          # CubicBezier
+        diff = seam_length(front_inseam) - seam_length(back_inseam)
+        print(f"inseam difference: {diff:.1f} mm")
+    """
+    total = 0.0
+    for g in geoms:
+        if isinstance(g, Segment):
+            total += g.length
+        else:
+            total += g.length()
+    return total

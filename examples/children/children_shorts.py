@@ -2,9 +2,9 @@ from sewpat import (
     Segment,
     PatternPart,
     Pattern,
-    STYLE_STITCH,
     STYLE_HEM,
     STYLE_WAISTBAND,
+    STYLE_STITCH,
 )
 from sewpat.geometry import (
     Point,
@@ -68,7 +68,7 @@ def make_model_config() -> ModelConfig:
 
 def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     pattern_boy_trousers = Pattern(
-        name="Flat Boy Trousers", anchor=Point(5 * CM, 5 * CM)
+        name="Flat Boy Trousers", anchor=Point(5 * CM, 7 * CM)
     )
     pt0 = pattern_boy_trousers.anchor
 
@@ -95,7 +95,9 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     front.append(
         Segment(pt6, pt0, name="Bund"), style=STYLE_WAISTBAND, is_outline=True
     )  # pt6 -> pt0
-    front.append(Segment(pt0, pt1), style=STYLE_STITCH, is_outline=True)  # pt0 -> pt1
+    front_size_top = front.append(
+        Segment(pt0, pt1), style=STYLE_STITCH, is_outline=True
+    )  # pt0 -> pt1
 
     # STEP 3: Hosenbeingitter
     pt9, pt10, pt11, pt12, pt13 = get_leg_grid(meas, model, pt0, anchor_left=True)
@@ -115,27 +117,27 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
 
     # Outline elements — original geometric directions; the chain-sorter in
     # add_seam_allowance will reorder/reverse them into a connected loop.
-    front.append(Segment(pt1, pt14), style=STYLE_STITCH, is_outline=True)  # side seam
-    front.append(Segment(pt14, pt33), style=STYLE_STITCH, is_outline=True)  # side → hem
+    front_side_upper = front.append(
+        Segment(pt1, pt14), style=STYLE_STITCH, is_outline=True
+    )  # side seam
+    front_side_lower = front.append(
+        Segment(pt14, pt33), style=STYLE_STITCH, is_outline=True
+    )  # side → hem
     front.append(Segment(pt33, pt32), style=STYLE_HEM, is_outline=True)  # hem
     front.append(
         Segment(pt32, pt15), style=STYLE_STITCH, is_outline=True
     )  # inner leg up
-    front_inner_leg = CubicBezier(
-        pt8, bz_control, pt15.translate(0.1 * CM, -2 * CM), pt15
-    )
-    front.append(
-        front_inner_leg,
+    front_inner_leg = front.append(
+        CubicBezier(pt8, bz_control, pt15.translate(0.1 * CM, -2 * CM), pt15),
         style=STYLE_STITCH,
         is_outline=True,
     )  # inner seam (pt8 → pt15)
-    front_curve = CubicBezier(pt7, bz_control3, bz_control2, pt8)
-    front.append(
-        front_curve, style=STYLE_STITCH, is_outline=True
+    front_curve = front.append(
+        CubicBezier(pt7, bz_control3, bz_control2, pt8),
+        style=STYLE_STITCH,
+        is_outline=True,
     )  # crotch curve (pt7 → pt8)
-    front.append(
-        Segment(pt6, pt7), style=STYLE_STITCH, is_outline=True
-    )  # crotch top (pt6 → pt7)
+    front.append(Segment(pt6, pt7), style=STYLE_STITCH, is_outline=True)  # crotch top
 
     # Fadenlauf Vorderteil
     grain_end = intersect(Segment(pt9, pt11), seam)
@@ -144,10 +146,10 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     # Kerben
     front.add_notches(pt14, seam_edge=Segment(pt14, pt33))  # Seitennaht am Knie
     front.add_notches(pt15, seam_edge=inner_seam)  # Innenbeinnaht am Saum
-    front.add_notches(pt7, seam_edge=front_curve)  # Hosenausschnitt (Kurve)
+    front.add_notches(pt7, seam_edge=front_curve.geometry)  # Hosenausschnitt (Kurve)
     front.add_notches(
-        front_inner_leg.point_at_t(0.5),
-        seam_edge=front_inner_leg,
+        front_inner_leg.geometry.point_at_t(0.5),
+        seam_edge=front_inner_leg.geometry,
     )  # Innennaht Mitte
 
     # Info-Box
@@ -211,11 +213,8 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
         style=STYLE_STITCH,
         is_outline=True,
     )  # crotch curve
-    back_inner_seam = CubicBezier(
-        pt21, bz_control5, pt25.translate(0.1 * CM, -2 * CM), pt25
-    )
-    back.append(
-        back_inner_seam,
+    back_inner_seam = back.append(
+        CubicBezier(pt21, bz_control5, pt25.translate(0.1 * CM, -2 * CM), pt25),
         style=STYLE_STITCH,
         is_outline=True,
     )  # inner seam (pt21 → pt25)
@@ -223,12 +222,10 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
         Segment(pt25, pt30), style=STYLE_STITCH, is_outline=True
     )  # inner leg up → hem
     back.append(Segment(pt30, pt31), style=STYLE_HEM, is_outline=True)  # hem
-    back.append(
+    back_side_seam = back.append(
         Segment(pt18, pt31), style=STYLE_STITCH, is_outline=True
-    )  # side seam (original direction)
-    back.append(
-        Segment(pt17, pt18), style=STYLE_WAISTBAND, is_outline=True
-    )  # Bund (original direction)
+    )  # side seam
+    back.append(Segment(pt17, pt18), style=STYLE_WAISTBAND, is_outline=True)  # Bund
 
     # Fadenlauf Rückteil
     grain_end_back = intersect(Segment(back_pt10, back_pt11), seam)
@@ -237,12 +234,12 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     # Kerben
     back.add_notches(pt23, seam_edge=side_back, is_back=True)  # Seitennaht am Knie
     back.add_notches(
-        pt25, seam_edge=back_inner_seam, is_back=True
+        pt25, seam_edge=back_inner_seam.geometry, is_back=True
     )  # Innenbeinnaht am Saum
     back.add_notches(pt19, seam_edge=Segment(pt17, pt19), is_back=True)  # Hinternaht
     back.add_notches(
-        back_inner_seam.point_at_t(0.5),
-        seam_edge=back_inner_seam,
+        back_inner_seam.geometry.point_at_t(0.5),
+        seam_edge=back_inner_seam.geometry,
         is_back=True,
     )  # Innennaht Mitte
 
@@ -257,6 +254,20 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
 
     # Nahtzugabe Rückteil
     back.add_seam_allowance(model.seam_allowance)
+
+    # -----------------------------------------------------------------------
+    # Nahtlängen-Kontrolle Seitennaht (Vorderteil vs. Rückteil)
+    # -----------------------------------------------------------------------
+    front_side_len = front.seam_length(
+        [front_size_top, front_side_upper, front_side_lower]
+    )
+    back_side_len = back.seam_length([back_side_seam])
+    diff_side = back_side_len - front_side_len
+    print(
+        f"Seitennaht  Vorderteil: {front_side_len / CM:.1f} cm  |  "
+        f"Rückteil: {back_side_len / CM:.1f} cm  |  "
+        f"Δ = {diff_side / CM:+.1f} cm"
+    )
 
     # -----------------------------------------------------------------------
     # KONSTRUKTION (Hilfsgeometrie — wird standardmäßig nicht gerendert)
