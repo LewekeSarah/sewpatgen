@@ -7,11 +7,15 @@ from .geometry import (
     Triangle,
     InfoBox,
     CubicBezier,
-    _miter_join,
-    _intersect_lines,
+    geom_start,
+    geom_end,
+    with_endpoints,
+    build_chain,
+    buffer_chain,
+    miter_corner,
+    outline_polygon,
 )
 from .units import CM, MM
-import numpy as np
 
 
 class PatternElement:
@@ -89,38 +93,43 @@ class PatternPart:
         """
         self.elements.extend(elements)
 
+    def _outline_polygon(self):
+        """Build a Shapely Polygon from the ``is_outline`` elements of this part."""
+        geoms = [
+            e.geometry
+            for e in self.elements
+            if e.is_outline and isinstance(e.geometry, (Segment, CubicBezier))
+        ]
+        return outline_polygon(geoms) if geoms else None
+
     @property
     def centroid(self) -> Point | None:
-        """Calculate the centroid of all vertex coordinates in this part.
+        """Return the true geometric centroid of the outline polygon.
 
-        Collects every coordinate from Points, Segment endpoints, Rect corners,
-        and Circle centres, then returns their average. Returns None if the part
-        contains no geometry yet.
+        Uses Shapely to compute the exact centroid from the closed outline.
+        Returns ``None`` if no ``is_outline`` elements have been added yet.
+        """
+        poly = self._outline_polygon()
+        if poly is None or poly.is_empty:
+            return None
+        c = poly.centroid
+        return Point(c.x, c.y)
 
-        This centroid is used internally (e.g. by add_notches) to determine
-        which side of a seam edge is the interior of the pattern piece.
+    @property
+    def area_cm2(self) -> float | None:
+        """Return the area of the outline polygon in cm².
+
+        Uses Shapely to compute the exact area of the closed outline polygon.
+        Returns ``None`` if no outline polygon has been defined yet.
 
         Returns:
-            The centroid Point, or None if there are no coordinates.
+            Area in cm², or ``None``.
         """
-
-        coords: list[np.ndarray] = []
-        for elem in self.elements:
-            g = elem.geometry
-            if isinstance(g, Point):
-                coords.append(g.coords)
-            elif isinstance(g, Segment):
-                coords.append(g.p1.coords)
-                coords.append(g.p2.coords)
-            elif isinstance(g, Rect):
-                coords.append(g.origin.coords)
-                coords.append(g.origin.coords + np.array([g.width, g.height]))
-            elif isinstance(g, Circle):
-                coords.append(g.center.coords)
-        if not coords:
+        poly = self._outline_polygon()
+        if poly is None or poly.is_empty:
             return None
-        mean = np.mean(coords, axis=0)
-        return Point(*mean)
+        # Internal unit is mm², divide by 100 to get cm²
+        return poly.area / 100.0
 
     def add_grainline(
         self,
@@ -229,33 +238,36 @@ class PatternPart:
                 along = seam_edge.unit_direction
                 normal = seam_edge.unit_normal
                 if inward_ref is not None:
-                    if np.dot(normal, inward_ref.coords - notch_pt.coords) < 0:
+                    dot = normal[0] * (inward_ref.x - notch_pt.x) + normal[1] * (
+                        inward_ref.y - notch_pt.y
+                    )
+                    if dot < 0:
                         normal = -normal
             elif isinstance(seam_edge, CubicBezier):
-                # Find the parameter t that minimises distance to pt
                 result = minimize_scalar(
-                    lambda t: float(
-                        np.linalg.norm(seam_edge.point_at_t(t).coords - pt.coords)
-                    ),
+                    lambda t: seam_edge.point_at_t(t).distance_to(pt),
                     bounds=(0.0, 1.0),
                     method="bounded",
                 )
                 t_closest = float(result.x)
                 notch_pt = seam_edge.point_at_t(t_closest)
                 tangent = seam_edge.tangent_at_t(t_closest)
-                tang_len = float(np.linalg.norm(tangent))
+                tang_len = float((tangent[0] ** 2 + tangent[1] ** 2) ** 0.5)
                 along = tangent / tang_len if tang_len > 1e-12 else tangent
                 normal = seam_edge.normal_at_t(t_closest)
                 if inward_ref is not None:
-                    if np.dot(normal, inward_ref.coords - notch_pt.coords) < 0:
+                    dot = normal[0] * (inward_ref.x - notch_pt.x) + normal[1] * (
+                        inward_ref.y - notch_pt.y
+                    )
+                    if dot < 0:
                         normal = -normal
             else:
                 notch_pt = pt
-                along = np.array([1.0, 0.0])
-                normal = np.array([0.0, -1.0])
+                along = (1.0, 0.0)
+                normal = (0.0, -1.0)
 
-            ax, ay = along
-            nx, ny = normal
+            ax, ay = float(along[0]), float(along[1])
+            nx, ny = float(normal[0]), float(normal[1])
             offsets = [0.0]
             if is_back:
                 offsets = [-(half_w + gap / 2), +(half_w + gap / 2)]
@@ -275,25 +287,19 @@ class PatternPart:
     ) -> list["PatternElement"]:
         """Add seam-allowance lines around the outline of this pattern part.
 
-        For each outline element (``is_outline=True`` or explicitly given via
-        *outline_elements*) an offset copy is created that is shifted outward
-        by *distance* mm from the interior of the part.  The interior is
-        determined automatically from :attr:`centroid`.
-
-        Successive offset segments are connected at corners using a
-        **miter-join** (extended intersection); if the miter ratio is too large
-        a bevel midpoint is used as fallback (see :func:`geometry._miter_join`).
-
-        Offset :class:`~sewpat.geometry.CubicBezier` elements are approximated
-        via the hodograph method (see :meth:`CubicBezier.offset`).
+        - :class:`~sewpat.geometry.Rect` outlines are expanded uniformly.
+        - Pure-segment outlines use a Shapely ``Polygon.buffer()`` (GEOS
+          Miter-join, limit 4.0) — robust and concave-safe.
+        - Mixed or Bézier outlines offset each element individually via
+          :meth:`~sewpat.geometry.CubicBezier.offset` /
+          :meth:`~sewpat.geometry.Segment.offset` and stitch corners with a
+          tangent-miter join.
 
         Args:
             distance: Seam allowance in mm (must be positive).
-            outline_elements: Optional list of :class:`PatternElement` objects
-                that define the cut-line contour.  Defaults to all elements
-                whose ``is_outline`` flag is ``True``.
-            style: Optional :class:`~sewpat.style.StyleOptions` for the
-                generated seam-allowance elements.  Defaults to
+            outline_elements: Elements forming the cut-line contour. Defaults
+                to all elements whose ``is_outline`` flag is ``True``.
+            style: Style for the generated elements. Defaults to
                 :data:`~sewpat.style.STYLE_SEAM_ALLOWANCE`.
 
         Returns:
@@ -305,40 +311,13 @@ class PatternPart:
             )
 
         sa_style = style if style is not None else STYLE_SEAM_ALLOWANCE
-        center = self.centroid
 
-        # --- collect outline geometry ----------------------------------------
         if outline_elements is None:
             outline_elements = [e for e in self.elements if e.is_outline]
-
         if not outline_elements:
             return []
 
-        # --- helpers ---------------------------------------------------------
-        def _start(g: Segment | CubicBezier) -> Point:
-            return g.p1 if isinstance(g, Segment) else g.p0
-
-        def _end(g: Segment | CubicBezier) -> Point:
-            return g.p2 if isinstance(g, Segment) else g.p3
-
-        def _reverse(g: Segment | CubicBezier) -> Segment | CubicBezier:
-            """Return a copy of *g* with direction flipped."""
-            if isinstance(g, Segment):
-                return Segment(g.p2, g.p1, name=g.name)
-            else:
-                # Swap anchor endpoints AND control points so the curve shape
-                # is preserved exactly.
-                return CubicBezier(g.p3, g.p2, g.p1, g.p0, name=g.name)
-
-        def _with_endpoints(
-            g: Segment | CubicBezier, new_start: Point, new_end: Point
-        ) -> Segment | CubicBezier:
-            if isinstance(g, Segment):
-                return Segment(new_start, new_end, name=g.name)
-            else:
-                return CubicBezier(new_start, g.p1, g.p2, new_end, name=g.name)
-
-        # --- handle Rect special case early ----------------------------------
+        # ── Rect fast-path ────────────────────────────────────────────────────
         for elem in outline_elements:
             if isinstance(elem.geometry, Rect):
                 g = elem.geometry
@@ -354,153 +333,52 @@ class PatternPart:
                 new_elem.is_seam_allowance = True
                 return [new_elem]
 
-        # --- sort outline elements into a connected chain --------------------
-        # Collect Segment / CubicBezier geometries only.
-        geoms_raw: list[Segment | CubicBezier] = [
-            elem.geometry
-            for elem in outline_elements
-            if isinstance(elem.geometry, (Segment, CubicBezier))
+        # ── collect Segment / CubicBezier geometries ──────────────────────────
+        geoms: list[Segment | CubicBezier] = [
+            e.geometry
+            for e in outline_elements
+            if isinstance(e.geometry, (Segment, CubicBezier))
         ]
 
-        # Build a mapping from geometry id → per-element seam allowance so we
-        # can use it during the offset step below.
-        _elem_sa: dict[int, float] = {}
-        for elem in outline_elements:
-            if isinstance(elem.geometry, (Segment, CubicBezier)):
-                sa = getattr(elem.style, "seam_allowance", 0.0)
-                if sa > 0:
-                    _elem_sa[id(elem.geometry)] = sa
+        # ── Pure-segment path: delegate entirely to Shapely ───────────────────
+        if not any(isinstance(g, CubicBezier) for g in geoms):
+            chain = build_chain(geoms)
+            buf_coords = buffer_chain(chain, distance)
+            added: list["PatternElement"] = []
+            for (x1, y1), (x2, y2) in zip(buf_coords, buf_coords[1:]):
+                elem = self.append(
+                    Segment(Point(x1, y1), Point(x2, y2)), style=sa_style
+                )
+                elem.is_seam_allowance = True
+                added.append(elem)
+            return added
 
-        SNAP = 0.5  # mm — tolerance for endpoint matching
-
-        def _close(a: Point, b: Point) -> bool:
-            return float(np.linalg.norm(a.coords - b.coords)) < SNAP
-
-        # Greedy chain builder: start with the first element, then repeatedly
-        # find the next piece whose start or end connects to the current tail.
-        # Reverse the piece when it connects end-first so every element in the
-        # chain runs start → end continuously.
-        # Also track original geometry id for per-element seam allowance lookup.
-        chain: list[Segment | CubicBezier] = [geoms_raw[0]]
-        chain_ids: list[int] = [id(geoms_raw[0])]
-        remaining = list(geoms_raw[1:])
-        remaining_ids = [id(g) for g in remaining]
-        while remaining:
-            tail = _end(chain[-1])
-            found = False
-            for i, g in enumerate(remaining):
-                if _close(tail, _start(g)):
-                    chain.append(g)
-                    chain_ids.append(remaining_ids[i])
-                    remaining.pop(i)
-                    remaining_ids.pop(i)
-                    found = True
-                    break
-                elif _close(tail, _end(g)):
-                    chain.append(_reverse(g))
-                    chain_ids.append(remaining_ids[i])
-                    remaining.pop(i)
-                    remaining_ids.pop(i)
-                    found = True
-                    break
-            if not found:
-                # Gap in the outline — append remaining pieces as-is
-                chain.extend(remaining)
-                chain_ids.extend(remaining_ids)
-                break
-
-        # --- offset each element in chain order ------------------------------
-        offset_geoms: list[Segment | CubicBezier] = [
-            g.offset(_elem_sa.get(orig_id, distance), center)
-            for g, orig_id in zip(chain, chain_ids)
+        # ── Mixed / Bézier path: per-element offset + corner stitching ────────
+        center = self.centroid
+        chain_mixed = build_chain(geoms)
+        elem_sa = {
+            id(e.geometry): getattr(e.style, "seam_allowance", 0.0)
+            for e in outline_elements
+            if isinstance(e.geometry, (Segment, CubicBezier))
+            and getattr(e.style, "seam_allowance", 0.0) > 0
+        }
+        offset_geoms = [
+            g.offset(elem_sa.get(id(g), distance), center) for g in chain_mixed
         ]
-
-        # --- miter-join corner stitching -------------------------------------
-        new_geoms: list[Segment | CubicBezier] = list(offset_geoms)
-        n = len(new_geoms)
-
-        def _end_tangent(g: Segment | CubicBezier) -> np.ndarray:
-            """Unit tangent at the *end* of g (pointing away from start)."""
-            if isinstance(g, Segment):
-                d = g.p2.coords - g.p1.coords
-            else:
-                d = g.tangent_at_t(1.0)
-            norm = float(np.linalg.norm(d))
-            return d / norm if norm > 1e-12 else d
-
-        def _start_tangent(g: Segment | CubicBezier) -> np.ndarray:
-            """Unit tangent at the *start* of g (pointing toward end)."""
-            if isinstance(g, Segment):
-                d = g.p2.coords - g.p1.coords
-            else:
-                d = g.tangent_at_t(0.0)
-            norm = float(np.linalg.norm(d))
-            return d / norm if norm > 1e-12 else d
-
-        def _miter_corner(
-            ga: Segment | CubicBezier,
-            gb: Segment | CubicBezier,
-            miter_limit: float = 4.0,
-            sa_distance: float = 0.0,
-        ) -> Point:
-            """Miter corner for any combination of Segment / CubicBezier.
-
-            Extends the end-tangent of *ga* and the start-tangent of *gb* as
-            infinite lines and returns their intersection.  Falls back to a
-            bevel midpoint when the lines are parallel or the miter extension
-            exceeds *miter_limit* × *sa_distance* (the seam-allowance width).
-            Using the actual SA distance as the limit reference avoids false
-            bevel fallbacks at sharp corners where the gap between the two
-            offset endpoints is small.
-            """
-            end_a = _end(ga)
-            start_b = _start(gb)
-
-            ta = _end_tangent(ga)  # direction leaving ga
-            tb = _start_tangent(gb)  # direction entering gb
-
-            # Normal vectors (perpendicular to tangents) for _intersect_lines
-            na = np.array([-ta[1], ta[0]])
-            nb = np.array([-tb[1], tb[0]])
-
-            pt = _intersect_lines(end_a.coords, na, start_b.coords, nb)
-            if pt is None:
-                return Point(*(0.5 * (end_a.coords + start_b.coords)))
-
-            miter_dist = float(np.linalg.norm(pt - end_a.coords))
-            # Use the SA distance as the miter-limit reference so that sharp
-            # corners are handled correctly even when the gap between the raw
-            # offset endpoints is very small.
-            ref = (
-                sa_distance
-                if sa_distance > 1e-9
-                else float(np.linalg.norm(end_a.coords - start_b.coords))
-            )
-            if ref > 1e-9 and miter_dist > miter_limit * ref:
-                return Point(*(0.5 * (end_a.coords + start_b.coords)))
-
-            return Point(*pt)
-
-        if n > 1:
-            for i in range(n):
-                j = (i + 1) % n
-                ga = new_geoms[i]
-                gb = new_geoms[j]
-                end_a = _end(ga)
-                start_b = _start(gb)
-                # Only apply miter-join when the gap is non-trivial (> 0.01 mm)
-                if end_a.distance_to(start_b) > 0.01:
-                    corner = _miter_corner(ga, gb, sa_distance=distance)
-                    new_geoms[i] = _with_endpoints(ga, _start(ga), corner)
-                    new_geoms[j] = _with_endpoints(gb, corner, _end(gb))
-
-        # --- append and return -----------------------------------------------
-        added: list["PatternElement"] = []
-        for geom in new_geoms:
+        n = len(offset_geoms)
+        for i in range(n):
+            j = (i + 1) % n
+            ga, gb = offset_geoms[i], offset_geoms[j]
+            if geom_end(ga).distance_to(geom_start(gb)) > 0.01:
+                corner = miter_corner(ga, gb, distance)
+                offset_geoms[i] = with_endpoints(ga, geom_start(ga), corner)
+                offset_geoms[j] = with_endpoints(gb, corner, geom_end(gb))
+        added_mixed: list["PatternElement"] = []
+        for geom in offset_geoms:
             elem = self.append(geom, style=sa_style)
             elem.is_seam_allowance = True
-            added.append(elem)
-        return added
+            added_mixed.append(elem)
+        return added_mixed
 
 
 class Pattern:

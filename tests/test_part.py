@@ -123,43 +123,70 @@ class TestPatternPartCentroid(unittest.TestCase):
         part = PatternPart(name="Empty")
         self.assertIsNone(part.centroid)
 
-    def test_centroid_from_points(self):
-        """centroid averages Point coordinates."""
+    def test_centroid_none_without_outline_elements(self):
+        """centroid returns None when elements exist but none are is_outline."""
         part = PatternPart(name="P")
         part.append(Point(0, 0))
-        part.append(Point(4, 0))
-        part.append(Point(0, 4))
-        c = part.centroid
-        self.assertIsNotNone(c)
-        self.assertAlmostEqual(c.x, 4 / 3)
-        self.assertAlmostEqual(c.y, 4 / 3)
+        part.append(Segment(Point(0, 0), Point(10, 0)))
+        self.assertIsNone(part.centroid)
 
-    def test_centroid_from_segments(self):
-        """centroid uses both endpoints of Segment objects."""
-        part = PatternPart(name="S")
-        part.append(Segment(Point(0, 0), Point(2, 0)))
+    def test_centroid_from_outline_polygon_square(self):
+        """With is_outline Segments Shapely returns the true geometric centroid."""
+        part = PatternPart(name="Square")
+        # 10 × 10 square → true centroid = (5, 5)
+        part.append(Segment(Point(0, 0), Point(10, 0)), is_outline=True)
+        part.append(Segment(Point(10, 0), Point(10, 10)), is_outline=True)
+        part.append(Segment(Point(10, 10), Point(0, 10)), is_outline=True)
+        part.append(Segment(Point(0, 10), Point(0, 0)), is_outline=True)
         c = part.centroid
         self.assertIsNotNone(c)
-        self.assertAlmostEqual(c.x, 1.0)
-        self.assertAlmostEqual(c.y, 0.0)
+        self.assertAlmostEqual(c.x, 5.0, places=3)
+        self.assertAlmostEqual(c.y, 5.0, places=3)
 
-    def test_centroid_from_rect(self):
-        """centroid uses origin and opposite corner of Rect objects."""
-        part = PatternPart(name="R")
-        part.append(Rect(origin=Point(0, 0), width=4, height=6))
+    def test_centroid_from_outline_polygon_rectangle(self):
+        """Shapely centroid is correct for a non-square rectangle."""
+        part = PatternPart(name="Rect")
+        # 20 × 6 rectangle → centroid = (10, 3)
+        part.append(Segment(Point(0, 0), Point(20, 0)), is_outline=True)
+        part.append(Segment(Point(20, 0), Point(20, 6)), is_outline=True)
+        part.append(Segment(Point(20, 6), Point(0, 6)), is_outline=True)
+        part.append(Segment(Point(0, 6), Point(0, 0)), is_outline=True)
         c = part.centroid
         self.assertIsNotNone(c)
-        self.assertAlmostEqual(c.x, 2.0)
-        self.assertAlmostEqual(c.y, 3.0)
+        self.assertAlmostEqual(c.x, 10.0, places=3)
+        self.assertAlmostEqual(c.y, 3.0, places=3)
 
-    def test_centroid_from_circle(self):
-        """centroid uses Circle centre point."""
-        part = PatternPart(name="C")
-        part.append(Circle(Point(3, 7), radius=5 * MM))
-        c = part.centroid
-        self.assertIsNotNone(c)
-        self.assertAlmostEqual(c.x, 3.0)
-        self.assertAlmostEqual(c.y, 7.0)
+
+# ---------------------------------------------------------------------------
+# PatternPart – area_cm2
+# ---------------------------------------------------------------------------
+
+
+class TestPatternPartArea(unittest.TestCase):
+    """Tests for PatternPart.area_cm2."""
+
+    def test_area_none_without_outline(self):
+        """area_cm2 returns None when no outline elements are present."""
+        part = PatternPart(name="Empty")
+        self.assertIsNone(part.area_cm2)
+
+    def test_area_square_10mm(self):
+        """10 mm × 10 mm square → area = 1 cm²."""
+        part = PatternPart(name="Square")
+        part.append(Segment(Point(0, 0), Point(10, 0)), is_outline=True)
+        part.append(Segment(Point(10, 0), Point(10, 10)), is_outline=True)
+        part.append(Segment(Point(10, 10), Point(0, 10)), is_outline=True)
+        part.append(Segment(Point(0, 10), Point(0, 0)), is_outline=True)
+        self.assertAlmostEqual(part.area_cm2, 1.0, places=4)
+
+    def test_area_rectangle(self):
+        """40 mm × 30 mm rectangle → area = 12 cm²."""
+        part = PatternPart(name="Rect")
+        part.append(Segment(Point(0, 0), Point(40, 0)), is_outline=True)
+        part.append(Segment(Point(40, 0), Point(40, 30)), is_outline=True)
+        part.append(Segment(Point(40, 30), Point(0, 30)), is_outline=True)
+        part.append(Segment(Point(0, 30), Point(0, 0)), is_outline=True)
+        self.assertAlmostEqual(part.area_cm2, 12.0, places=4)
 
 
 # ---------------------------------------------------------------------------
@@ -209,9 +236,10 @@ class TestAddInfoBox(unittest.TestCase):
     def test_info_box_position_is_centroid(self):
         """The InfoBox is placed at the centroid of the part."""
         part = PatternPart(name="Sleeve")
-        part.append(Point(0, 0))
-        part.append(Point(10, 0))
-        part.append(Point(0, 10))
+        part.append(Segment(Point(0, 0), Point(10, 0)), is_outline=True)
+        part.append(Segment(Point(10, 0), Point(10, 10)), is_outline=True)
+        part.append(Segment(Point(10, 10), Point(0, 10)), is_outline=True)
+        part.append(Segment(Point(0, 10), Point(0, 0)), is_outline=True)
         centroid = part.centroid
         elem = part.add_info_box()
         self.assertIsInstance(elem.geometry, InfoBox)
@@ -222,21 +250,30 @@ class TestAddInfoBox(unittest.TestCase):
     def test_info_box_default_header_is_part_name(self):
         """Default header equals the part name."""
         part = PatternPart(name="Sleeve")
-        part.append(Point(5, 5))
+        part.append(Segment(Point(0, 0), Point(10, 0)), is_outline=True)
+        part.append(Segment(Point(10, 0), Point(10, 10)), is_outline=True)
+        part.append(Segment(Point(10, 10), Point(0, 10)), is_outline=True)
+        part.append(Segment(Point(0, 10), Point(0, 0)), is_outline=True)
         elem = part.add_info_box()
         self.assertEqual(elem.geometry.header, "Sleeve")
 
     def test_info_box_custom_header(self):
         """Custom header overrides the part name."""
         part = PatternPart(name="Sleeve")
-        part.append(Point(5, 5))
+        part.append(Segment(Point(0, 0), Point(10, 0)), is_outline=True)
+        part.append(Segment(Point(10, 0), Point(10, 10)), is_outline=True)
+        part.append(Segment(Point(10, 10), Point(0, 10)), is_outline=True)
+        part.append(Segment(Point(0, 10), Point(0, 0)), is_outline=True)
         elem = part.add_info_box(header="Custom Header")
         self.assertEqual(elem.geometry.header, "Custom Header")
 
     def test_info_box_notes(self):
         """Notes are stored on the InfoBox."""
         part = PatternPart(name="Cuff")
-        part.append(Point(5, 5))
+        part.append(Segment(Point(0, 0), Point(10, 0)), is_outline=True)
+        part.append(Segment(Point(10, 0), Point(10, 10)), is_outline=True)
+        part.append(Segment(Point(10, 10), Point(0, 10)), is_outline=True)
+        part.append(Segment(Point(0, 10), Point(0, 0)), is_outline=True)
         notes = ["1 cm seam allowance", "Cut 2×"]
         elem = part.add_info_box(notes=notes)
         self.assertEqual(elem.geometry.notes, notes)
@@ -310,9 +347,14 @@ class TestAddNotches(unittest.TestCase):
     def test_notch_with_segment_adds_triangle(self):
         """With a segment, a Triangle is still produced."""
         part = PatternPart(name="Body")
-        # Build a rectangle so centroid is well-defined and lies above the
-        # bottom edge.
-        part.append(Rect(origin=Point(0, 0), width=10 * CM, height=10 * CM))
+        part.append(Segment(Point(0, 0), Point(10 * CM, 0)), is_outline=True)
+        part.append(
+            Segment(Point(10 * CM, 0), Point(10 * CM, 10 * CM)), is_outline=True
+        )
+        part.append(
+            Segment(Point(10 * CM, 10 * CM), Point(0, 10 * CM)), is_outline=True
+        )
+        part.append(Segment(Point(0, 10 * CM), Point(0, 0)), is_outline=True)
         seg = Segment(Point(0, 10 * CM), Point(10 * CM, 10 * CM))
         mid = Point(5 * CM, 10 * CM)
         part.add_notches(mid, seam_edge=seg)
@@ -322,14 +364,19 @@ class TestAddNotches(unittest.TestCase):
     def test_notch_with_segment_tip_points_inward(self):
         """Notch tip points toward the centroid (inward), not outward."""
         part = PatternPart(name="Body")
-        # Rect with centroid at (5 cm, 5 cm)
-        part.append(Rect(origin=Point(0, 0), width=10 * CM, height=10 * CM))
-        # Bottom edge: y = 10 cm  →  centroid is at y = 5 cm  →  inward = up (negative y)
+        part.append(Segment(Point(0, 0), Point(10 * CM, 0)), is_outline=True)
+        part.append(
+            Segment(Point(10 * CM, 0), Point(10 * CM, 10 * CM)), is_outline=True
+        )
+        part.append(
+            Segment(Point(10 * CM, 10 * CM), Point(0, 10 * CM)), is_outline=True
+        )
+        part.append(Segment(Point(0, 10 * CM), Point(0, 0)), is_outline=True)
+        # Bottom edge: y = 10 cm → centroid is at y = 5 cm → inward = up (negative y)
         seg = Segment(Point(0, 10 * CM), Point(10 * CM, 10 * CM))
         mid = Point(5 * CM, 10 * CM)
         part.add_notches(mid, seam_edge=seg)
         tri = cast(Triangle, part.elements[-1].geometry)
-        # Tip (p3) should have a smaller y-coordinate than the midpoint (closer to centroid)
         self.assertLess(tri.p3.y, mid.y)
 
     def test_notch_custom_length_and_width(self):

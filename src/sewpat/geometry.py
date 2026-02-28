@@ -9,99 +9,46 @@ import math
 import numpy as np
 from dataclasses import dataclass
 from sewpat.units import MM, CM
+import shapely.geometry as _sg
 
-# svgpathtools is used as a backend for Bezier–Bezier intersection.
-# It implements the numerically robust Bézier-clipping algorithm (Sederberg &
-# Nishita 1990) which converges quadratically and avoids the O(n²) sampling
-# artefacts of a brute-force grid scan.
 from svgpathtools import CubicBezier as _SvgCubicBezier
 
 
 def _solve_quadratic(a: float, b: float, c: float) -> list[float]:
-    """Solve a quadratic equation ax^2 + bx + c = 0 in a numerically stable way.
-
-    Uses a numerically stable algorithm to find solutions by avoiding
-    subtractive cancellation.
-
-    Args:
-        a: Coefficient of the quadratic term.
-        b: Coefficient of the linear term.
-        c: Constant term.
-
-    Returns:
-        list[float]: A list containing 0, 1, or 2 solutions.
-    """
-    # TODO: https://cnrs.hal.science/hal-04116310v1/document
-    # Check if this is actually a linear equation
+    """Solve ax² + bx + c = 0. Used by CubicBezier.bounding_box()."""
     if abs(a) < 1e-14:
-        # Linear equation: bx + c = 0
-        if abs(b) < 1e-14:  # All coefficients are essentially zero
-            return []
-        return [-c / b]
-
-    # Compute discriminant
+        return [] if abs(b) < 1e-14 else [-c / b]
     discriminant = b * b - 4 * a * c
-
-    # No real solutions
     if discriminant < 0:
         return []
-
-    # One real solution (repeated root)
     if abs(discriminant) < 1e-14:
         return [-b / (2 * a)]
-
-    # Two real solutions - use numerically stable algorithm
-    # Instead of the standard formula x = (-b ± sqrt(discriminant)) / (2*a)
-    # Use q = -0.5 * (b + sign(b) * sqrt(discriminant))
-    # Then x1 = q/a and x2 = c/q
-    sqrt_discriminant = math.sqrt(discriminant)
-
-    if b >= 0:
-        q = -0.5 * (b + sqrt_discriminant)
-    else:
-        q = -0.5 * (b - sqrt_discriminant)
-
-    x1 = q / a
-    x2 = c / q
-
-    # Return solutions in ascending order
-    if x1 <= x2:
-        return [x1, x2]
-    else:
-        return [x2, x1]
+    s = math.sqrt(discriminant)
+    q = -0.5 * (b + s) if b >= 0 else -0.5 * (b - s)
+    x1, x2 = q / a, c / q
+    return [x1, x2] if x1 <= x2 else [x2, x1]
 
 
-def _intersect_lines(  # noqa: N802  (exported for use in part.py)
+def _intersect_lines(
     pt1: np.ndarray, n1: np.ndarray, pt2: np.ndarray, n2: np.ndarray
 ) -> np.ndarray | None:
-    """Find intersection of two lines represented by a point on the line and the unit normal.
+    """Find intersection of two infinite lines given a point and unit normal each.
 
-    Args:
-        pt1: Point on first line.
-        n1: Unit normal of first line.
-        pt2: Point on second line.
-        n2: Unit normal of second line.
+    Uses Shapely's robust GEOS backend instead of manual Cramer's rule.
 
     Returns:
-        np.ndarray | None: Intersection between the two lines if they are not parallel.
+        np.ndarray | None: Intersection point, or None if lines are parallel.
     """
-    c1 = np.dot(pt1, n1)
-    c2 = np.dot(pt2, n2)
-
-    # System of equations for intersection (x, y):
-    # a1 * x + b1 * y = c1
-    # a2 * x + b2 * y = c2
-    determinant = n1[0] * n2[1] - n2[0] * n1[1]
-
-    if abs(determinant) < 1e-14:
-        # Lines are parallel or coincident
+    # Convert normal → direction (rotate 90°)
+    d1 = np.array([n1[1], -n1[0]])
+    d2 = np.array([n2[1], -n2[0]])
+    far = 1e9
+    line1 = _sg.LineString([pt1 - far * d1, pt1 + far * d1])
+    line2 = _sg.LineString([pt2 - far * d2, pt2 + far * d2])
+    result = line1.intersection(line2)
+    if result.is_empty or result.geom_type != "Point":
         return None
-
-    # Solve the system of equations using Cramer's rule
-    x = (n2[1] * c1 - n1[1] * c2) / determinant
-    y = (n1[0] * c2 - n2[0] * c1) / determinant
-
-    return np.array([x, y])
+    return np.array([result.x, result.y])
 
 
 @dataclass(frozen=True)
@@ -863,216 +810,52 @@ class Circle:
         )
         return Point(*point_coords)
 
-    def _intersect_with_circle(self, other: "Circle") -> List[Point]:
-        """Find intersection points with another circle.
-
-        Args:
-            other: Another circle to check for intersections.
-
-        Returns:
-            List[Point]: List of intersection points (empty if no intersections).
-        """
-        # Calculate distance between centers using NumPy for efficiency
-        center_vector = other.center.coords - self.center.coords
-        d = np.linalg.norm(center_vector)
-
-        # Check for no intersection or one circle inside the other
-        if d > self.radius + other.radius:
-            return []  # Circles are too far apart
-
-        if d < abs(self.radius - other.radius):
-            return []  # One circle is inside the other
-
-        if (abs(d) < 1e-14) and (abs(self.radius - other.radius) < 1e-14):
-            return []  # Circles are coincident
-
-        # Handle the case of circles touching at exactly one point
-        if abs(d - (self.radius + other.radius)) < 1e-14:  # External touch
-            # Calculate the point of tangency
-            t = self.radius / (self.radius + other.radius)
-            point_coords = self.center.coords + t * (
-                other.center.coords - self.center.coords
-            )
-            return [Point(*point_coords)]
-
-        if abs(d - abs(self.radius - other.radius)) < 1e-14:  # Internal touch
-            # Calculate the point of tangency
-            if self.radius > other.radius:
-                t = self.radius / (self.radius - other.radius)
-            else:
-                t = -self.radius / (other.radius - self.radius)
-
-            point_coords = self.center.coords + t * (
-                other.center.coords - self.center.coords
-            )
-            return [Point(*point_coords)]
-
-        # Calculate intersection points
-        # Law of cosines to find the angle
-        a = (self.radius * self.radius - other.radius * other.radius + d * d) / (2 * d)
-        h = math.sqrt(self.radius * self.radius - a * a)
-
-        # Direction vector from self.center to other.center
+    def _intersect_with_circle(self, other: "Circle") -> "list[Point]":
+        """Find intersection points with another circle (exact analytical solution)."""
+        d = float(np.linalg.norm(self.center.coords - other.center.coords))
+        r1, r2 = self.radius, other.radius
+        if d > r1 + r2 or d < abs(r1 - r2) or d < 1e-14:
+            return []
+        a = (r1 * r1 - r2 * r2 + d * d) / (2 * d)
+        h_sq = r1 * r1 - a * a
+        h = math.sqrt(max(h_sq, 0.0))
         direction = (other.center.coords - self.center.coords) / d
-
-        # Find the point P2 which is 'a' away from self.center on the line to other.center
-        p2 = self.center.coords + a * direction
-
-        # Compute the perpendicular vector
+        mid = self.center.coords + a * direction
         perp = np.array([-direction[1], direction[0]])
-
-        # Calculate the intersection points
-        p3 = p2 + h * perp
-        p4 = p2 - h * perp
-
-        return [Point(*p3), Point(*p4)]
+        if h < 1e-14:
+            return [Point(*mid)]
+        return [Point(*(mid + h * perp)), Point(*(mid - h * perp))]
 
 
 def _intersect_linear_linear(
     p1: np.ndarray,
     p2: np.ndarray,
-    a: Segment | Ray | Line,
-    b: Segment | Ray | Line,
+    a: "Segment | Ray | Line",
+    b: "Segment | Ray | Line",
     check1: bool,
     check2: bool,
-) -> list[Point]:
-    """Find the intersection point between two linear objects (i.e., segments, lines, rays).
+) -> "list[Point]":
+    """Find the intersection point between two linear objects using Shapely."""
+    far = 1e9
 
-    Args:
-        p1: Point on object 1.
-        p2: Point on object 2.
-        a: Object 1.
-        b: Object 2.
-        check1: Determines whether contains_point() is checked on object 1.
-        check2: Determines whether contains_point() is checked on object 2.
+    def _to_shapely(obj: "Segment | Ray | Line") -> "_sg.LineString":
+        if isinstance(obj, Segment):
+            return _sg.LineString([(obj.p1.x, obj.p1.y), (obj.p2.x, obj.p2.y)])
+        elif isinstance(obj, Ray):
+            end = obj.origin.coords + far * obj.unit_direction
+            return _sg.LineString([(obj.origin.x, obj.origin.y), (end[0], end[1])])
+        else:  # Line
+            start = obj.point.coords - far * obj.unit_direction
+            end = obj.point.coords + far * obj.unit_direction
+            return _sg.LineString([(start[0], start[1]), (end[0], end[1])])
 
-    Returns:
-        list[Point]: List containing the intersection point, or empty list if no intersection.
-    """
-    pt = _intersect_lines(p1, a.unit_normal, p2, b.unit_normal)
-
-    if pt is None:
+    result = _to_shapely(a).intersection(_to_shapely(b))
+    if result.is_empty or result.geom_type != "Point":
         return []
-
-    intersection = Point(*pt)
-    if (check1 and not a.contains_point(intersection)) or (
-        check2 and not b.contains_point(intersection)
-    ):
+    pt = Point(result.x, result.y)
+    if (check1 and not a.contains_point(pt)) or (check2 and not b.contains_point(pt)):
         return []
-
-    return [intersection]
-
-
-def _solve_cubic(a: float, b: float, c: float, d: float) -> list[float]:
-    """Solve a cubic equation ax³ + bx² + cx + d = 0.
-
-    Args:
-        a, b, c, d: Coefficients of the cubic equation.
-
-    Returns:
-        List of real roots.
-    """
-    eps = 1e-10
-
-    if abs(a) < eps:
-        # Degenerate to quadratic
-        return _solve_quadratic(b, c, d)
-
-    # Normalize coefficients
-    b /= a
-    c /= a
-    d /= a
-
-    # Substitute x = t - b/3 to eliminate quadratic term
-    # Results in t³ + pt + q = 0
-    p = c - b * b / 3
-    q = d - b * c / 3 + 2 * b * b * b / 27
-
-    # Use Cardano's formula
-    discriminant = (q / 2) ** 2 + (p / 3) ** 3
-
-    roots = []
-
-    if discriminant > eps:
-        # One real root
-        sqrt_disc = math.sqrt(discriminant)
-        u = (
-            (-q / 2 + sqrt_disc) ** (1 / 3)
-            if (-q / 2 + sqrt_disc) >= 0
-            else -(abs(-q / 2 + sqrt_disc) ** (1 / 3))
-        )
-        v = (
-            (-q / 2 - sqrt_disc) ** (1 / 3)
-            if (-q / 2 - sqrt_disc) >= 0
-            else -(abs(-q / 2 - sqrt_disc) ** (1 / 3))
-        )
-        roots.append(u + v - b / 3)
-    elif abs(discriminant) < eps:
-        # Two or three real roots
-        if abs(q) < eps:
-            # Triple root
-            roots.append(-b / 3)
-        else:
-            # One single and one double root
-            u = (-q / 2) ** (1 / 3) if (-q / 2) >= 0 else -(abs(-q / 2) ** (1 / 3))
-            roots.extend([2 * u - b / 3, -u - b / 3])
-    else:
-        # Three distinct real roots
-        rho = math.sqrt(-((p / 3) ** 3))
-        theta = math.acos(-q / 2 / rho)
-
-        for k in range(3):
-            root = (
-                2 * (rho ** (1 / 3)) * math.cos((theta + 2 * math.pi * k) / 3) - b / 3
-            )
-            roots.append(root)
-
-    return roots
-
-
-def _intersect_bezier_line(
-    bezier: CubicBezier, line_point: np.ndarray, line_dir: np.ndarray
-) -> list[float]:
-    """Find intersection parameters t where a cubic Bezier intersects a line.
-
-    Args:
-        bezier: The cubic Bezier curve.
-        line_point: A point on the line.
-        line_dir: Direction vector of the line (should be normalized).
-
-    Returns:
-        List of t parameters where intersections occur.
-    """
-    # Line equation: P = line_point + s * line_dir
-    # Bezier equation: B(t) = (1-t)³P₀ + 3(1-t)²tP₁ + 3(1-t)t²P₂ + t³P₃
-    #
-    # For intersection: B(t) lies on the line
-    # We can use the implicit line equation: (P - line_point) × line_dir = 0
-    # where × is the 2D cross product (determinant)
-
-    # Get perpendicular to line direction for implicit form
-    line_perp = np.array([-line_dir[1], line_dir[0]])
-
-    # Coefficients for the cubic equation in t
-    # B(t) = a₃t³ + a₂t² + a₁t + a₀ where:
-    a0 = bezier.p0.coords
-    a1 = 3 * (bezier.p1.coords - bezier.p0.coords)
-    a2 = 3 * (bezier.p2.coords - 2 * bezier.p1.coords + bezier.p0.coords)
-    a3 = (
-        bezier.p3.coords
-        - 3 * bezier.p2.coords
-        + 3 * bezier.p1.coords
-        - bezier.p0.coords
-    )
-
-    # Distance from line_point to each coefficient projected onto line_perp
-    d0 = np.dot(a0 - line_point, line_perp)
-    d1 = np.dot(a1, line_perp)
-    d2 = np.dot(a2, line_perp)
-    d3 = np.dot(a3, line_perp)
-
-    # Solve cubic equation: d₃t³ + d₂t² + d₁t + d₀ = 0
-    return _solve_cubic(d3, d2, d1, d0)
+    return [pt]
 
 
 class CubicBezier:
@@ -1419,151 +1202,13 @@ class CubicBezier:
         )
 
 
-def _miter_join(
-    seg_a: "Segment",
-    seg_b: "Segment",
-    miter_limit: float = 4.0,
-) -> "Point":
-    """Find the miter-join point where two offset segments meet.
-
-    Extends *seg_a* and *seg_b* as infinite lines and returns their
-    intersection.  If the lines are parallel or the miter ratio exceeds
-    *miter_limit* (measured as a multiple of the offset distance implied by
-    the gap between ``seg_a.p2`` and ``seg_b.p1``), a bevel fallback is
-    returned instead (midpoint between the two endpoints).
-
-    This is used by ``PatternPart.add_seam_allowance()`` to connect
-    successive offset segments at convex corners.
-
-    Args:
-        seg_a: First offset segment.  The join point replaces its end (p2).
-        seg_b: Second offset segment.  The join point replaces its start (p1).
-        miter_limit: Maximum miter ratio before falling back to a bevel.
-            A value of 4.0 means: if the miter extension is longer than
-            4× the gap between seg_a.p2 and seg_b.p1, use bevel instead.
-
-    Returns:
-        The corner point (miter intersection or bevel midpoint).
-    """
-    pt = _intersect_lines(
-        seg_a.p1.coords, seg_a.unit_normal, seg_b.p1.coords, seg_b.unit_normal
-    )
-    if pt is None:
-        # Parallel lines – return midpoint (straight seam, no corner needed)
-        return Point(*(0.5 * (seg_a.p2.coords + seg_b.p1.coords)))
-
-    corner = Point(*pt)
-    # Check miter ratio: distance from original endpoint to miter point
-    gap = float(np.linalg.norm(seg_a.p2.coords - seg_b.p1.coords))
-    miter_dist = seg_a.p2.distance_to(corner)
-    if gap > 1e-9 and miter_dist > miter_limit * gap:
-        # Bevel fallback
-        return Point(*(0.5 * (seg_a.p2.coords + seg_b.p1.coords)))
-    return corner
-
-
-def _intersect_linear_circle(
-    lin_pt: np.ndarray, dir: np.ndarray, circle: Circle
-) -> list[float]:
-    """Find the intersection point between a linear object (i.e., segments, lines, rays) and a circle.
-
-    Args:
-        lin_pt: Point on linear object.
-        dir: Direction vector of linear object.
-        circle: Circle.
-
-    Returns:
-        List[float]: List containing (relative) position of intersections along the linear object.
-    """
-    dc = lin_pt - circle.center.coords
-
-    A = np.dot(dir, dir)
-    B = np.dot(dc, dir)
-    C = np.dot(dc, dc)
-
-    return _solve_quadratic(A, 2 * B, C - circle.radius**2)
-
-
-def _intersect_circle_circle(c1: Circle, c2: Circle) -> list[Point]:
-    """Find intersection points between two circles.
-
-    Args:
-        c1: First circle.
-        c2: Second circle.
-
-    Returns:
-        List[Point]: List of intersection points (empty if no intersections).
-    """
-    # Calculate distance between centers using NumPy for efficiency
-    center_vector = c2.center.coords - c1.center.coords
-    d = np.linalg.norm(center_vector)
-
-    # Check for no intersection or one circle inside the other
-    if d > c1.radius + c2.radius:
-        return []  # Circles are too far apart
-
-    if d < abs(c1.radius - c2.radius):
-        return []  # One circle is inside the other
-
-    if (abs(d) < 1e-14) and (abs(c1.radius - c2.radius) < 1e-14):
-        return []  # Circles are coincident
-
-    # Handle the case of circles touching at exactly one point
-    if abs(d - (c1.radius + c2.radius)) < 1e-14:  # External touch
-        # Calculate the point of tangency
-        t = c1.radius / (c1.radius + c2.radius)
-        point_coords = c1.center.coords + t * (c2.center.coords - c1.center.coords)
-        return [Point(*point_coords)]
-
-    if abs(d - abs(c1.radius - c2.radius)) < 1e-14:  # Internal touch
-        # Calculate the point of tangency
-        if c1.radius > c2.radius:
-            t = c1.radius / (c1.radius - c2.radius)
-        else:
-            t = -c1.radius / (c2.radius - c1.radius)
-
-        point_coords = c1.center.coords + t * (c2.center.coords - c1.center.coords)
-        return [Point(*point_coords)]
-
-    # Calculate intersection points
-    # Law of cosines to find the angle
-    a = (c1.radius * c1.radius - c2.radius * c2.radius + d * d) / (2 * d)
-    h = math.sqrt(c1.radius * c1.radius - a * a)
-
-    # Direction vector from c1.center to c2.center
-    direction = (c2.center.coords - c1.center.coords) / d
-
-    # Find the point P2 which is 'a' away from c1.center on the line to c2.center
-    p2 = c1.center.coords + a * direction
-
-    # Compute the perpendicular vector
-    perp = np.array([-direction[1], direction[0]])
-
-    # Calculate the intersection points
-    p3 = p2 + h * perp
-    p4 = p2 - h * perp
-
-    return [Point(*p3), Point(*p4)]
-
-
 def _intersect_bezier_bezier(
     a: "CubicBezier", b: "CubicBezier", tol: float = 1e-12
-) -> list["Point"]:
+) -> "list[Point]":
     """Find intersections between two cubic Bézier curves.
 
     Uses ``svgpathtools`` as a backend, which implements the numerically robust
-    Bézier-clipping algorithm (Sederberg & Nishita 1990). The algorithm
-    converges quadratically and reliably finds all transversal intersections
-    without O(n²) sampling artefacts.
-
-    Args:
-        a: First cubic Bézier curve.
-        b: Second cubic Bézier curve.
-        tol: Distance tolerance for duplicate-intersection filtering (mm).
-             Defaults to 1e-12 (effectively exact).
-
-    Returns:
-        List of intersection points on curve *a*.
+    Bézier-clipping algorithm (Sederberg & Nishita 1990).
     """
     svg_a = _SvgCubicBezier(
         complex(a.p0.x, a.p0.y),
@@ -1585,185 +1230,255 @@ def _intersect_bezier_bezier(
     return intersections
 
 
+def _bezier_shapely(b: "CubicBezier", n: int = 64) -> "_sg.LineString":
+    """Discretise a CubicBezier into a Shapely LineString with *n* segments."""
+    return _sg.LineString(
+        [(b.point_at_t(i / n).x, b.point_at_t(i / n).y) for i in range(n + 1)]
+    )
+
+
+def _linear_shapely(obj: "Segment | Ray | Line", far: float = 1e9) -> "_sg.LineString":
+    """Convert a Segment, Ray or Line to a Shapely LineString."""
+    if isinstance(obj, Segment):
+        return _sg.LineString([(obj.p1.x, obj.p1.y), (obj.p2.x, obj.p2.y)])
+    elif isinstance(obj, Ray):
+        end = obj.origin.coords + far * obj.unit_direction
+        return _sg.LineString([(obj.origin.x, obj.origin.y), (end[0], end[1])])
+    else:  # Line
+        start = obj.point.coords - far * obj.unit_direction
+        end = obj.point.coords + far * obj.unit_direction
+        return _sg.LineString([(start[0], start[1]), (end[0], end[1])])
+
+
+def _shapely_to_points(result: "_sg.base.BaseGeometry") -> "list[Point]":
+    """Extract a list of Points from a Shapely intersection result."""
+    if result.is_empty:
+        return []
+    if result.geom_type == "Point":
+        return [Point(result.x, result.y)]
+    if result.geom_type in ("MultiPoint", "GeometryCollection"):
+        return [Point(g.x, g.y) for g in result.geoms if g.geom_type == "Point"]
+    return []
+
+
 GEOMETRIC_TYPE = (
     Point | Line | Ray | Circle | Segment | Rect | Triangle | InfoBox | CubicBezier
 )
 
 
-def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
-    """Find intersections between two geometrical objects.
+def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> "list[Point]":
+    """Find intersections between two geometric objects.
 
-    Args:
-        a: First object.
-        b: Second object.
+    Linear objects (Segment, Ray, Line) and circles are handled via Shapely's
+    GEOS backend.  Bézier–Bézier intersections use svgpathtools (Bézier-clipping).
+    Bézier–linear and Bézier–circle intersections discretise the curve and use
+    Shapely.
 
     Returns:
-        list[Point]: List containing intersections or empty list if there are no intersections.
+        list[Point]: Intersection points, or empty list if none.
     """
-    if isinstance(a, Segment):
-        if isinstance(b, Segment):
-            return _intersect_linear_linear(a.p1.coords, b.p1.coords, a, b, True, True)
-        elif isinstance(b, Ray):
-            return _intersect_linear_linear(
-                a.p1.coords, b.origin.coords, a, b, True, True
-            )
-        elif isinstance(b, Line):
-            return _intersect_linear_linear(
-                a.p1.coords, b.point.coords, a, b, True, False
-            )
-        elif isinstance(b, Circle):
-            t = _intersect_linear_circle(a.p1.coords, a.p2.coords - a.p1.coords, b)
-            return [a.point_at_rel_dist(ct) for ct in t if (0 <= ct) and (ct <= 1)]
-        elif isinstance(b, CubicBezier):
-            # Segment-Bezier intersection (swap and reuse Bezier-Segment logic)
-            return intersect(b, a)
-    elif isinstance(a, Ray):
-        if isinstance(b, Segment):
-            return _intersect_linear_linear(
-                b.p1.coords, a.origin.coords, b, a, True, True
-            )
-        elif isinstance(b, Ray):
-            return _intersect_linear_linear(
-                a.origin.coords, b.origin.coords, a, b, True, True
-            )
-        elif isinstance(b, Line):
-            return _intersect_linear_linear(
-                a.origin.coords, b.point.coords, a, b, True, False
-            )
-        elif isinstance(b, Circle):
-            t = _intersect_linear_circle(a.origin.coords, a.unit_direction, b)
-            return [
-                Point(*(a.origin.coords + ct * a.unit_direction))
-                for ct in t
-                if (0 <= ct)
-            ]
-        elif isinstance(b, CubicBezier):
-            # Ray-Bezier intersection (swap and reuse Bezier-Ray logic)
-            return intersect(b, a)
-    elif isinstance(a, Line):
-        if isinstance(b, Segment):
-            return _intersect_linear_linear(
-                b.p1.coords, a.point.coords, b, a, True, False
-            )
-        elif isinstance(b, Ray):
-            return _intersect_linear_linear(
-                b.origin.coords, a.point.coords, b, a, True, False
-            )
-        elif isinstance(b, Line):
-            return _intersect_linear_linear(
-                a.point.coords, b.point.coords, a, b, False, False
-            )
-        elif isinstance(b, Circle):
-            t = _intersect_linear_circle(a.point.coords, a.unit_direction, b)
-            return [Point(*(a.point.coords + ct * a.unit_direction)) for ct in t]
-        elif isinstance(b, CubicBezier):
-            # Line-Bezier intersection (swap and reuse Bezier-Line logic)
-            return intersect(b, a)
-    elif isinstance(a, Circle):
-        if isinstance(b, Segment):
-            t = _intersect_linear_circle(b.p1.coords, b.p2.coords - b.p1.coords, a)
-            return [b.point_at_rel_dist(ct) for ct in t if (0 <= ct) and (ct <= 1)]
-        elif isinstance(b, Ray):
-            t = _intersect_linear_circle(b.origin.coords, b.unit_direction, a)
-            return [
-                Point(*(b.origin.coords + ct * b.unit_direction))
-                for ct in t
-                if (0 <= ct)
-            ]
-        elif isinstance(b, Line):
-            t = _intersect_linear_circle(b.point.coords, b.unit_direction, a)
-            return [
-                Point(*(b.point.coords + ct * b.unit_direction))
-                for ct in t
-                if (0 <= ct)
-            ]
-        elif isinstance(b, Circle):
-            return _intersect_circle_circle(a, b)
-        elif isinstance(b, CubicBezier):
-            # Circle-Bezier intersection (swap and reuse Bezier-Circle logic)
-            return intersect(b, a)
-    elif isinstance(a, CubicBezier):
-        if isinstance(b, Segment):
-            # Bezier-Segment intersection
-            seg_dir = b.unit_direction
-            t_values = _intersect_bezier_line(a, b.p1.coords, seg_dir)
-            intersections = []
-            for t in t_values:
-                if 0 <= t <= 1:
-                    bezier_point = a.point_at_t(t)
-                    # Check if point lies on segment
-                    if b.contains_point(bezier_point):
-                        intersections.append(bezier_point)
-            return intersections
-        elif isinstance(b, Ray):
-            # Bezier-Ray intersection
-            t_values = _intersect_bezier_line(a, b.origin.coords, b.unit_direction)
-            intersections = []
-            for t in t_values:
-                if 0 <= t <= 1:
-                    bezier_point = a.point_at_t(t)
-                    # Check if point is in ray direction
-                    to_point = bezier_point.coords - b.origin.coords
-                    if np.dot(to_point, b.unit_direction) >= 0:
-                        intersections.append(bezier_point)
-            return intersections
-        elif isinstance(b, Line):
-            # Bezier-Line intersection
-            t_values = _intersect_bezier_line(a, b.point.coords, b.unit_direction)
-            return [a.point_at_t(t) for t in t_values if 0 <= t <= 1]
-        elif isinstance(b, Circle):
-            # Bezier-Circle intersection (approximate using sampling)
-            intersections = []
-            num_samples = 1000
-            prev_point = a.point_at_t(0)
+    # ── linear × linear ──────────────────────────────────────────────────────
+    if isinstance(a, (Segment, Ray, Line)) and isinstance(b, (Segment, Ray, Line)):
+        return _intersect_linear_linear(
+            None, None, a, b, isinstance(a, Segment), isinstance(b, Segment)
+        )
 
-            for i in range(1, num_samples + 1):
-                t = i / num_samples
-                curr_point = a.point_at_t(t)
+    # ── linear × circle ──────────────────────────────────────────────────────
+    if isinstance(a, (Segment, Ray, Line)) and isinstance(b, Circle):
+        circle_shape = _sg.Point(b.center.x, b.center.y).buffer(b.radius)
+        result = _linear_shapely(a).intersection(circle_shape.exterior)
+        return _shapely_to_points(result)
 
-                # Check if segment crosses circle boundary
-                prev_inside = b.contains_point_inside(prev_point)
-                curr_inside = b.contains_point_inside(curr_point)
+    if isinstance(a, Circle) and isinstance(b, (Segment, Ray, Line)):
+        return intersect(b, a)
 
-                if prev_inside != curr_inside:
-                    # Binary search for more precise intersection
-                    t_start = (i - 1) / num_samples
-                    t_end = t
+    # ── circle × circle ──────────────────────────────────────────────────────
+    if isinstance(a, Circle) and isinstance(b, Circle):
+        return a._intersect_with_circle(b)
 
-                    for _ in range(20):  # Binary search iterations
-                        t_mid = (t_start + t_end) / 2
-                        mid_point = a.point_at_t(t_mid)
-                        mid_inside = b.contains_point_inside(mid_point)
+    # ── Bézier × Bézier ──────────────────────────────────────────────────────
+    if isinstance(a, CubicBezier) and isinstance(b, CubicBezier):
+        return _intersect_bezier_bezier(a, b)
 
-                        if mid_inside == prev_inside:
-                            t_start = t_mid
-                        else:
-                            t_end = t_mid
+    # ── Bézier × linear ──────────────────────────────────────────────────────
+    if isinstance(a, CubicBezier) and isinstance(b, (Segment, Ray, Line)):
+        result = _bezier_shapely(a).intersection(_linear_shapely(b))
+        return _shapely_to_points(result)
 
-                    intersections.append(a.point_at_t((t_start + t_end) / 2))
+    if isinstance(a, (Segment, Ray, Line)) and isinstance(b, CubicBezier):
+        return intersect(b, a)
 
-                prev_point = curr_point
+    # ── Bézier × circle ──────────────────────────────────────────────────────
+    if isinstance(a, CubicBezier) and isinstance(b, Circle):
+        circle_shape = _sg.Point(b.center.x, b.center.y).buffer(b.radius)
+        result = _bezier_shapely(a).intersection(circle_shape.exterior)
+        return _shapely_to_points(result)
 
-            return intersections
-        elif isinstance(b, CubicBezier):
-            return _intersect_bezier_bezier(a, b)
+    if isinstance(a, Circle) and isinstance(b, CubicBezier):
+        return intersect(b, a)
 
     raise TypeError(f"Intersection not implemented for {type(a)} and {type(b)}")
 
 
 def segment_to_intersection(
     start: Point, dir: np.ndarray, obj: GEOMETRIC_TYPE
-) -> tuple[Point, Segment]:
-    """Creates a Segment from the given start point to the intersection with an object in given direction.
-
-    Args:
-        start: Start point of the new segment.
-        dir: Direction for finding intersection.
-        obj: Other object that is intersected by a ray from start in direction dir.
-
-    Returns:
-        Point: Intersection point with obj.
-        Segment: Segment from start to intersection with obj in direction dir.
-    """
+) -> "tuple[Point, Segment]":
+    """Create a Segment from start to the first intersection with obj in direction dir."""
     pt = intersect(Ray(start, dir), obj)[0]
     return pt, Segment(start, pt)
+
+
+# ---------------------------------------------------------------------------
+# Chain / offset helpers  (used by PatternPart.add_seam_allowance)
+# ---------------------------------------------------------------------------
+
+_CHAIN_SNAP = 0.5  # mm — endpoint-matching tolerance
+
+
+def geom_start(g: "Segment | CubicBezier") -> Point:
+    """Return the start point of a Segment or CubicBezier."""
+    return g.p1 if isinstance(g, Segment) else g.p0
+
+
+def geom_end(g: "Segment | CubicBezier") -> Point:
+    """Return the end point of a Segment or CubicBezier."""
+    return g.p2 if isinstance(g, Segment) else g.p3
+
+
+def with_endpoints(
+    g: "Segment | CubicBezier", new_start: Point, new_end: Point
+) -> "Segment | CubicBezier":
+    """Return a copy of *g* with replaced start and end points."""
+    if isinstance(g, Segment):
+        return Segment(new_start, new_end, name=g.name)
+    return CubicBezier(new_start, g.p1, g.p2, new_end, name=g.name)
+
+
+def build_chain(
+    geoms: "list[Segment | CubicBezier]",
+) -> "list[Segment | CubicBezier]":
+    """Sort *geoms* into a single connected chain, reversing pieces as needed.
+
+    Walks through *geoms* greedily: the next piece whose start or end lies
+    within ``_CHAIN_SNAP`` mm of the current tail is appended (reversed if
+    necessary).  Any unconnected remainder is appended as-is.
+    """
+    chain = [geoms[0]]
+    remaining = list(geoms[1:])
+    while remaining:
+        tail = geom_end(chain[-1])
+        for i, g in enumerate(remaining):
+            if tail.distance_to(geom_start(g)) < _CHAIN_SNAP:
+                chain.append(remaining.pop(i))
+                break
+            elif tail.distance_to(geom_end(g)) < _CHAIN_SNAP:
+                rev: Segment | CubicBezier = (
+                    Segment(g.p2, g.p1, name=g.name)
+                    if isinstance(g, Segment)
+                    else CubicBezier(g.p3, g.p2, g.p1, g.p0, name=g.name)
+                )
+                chain.append(rev)
+                remaining.pop(i)
+                break
+        else:
+            chain.extend(remaining)  # gap — append remainder as-is
+            break
+    return chain
+
+
+def miter_corner(
+    ga: "Segment | CubicBezier",
+    gb: "Segment | CubicBezier",
+    sa_distance: float,
+    miter_limit: float = 4.0,
+) -> Point:
+    """Return the miter-join corner between the end of *ga* and the start of *gb*.
+
+    Extends the end-tangent of *ga* and the start-tangent of *gb* as infinite
+    lines and returns their intersection.  Falls back to the bevel midpoint
+    when the lines are parallel or the miter extension exceeds
+    *miter_limit* × *sa_distance*.
+    """
+
+    def _unit_tangent(g: "Segment | CubicBezier", at_end: bool) -> np.ndarray:
+        d = (
+            g.p2.coords - g.p1.coords
+            if isinstance(g, Segment)
+            else (g.tangent_at_t(1.0) if at_end else g.tangent_at_t(0.0))
+        )
+        norm = float(np.linalg.norm(d))
+        return d / norm if norm > 1e-12 else d
+
+    end_a = geom_end(ga)
+    start_b = geom_start(gb)
+    ta = _unit_tangent(ga, at_end=True)
+    tb = _unit_tangent(gb, at_end=False)
+    pt = _intersect_lines(
+        end_a.coords,
+        np.array([-ta[1], ta[0]]),
+        start_b.coords,
+        np.array([-tb[1], tb[0]]),
+    )
+    if pt is None:
+        return Point(*(0.5 * (end_a.coords + start_b.coords)))
+    if (
+        sa_distance > 1e-9
+        and float(np.linalg.norm(pt - end_a.coords)) > miter_limit * sa_distance
+    ):
+        return Point(*(0.5 * (end_a.coords + start_b.coords)))
+    return Point(*pt)
+
+
+def buffer_chain(
+    geoms: "list[Segment | CubicBezier]",
+    distance: float,
+    join_style: int = 2,
+    mitre_limit: float = 4.0,
+) -> "list[tuple[float, float]]":
+    """Buffer a connected chain of Segments outward by *distance* using Shapely.
+
+    Builds a Shapely Polygon from the chain, applies ``Polygon.buffer()``,
+    and returns the exterior ring as a list of (x, y) coordinate tuples.
+    Only valid for pure-segment chains; call ``build_chain`` first.
+
+    Args:
+        geoms: Connected chain of Segments (no CubicBeziers).
+        distance: Offset distance in mm (must be positive).
+        join_style: Shapely join style (2 = Miter, 1 = Round, 3 = Bevel).
+        mitre_limit: Maximum miter ratio before fallback to bevel.
+
+    Returns:
+        List of (x, y) coordinate tuples forming the buffered exterior ring.
+    """
+    ring_coords = [(g.p1.x, g.p1.y) for g in geoms]  # type: ignore[union-attr]
+    poly = _sg.Polygon(ring_coords)
+    if not poly.is_valid:
+        poly = poly.buffer(0)
+    return list(
+        poly.buffer(
+            distance, join_style=join_style, mitre_limit=mitre_limit
+        ).exterior.coords
+    )
+
+
+def outline_polygon(
+    geoms: "list[Segment | CubicBezier]",
+    bezier_samples: int = 32,
+) -> "_sg.Polygon | None":
+    """Build a Shapely Polygon from a list of Segments and CubicBeziers.
+
+    Segments contribute their start point; CubicBeziers are discretised into
+    *bezier_samples* evenly spaced points.  Returns ``None`` if fewer than 3
+    vertices are produced.
+    """
+    coords: list[tuple[float, float]] = []
+    for g in geoms:
+        if isinstance(g, Segment):
+            coords.append((g.p1.x, g.p1.y))
+        else:
+            for i in range(bezier_samples):
+                pt = g.point_at_t(i / bezier_samples)
+                coords.append((pt.x, pt.y))
+    if len(coords) < 3:
+        return None
+    return _sg.Polygon(coords)
