@@ -1,4 +1,4 @@
-from sewpat import Segment, PatternPart, Pattern
+from sewpat import Segment, PatternPart, Pattern, STYLE_STITCH, STYLE_HEM
 from sewpat.geometry import (
     Point,
     intersect,
@@ -85,8 +85,10 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     bz_control2 = Segment(pt7, pt8).point_perpendicular(0.5 * CM, rel_pos_on_obj=0.75)
     bz_control3 = pt7.translate(0.2 * CM, 2.5 * CM)
     # Hilfsgeometrie Hosenausschnitt
-    front.append(Segment(pt6, pt0, name="Bund"), is_outline=True)  # pt6 -> pt0
-    front.append(Segment(pt0, pt1), is_outline=True)  # pt0 -> pt1
+    front.append(
+        Segment(pt6, pt0, name="Bund"), style=STYLE_HEM, is_outline=True
+    )  # pt6 -> pt0
+    front.append(Segment(pt0, pt1), style=STYLE_STITCH, is_outline=True)  # pt0 -> pt1
 
     # STEP 3: Hosenbeingitter
     pt9, pt10, pt11, pt12, pt13 = get_leg_grid(meas, model, pt0, anchor_left=True)
@@ -106,20 +108,27 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
 
     # Outline elements — original geometric directions; the chain-sorter in
     # add_seam_allowance will reorder/reverse them into a connected loop.
-    front.append(Segment(pt1, pt14), is_outline=True)  # side seam
-    front.append(Segment(pt14, pt33), is_outline=True)  # side → hem
-    front.append(Segment(pt33, pt32), is_outline=True)  # hem
-    front.append(Segment(pt32, pt15), is_outline=True)  # inner leg up
+    front.append(Segment(pt1, pt14), style=STYLE_STITCH, is_outline=True)  # side seam
+    front.append(Segment(pt14, pt33), style=STYLE_STITCH, is_outline=True)  # side → hem
+    front.append(Segment(pt33, pt32), style=STYLE_STITCH, is_outline=True)  # hem
+    front.append(
+        Segment(pt32, pt15), style=STYLE_STITCH, is_outline=True
+    )  # inner leg up
     front_inner_leg = CubicBezier(
         pt8, bz_control, pt15.translate(0.1 * CM, -2 * CM), pt15
     )
     front.append(
         front_inner_leg,
+        style=STYLE_STITCH,
         is_outline=True,
     )  # inner seam (pt8 → pt15)
     front_curve = CubicBezier(pt7, bz_control3, bz_control2, pt8)
-    front.append(front_curve, is_outline=True)  # crotch curve (pt7 → pt8)
-    front.append(Segment(pt6, pt7), is_outline=True)  # crotch top (pt6 → pt7)
+    front.append(
+        front_curve, style=STYLE_STITCH, is_outline=True
+    )  # crotch curve (pt7 → pt8)
+    front.append(
+        Segment(pt6, pt7), style=STYLE_STITCH, is_outline=True
+    )  # crotch top (pt6 → pt7)
 
     # Fadenlauf Vorderteil
     grain_end = intersect(Segment(pt9, pt11), seam)
@@ -189,21 +198,30 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     pt31 = intersect(seam, side_back)[0]
 
     # Outline elements — original geometric directions; chain-sorter handles the loop.
-    back.append(Segment(pt17, pt19), is_outline=True)  # Hinternaht
+    back.append(Segment(pt17, pt19), style=STYLE_STITCH, is_outline=True)  # Hinternaht
     back.append(
-        CubicBezier(pt19, bz_contol4, bz_contol4, pt21), is_outline=True
+        CubicBezier(pt19, bz_contol4, bz_contol4, pt21),
+        style=STYLE_STITCH,
+        is_outline=True,
     )  # crotch curve
     back_inner_seam = CubicBezier(
         pt21, bz_control5, pt25.translate(0.1 * CM, -2 * CM), pt25
     )
     back.append(
         back_inner_seam,
+        style=STYLE_STITCH,
         is_outline=True,
     )  # inner seam (pt21 → pt25)
-    back.append(Segment(pt25, pt30), is_outline=True)  # inner leg up → hem
-    back.append(Segment(pt30, pt31), is_outline=True)  # hem
-    back.append(Segment(pt18, pt31), is_outline=True)  # side seam (original direction)
-    back.append(Segment(pt17, pt18), is_outline=True)  # Bund (original direction)
+    back.append(
+        Segment(pt25, pt30), style=STYLE_STITCH, is_outline=True
+    )  # inner leg up → hem
+    back.append(Segment(pt30, pt31), style=STYLE_STITCH, is_outline=True)  # hem
+    back.append(
+        Segment(pt18, pt31), style=STYLE_STITCH, is_outline=True
+    )  # side seam (original direction)
+    back.append(
+        Segment(pt17, pt18), style=STYLE_HEM, is_outline=True
+    )  # Bund (original direction)
 
     # Fadenlauf Rückteil
     grain_end_back = intersect(Segment(back_pt10, back_pt11), seam)
