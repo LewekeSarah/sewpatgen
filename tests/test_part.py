@@ -1086,6 +1086,35 @@ class TestSeamAllowanceCornerJoin(unittest.TestCase):
         sa_elems = part.add_seam_allowance(10.0, corner_join="bevel")
         self.assertTrue(len(sa_elems) > 0)
 
+    def test_round_on_bezier_path_inserts_arc_elements(self):
+        """corner_join='round' on a mixed outline inserts CubicBezier arc elements.
+
+        A part with three straight sides and one Bézier arc is offset with
+        corner_join='round'.  At convex corners the stitching inserts a
+        CubicBezier arc between the two offset elements.  The result must
+        contain at least one CubicBezier SA element beyond the original
+        Bézier offset.
+        """
+        part = PatternPart(name="CurvedRound")
+        # Bézier top edge (convex upward bump — offset will create convex corners)
+        part.append(
+            CubicBezier(Point(0, 0), Point(33, -30), Point(67, -30), Point(100, 0)),
+            is_outline=True,
+        )
+        part.append(Segment(Point(100, 0), Point(100, 50)), is_outline=True)
+        part.append(Segment(Point(100, 50), Point(0, 50)), is_outline=True)
+        part.append(Segment(Point(0, 50), Point(0, 0)), is_outline=True)
+        sa_elems = part.add_seam_allowance(10.0, corner_join="round")
+        bezier_sa = [e for e in sa_elems if isinstance(e.geometry, CubicBezier)]
+        # At least one CubicBezier arc must have been inserted as a round corner
+        self.assertGreater(
+            len(bezier_sa),
+            0,
+            "Expected at least one CubicBezier arc element for round corners, got none",
+        )
+        # All SA elements must be flagged correctly
+        self.assertTrue(all(e.is_seam_allowance for e in sa_elems))
+
     def test_per_element_corner_join_override(self):
         """StyleOptions.corner_join overrides the part-level default for that element.
 

@@ -938,7 +938,7 @@ class TestCubicBezierConsistencyMethods(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-from sewpat.geometry import miter_corner, build_chain, geom_end, geom_start
+from sewpat.geometry import miter_corner, round_corner
 
 
 class TestMiterCornerReflex(unittest.TestCase):
@@ -1011,6 +1011,99 @@ class TestMiterCornerReflex(unittest.TestCase):
         # Must NOT return bevel midpoint (50, 45) — must return miter (110,-10)
         self.assertAlmostEqual(corner.x, 110.0, places=2)
         self.assertAlmostEqual(corner.y, -10.0, places=2)
+
+
+# ---------------------------------------------------------------------------
+# round_corner – cubic Bézier arc approximation
+# ---------------------------------------------------------------------------
+
+
+class TestRoundCorner(unittest.TestCase):
+    """Tests for round_corner(), the Bézier arc approximation for round joins."""
+
+    def test_convex_90deg_returns_cubic_bezier(self):
+        """A convex 90° corner returns a CubicBezier, not a Point."""
+        ga = Segment(Point(0, -10), Point(100, -10))  # → ta=(+1,0)
+        gb = Segment(Point(110, 0), Point(110, 100))  # ↓ tb=(0,+1)
+        result = round_corner(ga, gb)
+        self.assertIsInstance(result, CubicBezier)
+
+    def test_arc_starts_at_end_of_ga(self):
+        """The arc must start exactly at geom_end(ga)."""
+        ga = Segment(Point(0, -10), Point(100, -10))
+        gb = Segment(Point(110, 0), Point(110, 100))
+        arc = round_corner(ga, gb)
+        self.assertIsInstance(arc, CubicBezier)
+        self.assertAlmostEqual(arc.p0.x, 100.0, places=6)
+        self.assertAlmostEqual(arc.p0.y, -10.0, places=6)
+
+    def test_arc_ends_at_start_of_gb(self):
+        """The arc must end exactly at geom_start(gb)."""
+        ga = Segment(Point(0, -10), Point(100, -10))
+        gb = Segment(Point(110, 0), Point(110, 100))
+        arc = round_corner(ga, gb)
+        self.assertIsInstance(arc, CubicBezier)
+        self.assertAlmostEqual(arc.p3.x, 110.0, places=6)
+        self.assertAlmostEqual(arc.p3.y, 0.0, places=6)
+
+    def test_arc_stays_close_to_true_circle(self):
+        """All points on the Bézier arc must lie within 0.03 % of the true radius.
+
+        Setup: ga ends at (100, -10), gb starts at (110, 0).  Tangents (+1,0)
+        and (0,+1).  The arc centre is at (100, 0): the perpendicular to
+        ta=(+1,0) through end_a=(100,-10) gives x=100; the perpendicular to
+        tb=(0,+1) through start_b=(110,0) gives y=0.  r = 10 mm.
+        Max theoretical error for k=4/3·tan(θ/4) at 90° is 0.027 % of r.
+        """
+        import math as _m
+
+        ga = Segment(Point(0, -10), Point(100, -10))
+        gb = Segment(Point(110, 0), Point(110, 100))
+        arc = round_corner(ga, gb)
+        self.assertIsInstance(arc, CubicBezier)
+        cx, cy, r = 100.0, 0.0, 10.0  # correct arc centre
+        tolerance = r * 0.0003  # 0.03 % of radius = 0.003 mm
+        for k in range(21):
+            pt = arc.point_at_t(k / 20)
+            radial_err = abs(_m.hypot(pt.x - cx, pt.y - cy) - r)
+            self.assertLess(
+                radial_err,
+                tolerance,
+                f"t={k/20:.2f}: radial error {radial_err:.5f} mm > {tolerance:.5f} mm",
+            )
+
+    def test_reflex_corner_returns_point(self):
+        """A reflex corner returns a Point (bevel midpoint), not a CubicBezier."""
+        # ga going right, end at (10,0); gb going left, start at (10,0) — hairpin
+        ga = Segment(Point(0, 0), Point(10, 0))
+        gb = Segment(Point(10, 0), Point(0, 0))
+        result = round_corner(ga, gb)
+        self.assertIsInstance(result, Point)
+
+    def test_parallel_tangents_returns_point(self):
+        """Parallel tangents (straight continuation) return a Point."""
+        ga = Segment(Point(0, 0), Point(10, 0))
+        gb = Segment(Point(10, 0), Point(20, 0))
+        result = round_corner(ga, gb)
+        # Angle ≈ 0 → falls back to bevel midpoint (a Point)
+        self.assertIsInstance(result, Point)
+
+    def test_180_degree_corner_returns_point(self):
+        """Anti-parallel segments (U-turn) return a Point fallback."""
+        ga = Segment(Point(0, 5), Point(10, 5))  # →
+        gb = Segment(Point(10, 5), Point(0, 5))  # ← (anti-parallel)
+        result = round_corner(ga, gb)
+        self.assertIsInstance(result, Point)
+
+    def test_control_points_on_tangent_lines(self):
+        """Both control points must lie on the respective tangent lines of the arc."""
+        ga = Segment(Point(0, -10), Point(100, -10))  # → ta=(+1,0)
+        gb = Segment(Point(110, 0), Point(110, 100))  # ↓ tb=(0,+1)
+        arc = round_corner(ga, gb)
+        self.assertIsInstance(arc, CubicBezier)
+        # cp1 must be east of p0 (same y), cp2 must be north of p3 (same x)
+        self.assertAlmostEqual(arc.p1.y, arc.p0.y, places=6)  # tangent along +x
+        self.assertAlmostEqual(arc.p2.x, arc.p3.x, places=6)  # tangent along -y
 
 
 if __name__ == "__main__":

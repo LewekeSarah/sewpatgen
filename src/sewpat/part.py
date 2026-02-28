@@ -16,6 +16,7 @@ from .geometry import (
     build_chain,
     buffer_chain,
     miter_corner,
+    round_corner,
     outline_polygon,
     seam_length as _geom_seam_length,
 )
@@ -473,9 +474,10 @@ class PatternPart:
                 * ``"miter"`` — tangent-line intersection clamped by a miter
                   limit of 4 × *distance*; reflex (concave) corners fall back
                   to bevel automatically.
-                * ``"round"`` — circular arc at outside corners (pure-segment
-                  paths only via Shapely; bevel midpoint used for mixed/Bézier
-                  paths).
+                * ``"round"`` — circular arc at outside corners.  Pure-segment
+                  paths use Shapely's arc approximation; mixed/Bézier paths
+                  insert a cubic Bézier arc (k = 4/3 · tan θ/4, max error
+                  < 0.027 % of arc radius).  Reflex corners fall back to bevel.
                 * ``"bevel"`` — straight cut across every corner.
 
         Returns:
@@ -597,6 +599,7 @@ class PatternPart:
             g.offset(elem_sa.get(_ep_key(g), distance), center) for g in chain_mixed
         ]
         n = len(offset_geoms)
+        arc_inserts: list[tuple[int, CubicBezier]] = []  # (after-index, arc)
         for i in range(n):
             j = (i + 1) % n
             ga, gb = offset_geoms[i], offset_geoms[j]
@@ -606,16 +609,34 @@ class PatternPart:
                 key_a = _ep_key(chain_mixed[i])
                 key_b = _ep_key(chain_mixed[j])
                 effective_cj = elem_cj.get(key_a) or elem_cj.get(key_b) or corner_join
+
                 if effective_cj == "miter":
                     corner = miter_corner(ga, gb, distance)
+                    offset_geoms[i] = with_endpoints(ga, geom_start(ga), corner)
+                    offset_geoms[j] = with_endpoints(gb, corner, geom_end(gb))
+                elif effective_cj == "round":
+                    arc = round_corner(ga, gb)
+                    if isinstance(arc, CubicBezier):
+                        # Trim ga to end at arc start, gb to start at arc end.
+                        offset_geoms[i] = with_endpoints(ga, geom_start(ga), arc.p0)
+                        offset_geoms[j] = with_endpoints(gb, arc.p3, geom_end(gb))
+                        arc_inserts.append((i, arc))
+                    else:
+                        # Fallback: arc is a Point (bevel midpoint)
+                        corner = arc
+                        offset_geoms[i] = with_endpoints(ga, geom_start(ga), corner)
+                        offset_geoms[j] = with_endpoints(gb, corner, geom_end(gb))
                 else:
-                    # "bevel" / "round": bevel midpoint for the mixed/Bézier path.
-                    # (True round arcs for Bézier paths are improvement F.)
+                    # "bevel": simple midpoint cut
                     _ea = geom_end(ga)
                     _sb = geom_start(gb)
                     corner = Point(*(0.5 * (_ea.coords + _sb.coords)))
-                offset_geoms[i] = with_endpoints(ga, geom_start(ga), corner)
-                offset_geoms[j] = with_endpoints(gb, corner, geom_end(gb))
+                    offset_geoms[i] = with_endpoints(ga, geom_start(ga), corner)
+                    offset_geoms[j] = with_endpoints(gb, corner, geom_end(gb))
+
+        # Insert arc elements in reverse order so indices stay valid.
+        for insert_after, arc in sorted(arc_inserts, key=lambda x: x[0], reverse=True):
+            offset_geoms.insert(insert_after + 1, arc)
         added_mixed: list["PatternElement"] = []
         for geom in offset_geoms:
             elem = self.append(geom, style=sa_style)

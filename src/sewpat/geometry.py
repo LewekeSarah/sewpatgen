@@ -1526,6 +1526,97 @@ def miter_corner(
     return Point(*pt)
 
 
+def round_corner(
+    ga: "Segment | CubicBezier",
+    gb: "Segment | CubicBezier",
+) -> "CubicBezier | Point":
+    """Return a cubic Bézier arc approximation for a round join at a convex corner.
+
+    Constructs a cubic Bézier that approximates the circular arc connecting
+    ``geom_end(ga)`` to ``geom_start(gb)`` around the outside of the corner.
+    The arc centre is the intersection of the outward normals at the two
+    endpoints (i.e. the miter point).  Handle lengths follow the standard
+    **k = (4/3) tan(θ/4)** formula, giving a maximum radial error < 0.027 %
+    of the arc radius for included angles up to 90°.
+
+    Falls back to the bevel midpoint (as a :class:`Point`) for:
+
+    * parallel or anti-parallel tangents (degenerate corner),
+    * reflex (concave) corners where the arc would curve inward,
+    * degenerate geometry (zero chord, zero radius, …).
+
+    Args:
+        ga: The outgoing offset element whose *end* point is the arc start.
+        gb: The incoming offset element whose *start* point is the arc end.
+
+    Returns:
+        A :class:`CubicBezier` arc, or a :class:`Point` bevel midpoint
+        fallback.
+    """
+
+    def _unit_tangent(g: "Segment | CubicBezier", at_end: bool) -> np.ndarray:
+        d = (
+            g.p2.coords - g.p1.coords  # type: ignore[union-attr]
+            if isinstance(g, Segment)
+            else (g.tangent_at_t(1.0) if at_end else g.tangent_at_t(0.0))
+        )
+        norm = float(np.linalg.norm(d))
+        return d / norm if norm > 1e-12 else d
+
+    end_a = geom_end(ga)
+    start_b = geom_start(gb)
+    bevel_mid = Point(*(0.5 * (end_a.coords + start_b.coords)))
+
+    ta = _unit_tangent(ga, at_end=True)
+    tb = _unit_tangent(gb, at_end=False)
+
+    # Signed angle from ta to tb.  Positive → left turn (convex outward arc).
+    cross = float(ta[0] * tb[1] - ta[1] * tb[0])
+    dot_ = float(ta[0] * tb[0] + ta[1] * tb[1])
+    angle = math.atan2(cross, dot_)  # in (-π, π]
+
+    # Only produce an arc for convex corners (positive included angle ≤ π).
+    if angle <= 1e-6 or angle > math.pi - 1e-6:
+        return bevel_mid
+
+    # Arc centre: intersection of the outward normals at end_a and start_b.
+    # For a clockwise-wound offset curve (SVG y-down) the outward normal is
+    # the *right-hand* perpendicular of the tangent: (ta[1], -ta[0]).
+    na = np.array([ta[1], -ta[0]])
+    nb = np.array([tb[1], -tb[0]])
+    centre_pt = _intersect_lines(
+        end_a.coords,
+        na,
+        start_b.coords,
+        nb,
+    )
+    if centre_pt is None:
+        return bevel_mid
+
+    # Verify the arc centre is on the correct (outside) side of the corner.
+    if float(np.dot(centre_pt - end_a.coords, na)) < 0.0:
+        return bevel_mid
+
+    r = float(np.linalg.norm(centre_pt - end_a.coords))
+    if r < 1e-9:
+        return bevel_mid
+
+    # Verify start_b is also on the circle (sanity check).
+    r2 = float(np.linalg.norm(centre_pt - start_b.coords))
+    if abs(r2 - r) > r * 0.01:  # > 1 % discrepancy → degenerate
+        return bevel_mid
+
+    # k = (4/3) * tan(angle/4) → handle length = k * r (tangential, standard formula).
+    k = (4.0 / 3.0) * math.tan(angle / 4.0)
+    handle = k * r
+
+    # Control points along the tangent directions at each endpoint.
+    cp1 = Point(*(end_a.coords + handle * ta))
+    cp2 = Point(*(start_b.coords - handle * tb))
+
+    return CubicBezier(end_a, cp1, cp2, start_b)
+
+
 def buffer_chain(
     geoms: list[Segment | CubicBezier],
     distance: float,
