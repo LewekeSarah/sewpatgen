@@ -441,17 +441,20 @@ class PatternPart:
             ga: Segment | CubicBezier,
             gb: Segment | CubicBezier,
             miter_limit: float = 4.0,
+            sa_distance: float = 0.0,
         ) -> Point:
             """Miter corner for any combination of Segment / CubicBezier.
 
             Extends the end-tangent of *ga* and the start-tangent of *gb* as
             infinite lines and returns their intersection.  Falls back to a
             bevel midpoint when the lines are parallel or the miter extension
-            exceeds *miter_limit* × the gap between the two endpoints.
+            exceeds *miter_limit* × *sa_distance* (the seam-allowance width).
+            Using the actual SA distance as the limit reference avoids false
+            bevel fallbacks at sharp corners where the gap between the two
+            offset endpoints is small.
             """
             end_a = _end(ga)
             start_b = _start(gb)
-            gap = float(np.linalg.norm(end_a.coords - start_b.coords))
 
             ta = _end_tangent(ga)  # direction leaving ga
             tb = _start_tangent(gb)  # direction entering gb
@@ -465,7 +468,15 @@ class PatternPart:
                 return Point(*(0.5 * (end_a.coords + start_b.coords)))
 
             miter_dist = float(np.linalg.norm(pt - end_a.coords))
-            if gap > 1e-9 and miter_dist / gap > miter_limit:
+            # Use the SA distance as the miter-limit reference so that sharp
+            # corners are handled correctly even when the gap between the raw
+            # offset endpoints is very small.
+            ref = (
+                sa_distance
+                if sa_distance > 1e-9
+                else float(np.linalg.norm(end_a.coords - start_b.coords))
+            )
+            if ref > 1e-9 and miter_dist > miter_limit * ref:
                 return Point(*(0.5 * (end_a.coords + start_b.coords)))
 
             return Point(*pt)
@@ -479,7 +490,7 @@ class PatternPart:
                 start_b = _start(gb)
                 # Only apply miter-join when the gap is non-trivial (> 0.01 mm)
                 if end_a.distance_to(start_b) > 0.01:
-                    corner = _miter_corner(ga, gb)
+                    corner = _miter_corner(ga, gb, sa_distance=distance)
                     new_geoms[i] = _with_endpoints(ga, _start(ga), corner)
                     new_geoms[j] = _with_endpoints(gb, corner, _end(gb))
 

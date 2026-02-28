@@ -8,6 +8,8 @@ to SVG files.
 import warnings
 from typing import Any, Callable
 
+import numpy as np
+
 from sewpat.geometry import Point, Segment, Circle, Rect, Triangle, InfoBox, CubicBezier
 
 from sewpat.part import PatternPart, PatternElement, Pattern
@@ -296,20 +298,110 @@ def _make_renderers(
     }
 
 
+def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
+    """Serialize a chain of Segment/CubicBezier geometries into an SVG path string.
+
+    The chain is assumed to be sorted (end of element i == start of element i+1).
+    A closing ``Z`` is appended when the last endpoint equals the first start point
+    within 0.01 mm.
+
+    Args:
+        geoms: Ordered list of Segment or CubicBezier objects forming the chain.
+
+    Returns:
+        SVG path ``d`` attribute string (e.g. ``"M x,y L x,y C ... Z"``).
+    """
+    if not geoms:
+        return ""
+
+    def _start(g: Segment | CubicBezier) -> Point:
+        return g.p1 if isinstance(g, Segment) else g.p0
+
+    def _end(g: Segment | CubicBezier) -> Point:
+        return g.p2 if isinstance(g, Segment) else g.p3
+
+    parts: list[str] = []
+    first_pt = _start(geoms[0])
+    parts.append(f"M {first_pt.x},{first_pt.y}")
+
+    for g in geoms:
+        if isinstance(g, Segment):
+            parts.append(f"L {g.p2.x},{g.p2.y}")
+        else:  # CubicBezier
+            parts.append(f"C {g.p1.x},{g.p1.y} {g.p2.x},{g.p2.y} {g.p3.x},{g.p3.y}")
+
+    last_pt = _end(geoms[-1])
+    if float(np.linalg.norm(last_pt.coords - first_pt.coords)) < 0.01:
+        parts.append("Z")
+
+    return " ".join(parts)
+
+
+def _render_seam_allowance_chain(
+    sa_elements: list["PatternElement"],
+    style_dict: dict[str, Any],
+) -> list[str]:
+    """Render all seam-allowance Segment/CubicBezier elements as one SVG ``<path>``.
+
+    Combining them into a single path ensures that SVG stroke-linejoin is
+    applied at every corner, producing clean mitered/beveled joints without
+    any visible gaps.
+
+    Args:
+        sa_elements: PatternElements with ``is_seam_allowance=True``.
+        style_dict: Style attributes dict from the shared SA StyleOptions.
+
+    Returns:
+        List with one ``<path … />`` SVG string (or empty list if no geometry).
+    """
+    geoms: list[Segment | CubicBezier] = [
+        e.geometry
+        for e in sa_elements
+        if isinstance(e.geometry, (Segment, CubicBezier))
+    ]
+    if not geoms:
+        return []
+
+    path_data = _geoms_to_path_data(geoms)
+    if not path_data:
+        return []
+
+    attrs = _common_stroke_attrs(style_dict, force_fill="none")
+    return [f'<path d="{path_data}" {attrs} />']
+
+
 def _render_elements(
-    elements: list[PatternElement],
+    elements: list["PatternElement"],
     svg_nodes: list[str],
     show_bezier_control_points: bool,
     show_points: bool,
 ) -> None:
-    """Render a list of PatternElements into svg_nodes (in-place)."""
+    """Render a list of PatternElements into svg_nodes (in-place).
+
+    Seam-allowance elements (``is_seam_allowance=True``) are collected and
+    rendered as a single connected SVG ``<path>`` at the end so that
+    ``stroke-linejoin`` is applied at every corner.
+    """
+    sa_elements: list["PatternElement"] = []
+    sa_style_dict: dict[str, Any] | None = None
+
+    renderers = _make_renderers(show_bezier_control_points)
+
     for pat_elem in elements:
         element = pat_elem.geometry
+
+        # Collect SA geometry for grouped rendering — skip individual rendering.
+        if pat_elem.is_seam_allowance and isinstance(element, (Segment, CubicBezier)):
+            sa_elements.append(pat_elem)
+            if sa_style_dict is None:
+                sa_style_dict = pat_elem.style.as_dict()
+            continue
+
         if not show_points and isinstance(element, Point):
             continue
+
         style = pat_elem.style
         effective_name = pat_elem.get_name()
-        renderers = _make_renderers(show_bezier_control_points)
         renderer = renderers.get(type(element))
         if renderer is not None:
             original_name = getattr(element, "name", None)
@@ -330,6 +422,10 @@ def _render_elements(
                 )
             except (AttributeError, TypeError):
                 pass
+
+    # Render all SA elements as one connected path (clean corners via linejoin).
+    if sa_elements and sa_style_dict is not None:
+        svg_nodes.extend(_render_seam_allowance_chain(sa_elements, sa_style_dict))
 
 
 # ---------------------------------------------------------------------------
