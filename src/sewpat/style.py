@@ -64,6 +64,7 @@ class StyleOptions:
         font_weight: str = "normal",
         font_style: str = "normal",
         seam_allowance: float = 0.0,
+        corner_join: str | None = None,
     ) -> None:
         """Initialize style options.
 
@@ -89,6 +90,17 @@ class StyleOptions:
                 :meth:`~sewpat.part.PatternPart.add_seam_allowance` for any
                 outline element that carries this style.  ``0.0`` (the
                 default) means "use the global default distance".
+            corner_join: Per-element corner join override for seam-allowance
+                generation.  One of ``"miter"``, ``"round"``, or ``"bevel"``.
+                When set, overrides the global ``corner_join`` argument of
+                :meth:`~sewpat.part.PatternPart.add_seam_allowance` for
+                **both corners** that adjoin this element.  ``None`` (the
+                default) means "use the part-level default".
+
+        Example::
+
+            # Armhole curve: override both its corners to bevel
+            StyleOptions(corner_join="bevel")
         """
         self.stroke_color = stroke_color
         self.stroke_width = stroke_width
@@ -104,6 +116,7 @@ class StyleOptions:
         self.font_weight = font_weight
         self.font_style = font_style
         self.seam_allowance = seam_allowance
+        self.corner_join: str | None = corner_join
 
     def as_dict(self) -> dict[str, Any]:
         """Convert style options to a dictionary.

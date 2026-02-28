@@ -471,11 +471,12 @@ class PatternPart:
                 ``"miter"`` (default), ``"round"``, or ``"bevel"``.
 
                 * ``"miter"`` — tangent-line intersection clamped by a miter
-                  limit of 4 × *distance*; reflex corners fall back to bevel.
-                * ``"round"`` — circular arc at outside corners (Shapely
-                  join_style=1 for pure-segment paths; bevel midpoint used for
-                  the mixed/Bézier path as a conservative fallback).
-                * ``"bevel"`` — straight cut across the corner.
+                  limit of 4 × *distance*; reflex (concave) corners fall back
+                  to bevel automatically.
+                * ``"round"`` — circular arc at outside corners (pure-segment
+                  paths only via Shapely; bevel midpoint used for mixed/Bézier
+                  paths).
+                * ``"bevel"`` — straight cut across every corner.
 
         Returns:
             List of the newly created :class:`PatternElement` objects.
@@ -523,14 +524,24 @@ class PatternPart:
 
         # ── Pure-segment path: delegate entirely to Shapely ───────────────────
         # Only use the uniform Shapely buffer when there are no Béziers AND no
-        # per-element SA overrides.  If any element carries its own
-        # seam_allowance, fall through to the mixed path which respects them.
+        # per-element SA overrides AND no per-element corner_join overrides.
+        # If any element carries its own seam_allowance or corner_join, fall
+        # through to the mixed path which can honour them per-corner.
         has_per_elem_sa = any(
             getattr(e.style, "seam_allowance", 0.0) > 0
             for e in outline_elements
             if isinstance(e.geometry, (Segment, CubicBezier))
         )
-        if not any(isinstance(g, CubicBezier) for g in geoms) and not has_per_elem_sa:
+        has_per_elem_cj = any(
+            getattr(e.style, "corner_join", None) is not None
+            for e in outline_elements
+            if isinstance(e.geometry, (Segment, CubicBezier))
+        )
+        if (
+            not any(isinstance(g, CubicBezier) for g in geoms)
+            and not has_per_elem_sa
+            and not has_per_elem_cj
+        ):
             chain = build_chain(geoms)
             buf_coords = buffer_chain(
                 chain,
@@ -550,7 +561,7 @@ class PatternPart:
         center = self.centroid
         chain_mixed = build_chain(geoms)
 
-        # Build a lookup: endpoint-pair → per-element SA distance.
+        # Build a lookup: endpoint-pair → per-element SA distance / corner_join.
         # Keying by frozenset of (start, end) coords means a segment that
         # build_chain reversed still matches its original style entry.
         def _ep_key(g: Segment | CubicBezier) -> frozenset:
@@ -565,6 +576,23 @@ class PatternPart:
             if isinstance(e.geometry, (Segment, CubicBezier))
             and getattr(e.style, "seam_allowance", 0.0) > 0
         }
+
+        # Per-element corner_join: one value per element, applies to both its corners.
+        _valid_cj = {"miter", "round", "bevel"}
+        elem_cj: dict[frozenset, str] = {}
+        for e in outline_elements:
+            if not isinstance(e.geometry, (Segment, CubicBezier)):
+                continue
+            val = getattr(e.style, "corner_join", None)
+            if val is None:
+                continue
+            if val not in _valid_cj:
+                raise ValueError(
+                    f"StyleOptions.corner_join must be one of {sorted(_valid_cj)!r}, "
+                    f"got {val!r} on element {e.get_name()!r}"
+                )
+            elem_cj[_ep_key(e.geometry)] = val
+
         offset_geoms = [
             g.offset(elem_sa.get(_ep_key(g), distance), center) for g in chain_mixed
         ]
@@ -573,11 +601,15 @@ class PatternPart:
             j = (i + 1) % n
             ga, gb = offset_geoms[i], offset_geoms[j]
             if geom_end(ga).distance_to(geom_start(gb)) > 0.01:
-                if corner_join == "miter":
+                # Resolution order: element i's override → element j's override
+                # → part-level default.
+                key_a = _ep_key(chain_mixed[i])
+                key_b = _ep_key(chain_mixed[j])
+                effective_cj = elem_cj.get(key_a) or elem_cj.get(key_b) or corner_join
+                if effective_cj == "miter":
                     corner = miter_corner(ga, gb, distance)
                 else:
-                    # "bevel" or "round": for the mixed/Bézier path use the
-                    # bevel midpoint as a conservative, spike-free fallback.
+                    # "bevel" / "round": bevel midpoint for the mixed/Bézier path.
                     # (True round arcs for Bézier paths are improvement F.)
                     _ea = geom_end(ga)
                     _sb = geom_start(gb)

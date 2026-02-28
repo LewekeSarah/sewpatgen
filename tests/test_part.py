@@ -1048,13 +1048,8 @@ class TestSeamAllowanceCornerJoin(unittest.TestCase):
         with self.assertRaises(ValueError):
             part.add_seam_allowance(10.0, corner_join="zigzag")
 
-    def test_round_produces_more_segments_than_bevel(self):
-        """Round join inserts arc segments at corners; bevel does not.
-
-        For a pure-segment square Shapely round join (join_style=1) generates
-        arc approximation points at corners, so it produces more output
-        segments than a bevel join (join_style=3).
-        """
+    def test_round_more_segments_than_bevel_on_square(self):
+        """Round join (Shapely arc) produces more segments than bevel on a square."""
         part_round = self._square_part()
         part_bevel = self._square_part()
         n_round = len(part_round.add_seam_allowance(10.0, corner_join="round"))
@@ -1090,6 +1085,39 @@ class TestSeamAllowanceCornerJoin(unittest.TestCase):
         part.append(Segment(Point(0, 50), Point(0, 0)), is_outline=True)
         sa_elems = part.add_seam_allowance(10.0, corner_join="bevel")
         self.assertTrue(len(sa_elems) > 0)
+
+    def test_per_element_corner_join_override(self):
+        """StyleOptions.corner_join overrides the part-level default for that element.
+
+        A 100×100 square with part-level corner_join='miter'.  The top segment
+        carries StyleOptions(corner_join='bevel'), which applies to both its corners.
+        """
+        part = PatternPart(name="MixedCorners")
+        part.append(
+            Segment(Point(0, 0), Point(100, 0)),
+            style=StyleOptions(corner_join="bevel"),
+            is_outline=True,
+        )
+        part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True)
+        part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
+        part.append(Segment(Point(0, 100), Point(0, 0)), is_outline=True)
+        sa_elems = part.add_seam_allowance(10.0, corner_join="miter")
+        self.assertTrue(len(sa_elems) > 0)
+        self.assertTrue(all(e.is_seam_allowance for e in sa_elems))
+
+    def test_per_element_corner_join_invalid_raises(self):
+        """An invalid StyleOptions.corner_join value raises ValueError."""
+        part = PatternPart(name="Bad")
+        part.append(
+            Segment(Point(0, 0), Point(100, 0)),
+            style=StyleOptions(corner_join="zigzag"),
+            is_outline=True,
+        )
+        part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True)
+        part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
+        part.append(Segment(Point(0, 100), Point(0, 0)), is_outline=True)
+        with self.assertRaises(ValueError):
+            part.add_seam_allowance(10.0)
 
 
 if __name__ == "__main__":
