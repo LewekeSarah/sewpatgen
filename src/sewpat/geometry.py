@@ -1,9 +1,4 @@
-"""
-2D Geometry Module for CAD Operations.
-
-This module provides classes for fundamental 2D geometric primitives such as
-points, lines, segments, rays, and circles for use in CAD applications.
-"""
+"""2D geometry primitives for sewing pattern generation."""
 
 import math
 import numpy as np
@@ -53,36 +48,23 @@ def _intersect_lines(
 
 @dataclass(frozen=True)
 class Point:
-    """A 2D point with x and y coordinates stored as a NumPy array.
-
-    Attributes:
-        coords: NumPy array containing [x, y] coordinates.
-        name: Optional, name of the point.
-    """
+    """A 2D point (frozen dataclass). Coordinates stored as a NumPy array."""
 
     coords: np.ndarray
     name: str | None = None
 
     def __init__(self, x: float, y: float, name: str | None = None):
-        """Initialize a point with x and y coordinates.
-
-        Args:
-            x: The x-coordinate of the point.
-            y: The y-coordinate of the point.
-            name: Optional, name of the point.
-        """
-        # Use object.__setattr__ to set values in a frozen dataclass
         object.__setattr__(self, "coords", np.array([x, y], dtype=float))
         object.__setattr__(self, "name", name)
 
     @property
     def x(self) -> float:
-        """Get the x coordinate."""
+        """x coordinate."""
         return float(self.coords[0])
 
     @property
     def y(self) -> float:
-        """Get the y coordinate."""
+        """y coordinate."""
         return float(self.coords[1])
 
     def __str__(self) -> str:
@@ -99,58 +81,20 @@ class Point:
             return float(np.linalg.norm(self.coords - other))
 
     def translate(self, dx: float, dy: float) -> Point:
-        """Return a new point translated by the given vector.
-
-        Args:
-            dx: Translation distance along the x-axis.
-            dy: Translation distance along the y-axis.
-
-        Returns:
-            Point: A new point translated by the specified vector.
-        """
-        translation = np.array([dx, dy])
-        return Point(*(self.coords + translation))
+        """Return a copy translated by (dx, dy)."""
+        return Point(*(self.coords + np.array([dx, dy])))
 
     def rotate(self, center: Point, angle_rad: float) -> Point:
-        """Rotate the point around a specified center.
-
-        Args:
-            center: The center point of rotation.
-            angle_rad: Angle of rotation in radians (positive is counter-clockwise).
-
-        Returns:
-            Point: A new point representing the rotated position.
-        """
-        # Create rotation matrix
-        cos_a = math.cos(angle_rad)
-        sin_a = math.sin(angle_rad)
-        rotation_matrix = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
-
-        # Translate to origin, rotate, and translate back
-        translated = self.coords - center.coords
-        rotated = rotation_matrix @ translated
-        result = rotated + center.coords
-
-        return Point(*result)
+        """Return a copy rotated by *angle_rad* around *center* (counter-clockwise)."""
+        cos_a, sin_a = math.cos(angle_rad), math.sin(angle_rad)
+        rot = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+        return Point(*(rot @ (self.coords - center.coords) + center.coords))
 
 
 class Segment:
-    """A line segment between two points (from p1 to p2).
-
-    Attributes:
-        p1: Start point of the line segment.
-        p2: End point of the line segment.
-        name: Optional, name of the line segment.
-    """
+    """A line segment from p1 to p2."""
 
     def __init__(self, p1: Point, p2: Point, name: str | None = None):
-        """Initialize a line with two points.
-
-        Args:
-            p1: First endpoint of the line segment.
-            p2: Second endpoint of the line segment.
-            name: Optional, name of the line segment.
-        """
         self.p1 = p1
         self.p2 = p2
         self.name = name
@@ -161,65 +105,48 @@ class Segment:
         else:
             return f"Segment(p1={self.p1}, p2={self.p2})"
 
+    def __repr__(self) -> str:
+        return self.__str__()
+
+    @property
+    def start(self) -> Point:
+        """Start point of the segment (alias for p1)."""
+        return self.p1
+
+    @property
+    def end(self) -> Point:
+        """End point of the segment (alias for p2)."""
+        return self.p2
+
     @property
     def length(self) -> float:
-        """Calculate the length of the line segment.
-
-        Returns:
-            float: The Euclidean length of the line segment.
-        """
+        """Euclidean length."""
         return self.p1.distance_to(self.p2)
 
     @property
     def direction_unnormalized(self) -> np.ndarray:
-        """Return the direction vector of the line segment (not normalized).
-
-        Returns:
-            np.ndarray: The non-normalized direction of the line segment.
-        """
+        """Direction vector (not normalised)."""
         return self.p2.coords - self.p1.coords
 
     @property
     def unit_direction(self) -> np.ndarray:
-        """Return the normalized direction vector of the line segment.
-
-        Returns:
-            np.ndarray: The normalized direction of the line segment.
-        """
-        dir_vec = self.p2.coords - self.p1.coords
-        return dir_vec / np.linalg.norm(dir_vec)
+        """Normalised direction vector."""
+        d = self.p2.coords - self.p1.coords
+        return d / np.linalg.norm(d)
 
     @property
     def unit_normal(self) -> np.ndarray:
-        """Return the normalized direction vector perpendicular to the line segment.
-
-        The perpendicular direction is to the left of the line direction.
-
-        Returns:
-            np.ndarray: The normalized direction perpendicular to the line segment.
-        """
-        dir_vec = self.p2.coords - self.p1.coords
-        dir_vec = dir_vec / np.linalg.norm(dir_vec)
-        return np.array([-dir_vec[1], dir_vec[0]])
+        """Unit normal (left-hand perpendicular of the direction vector)."""
+        d = self.unit_direction
+        return np.array([-d[1], d[0]])
 
     @property
     def midpoint(self) -> Point:
-        """Calculate the midpoint of the line segment.
-
-        Returns:
-            Point: The midpoint of the line segment.
-        """
+        """Midpoint of the segment."""
         return Point(*(0.5 * (self.p1.coords + self.p2.coords)))
 
     def point_at_t(self, t: float) -> Point:
-        """Calculate a point on the line segment at relative parameter t.
-
-        Args:
-            t: Parameter value in [0, 1]. t=0 corresponds to p1, t=1 to p2.
-
-        Returns:
-            Point: Position on the line segment at parameter t.
-        """
+        """Return the point at parameter *t* ∈ [0, 1] (0 = p1, 1 = p2)."""
         assert (0 <= t) and (t <= 1), f"{t = } expected in [0, 1]"
         return Point(*((1.0 - t) * self.p1.coords + t * self.p2.coords))
 
@@ -229,56 +156,61 @@ class Segment:
 
     def point_perpendicular(
         self,
-        distance_to_obj: float,
+        distance: float,
+        arc_length: float | None = None,
+        t: float | None = None,
+        # Deprecated kwargs — kept for backward compatibility
+        distance_to_obj: float | None = None,
         distance_on_obj: float | None = None,
         rel_pos_on_obj: float | None = None,
     ) -> Point:
-        """Calculates a point at a given perpendicular distance from the line segment.
+        """Return a point offset perpendicularly from the segment.
 
-        This method finds a point that is perpendicular to the line segment at a specified
-        position along the line segment, with a given distance from the line segment.
-
-        Args:
-            distance_to_obj: Perpendicular distance from the line segment to the point.
-                Positive values are to the left of the line direction, negative values to the right.
-            distance_on_obj: Optional; absolute distance along the line segment from p1.
-                If provided, rel_pos_on_obj must be None.
-            rel_pos_on_obj: Optional; relative position along the line from 0.0 (at p1) to 1.0 (at p2).
-                If provided, distance_on_obj must be None.
-
-        Returns:
-            Point: A new point at the specified perpendicular distance from the line segment.
+        Positive *distance* = left of travel direction (p1→p2), negative = right.
+        Position is given by *t* (0–1) or *arc_length* (mm from p1); defaults to midpoint.
 
         Raises:
-            ValueError: If both or neither of distance_on_obj and rel_pos_on_obj are provided.
-            AssertionError: If rel_pos_on_obj is provided, but not in range [0, 1].
-
-        Examples:
-            # Point 5 units perpendicular from the midpoint of the line
-            >>> line = Line(Point(0, 0), [10, 0])
-            >>> point = line.point_perpendicular(5, rel_pos_on_obj=0.5)
-            >>> print(point)
-            Point(5, 5)
+            ValueError: If both *arc_length* and *t* are given.
         """
-        if ((distance_on_obj is None) and (rel_pos_on_obj is None)) or (
-            (distance_on_obj is not None) and (rel_pos_on_obj is not None)
-        ):
-            raise ValueError(
-                "exactly one of distance_on_obj and rel_pos_on_obj has to be set"
+        import warnings as _warnings
+
+        # ── Backward-compat shim ─────────────────────────────────────────────
+        if distance_to_obj is not None:
+            _warnings.warn(
+                "The 'distance_to_obj' keyword argument is deprecated. "
+                "Use the positional 'distance' argument instead.",
+                DeprecationWarning,
+                stacklevel=2,
             )
-
-        if distance_on_obj:
-            dir = self.unit_direction
-            base = self.p1.coords + distance_on_obj * dir
+            distance = distance_to_obj
+        if distance_on_obj is not None:
+            _warnings.warn(
+                "The 'distance_on_obj' keyword argument is deprecated. "
+                "Use 'arc_length' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            arc_length = distance_on_obj
+        if rel_pos_on_obj is not None:
+            _warnings.warn(
+                "The 'rel_pos_on_obj' keyword argument is deprecated. "
+                "Use 't' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            t = rel_pos_on_obj
+        # ── Resolve position ─────────────────────────────────────────────────
+        if arc_length is not None and t is not None:
+            raise ValueError("Specify at most one of 'arc_length' and 't'.")
+        if arc_length is not None:
+            base = self.p1.coords + arc_length * self.unit_direction
+        elif t is not None:
+            assert 0.0 <= t <= 1.0, f"t = {t} must be in [0, 1]"
+            base = (1.0 - t) * self.p1.coords + t * self.p2.coords
         else:
-            assert (0 <= rel_pos_on_obj) and (
-                rel_pos_on_obj <= 1.0
-            ), f"rel_pos_on_obj = {rel_pos_on_obj} required in [0, 1]"
-            base = (
-                1.0 - rel_pos_on_obj
-            ) * self.p1.coords + rel_pos_on_obj * self.p2.coords
+            base = 0.5 * (self.p1.coords + self.p2.coords)
 
-        return Point(*(base + self.unit_normal * distance_to_obj))
+        return Point(*(base + self.unit_normal * distance))
 
     def project_point(self, point: Point) -> Point:
         """Return the orthogonal projection of *point* onto this segment's line.
@@ -298,50 +230,19 @@ class Segment:
         return Point(*(p1 + t * d))
 
     def contains_point(self, point: Point, tolerance: float = 1e-9) -> bool:
-        """Check if a point lies on the line segment.
-
-        Uses Shapely's GEOS backend (``LineString.distance()``) for robust
-        floating-point behaviour instead of the triangle-inequality check.
-
-        Args:
-            point: The point to check.
-            tolerance: The maximum distance (mm) allowed for the point to be
-                considered on the segment. Defaults to 1e-9 mm.
-
-        Returns:
-            bool: True if the point lies on the line segment within tolerance,
-                False otherwise.
-        """
+        """Return True if *point* lies on the segment within *tolerance* mm (uses Shapely GEOS)."""
         ls = _sg.LineString([(self.p1.x, self.p1.y), (self.p2.x, self.p2.y)])
         return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
     def point_at_length(self, arc_length: float) -> Point:
-        """Return the point at a given arc length from p1 along the segment.
-
-        Mirrors ``CubicBezier.point_at_length()`` for API consistency.
-
-        Args:
-            arc_length: Distance from p1 along the segment (mm).
-
-        Returns:
-            Point on the segment at the given distance from p1.
-
-        Raises:
-            ValueError: If arc_length is negative or exceeds the segment length.
-        """
+        """Return the point at *arc_length* mm from p1. Raises ValueError if out of range."""
         total = self.length
         if arc_length < 0 or arc_length > total + 1e-9:
             raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
         return self.point_at_rel_dist(arc_length / total)
 
     def bounding_box(self) -> tuple[Point, Point]:
-        """Return the axis-aligned bounding box of the segment.
-
-        Mirrors ``CubicBezier.bounding_box()`` for API consistency.
-
-        Returns:
-            Tuple of (min_point, max_point).
-        """
+        """Return the axis-aligned bounding box as ``(min_point, max_point)``."""
         min_x = min(self.p1.x, self.p2.x)
         min_y = min(self.p1.y, self.p2.y)
         max_x = max(self.p1.x, self.p2.x)
@@ -349,22 +250,10 @@ class Segment:
         return Point(min_x, min_y), Point(max_x, max_y)
 
     def offset(self, distance: float, center: Point | None = None) -> Segment:
-        """Return a new Segment offset perpendicularly by *distance*.
+        """Return a new Segment offset perpendicularly by *distance* mm.
 
-        The offset direction is chosen so that the result moves *away* from
-        *center* (i.e. outward from the interior of the pattern piece).  If
-        *center* is ``None`` the sign of *distance* controls the direction
-        directly: positive = left of the travel direction, negative = right.
-
-        Args:
-            distance: Perpendicular offset in mm. When *center* is provided the
-                absolute value is used and the sign is derived from *center*.
-            center: Interior reference point (e.g. ``PatternPart.centroid``).
-                When given the offset is forced *away* from this point.
-
-        Returns:
-            A new ``Segment`` with both endpoints shifted by *distance* along
-            the outward unit normal.
+        Direction is away from *center* (outward) when given; otherwise the
+        sign of *distance* controls the direction (positive = left of travel).
         """
         normal = self.unit_normal  # points left of travel direction
         if center is not None:
@@ -427,47 +316,21 @@ class Ray:
 
     @property
     def unit_direction(self) -> np.ndarray:
-        """Return the normalized direction vector of the line.
-
-        Returns:
-            np.ndarray: The normalized direction of the line.
-        """
+        """Normalised direction vector."""
         return self.direction
 
     @property
     def unit_normal(self) -> np.ndarray:
-        """Return the normalized direction vector perpendicular to the ray.
-
-        The perpendicular direction is to the left of the ray direction.
-
-        Returns:
-            np.ndarray: The normalized direction perpendicular to the ray.
-        """
+        """Unit normal (left-hand perpendicular of the direction vector)."""
         dir_vec = self.direction
         return np.array([-dir_vec[1], dir_vec[0]])
 
     def point_at_distance(self, distance: float) -> Point:
-        """Return a point on the ray at the given distance from the origin.
-
-        Args:
-            distance: The distance from the origin along the ray direction.
-
-        Returns:
-            Point: A point on the ray at the specified distance from the origin.
-        """
-        point_coords = self.origin.coords + self.direction * distance
-        return Point(*point_coords)
+        """Return the point at *distance* mm along the ray from the origin."""
+        return Point(*(self.origin.coords + self.direction * distance))
 
     def contains_point(self, point: Point, tolerance: float = 1e-14) -> bool:
-        """Check if a point lies on the ray.
-
-        Args:
-            point: The point to check.
-            tolerance: The maximum angular deviation allowed.
-
-        Returns:
-            bool: True if the point lies on the ray within tolerance, False otherwise.
-        """
+        """Return True if *point* lies on the ray within *tolerance*."""
         # Vector from origin to point
         v = point.coords - self.origin.coords
 
@@ -487,25 +350,13 @@ class Ray:
         # and point is in the right direction
         return abs(dot_product - 1.0) < tolerance
 
-    def point_perpendicular(
-        self, distance_to_obj: float, distance_on_obj: float
-    ) -> Point:
-        """Calculates a point at a given perpendicular distance from the ray.
+    def point_perpendicular(self, distance: float, arc_length: float) -> Point:
+        """Return a point offset perpendicularly by *distance* at *arc_length* along the ray.
 
-        This method finds a point that is perpendicular to the ray at a specified position
-        along the ray, with a given distance from the ray.
-
-        Args:
-            distance_to_obj: Perpendicular distance from the line to the point.
-                Positive values are to the left of the line direction, negative values to the right.
-            distance_on_obj: Absolute distance along the ray from origin.
-
-        Returns:
-            Point: A new point at the specified perpendicular distance from the ray.
+        Positive *distance* = left of direction, negative = right.
         """
-        dir = self.direction
-        base = self.origin.coords + distance_on_obj * dir
-        return Point(*(base + self.unit_normal * distance_to_obj))
+        base = self.origin.coords + arc_length * self.direction
+        return Point(*(base + self.unit_normal * distance))
 
 
 class Line:
@@ -555,47 +406,22 @@ class Line:
 
     @property
     def unit_direction(self) -> np.ndarray:
-        """Return the normalized direction vector of the line.
-
-        Returns:
-            np.ndarray: The normalized direction of the line.
-        """
+        """Normalized direction vector of the line."""
         return self.direction
 
     @property
     def unit_normal(self) -> np.ndarray:
-        """Return the normalized direction vector perpendicular to the line.
-
-        The perpendicular direction is to the left of the line direction.
-
-        Returns:
-            np.ndarray: The normalized direction perpendicular to the line.
-        """
+        """Unit normal (left-hand perpendicular of the direction vector)."""
         dir_vec = self.direction
         return np.array([-dir_vec[1], dir_vec[0]])
 
     def point_at_distance(self, distance: float) -> Point:
-        """Return a point on the line at the given distance from the base point.
-
-        Args:
-            distance: The distance from the base point along the line direction.
-
-        Returns:
-            Point: A point on the line at the specified distance from the base point.
-        """
+        """Return the point at *distance* mm along the line from the base point."""
         point_coords = self.point.coords + self.direction * distance
         return Point(*point_coords)
 
     def contains_point(self, point: Point, tolerance: float = 1e-14) -> bool:
-        """Check if a point lies on the line.
-
-        Args:
-            point: The point to check.
-            tolerance: The maximum angular deviation allowed.
-
-        Returns:
-            bool: True if the point lies on the line within tolerance, False otherwise.
-        """
+        """Return True if *point* lies on the line within *tolerance*."""
         # Vector from origin to point
         v = point.coords - self.point.coords
 
@@ -613,25 +439,13 @@ class Line:
         # Check if vectors are parallel (dot product near 1)
         return abs(abs(dot_product) - 1.0) < tolerance
 
-    def point_perpendicular(
-        self, distance_to_obj: float, distance_on_obj: float
-    ) -> Point:
-        """Calculates a point at a given perpendicular distance from the line.
+    def point_perpendicular(self, distance: float, arc_length: float) -> Point:
+        """Return a point offset perpendicularly by *distance* at *arc_length* along the line.
 
-        This method finds a point that is perpendicular to the line at a specified position
-        along the line, with a given distance from the line.
-
-        Args:
-            distance_to_obj: Perpendicular distance from the line to the point.
-                Positive values are to the left of the line direction, negative values to the right.
-            distance_on_obj: Absolute distance along the line from base point.
-
-        Returns:
-            Point: A new point at the specified perpendicular distance from the line.
+        Positive *distance* = left of direction, negative = right.
         """
-        dir = self.direction
-        base = self.point.coords + distance_on_obj * dir
-        return Point(*(base + self.unit_normal * distance_to_obj))
+        base = self.point.coords + arc_length * self.direction
+        return Point(*(base + self.unit_normal * distance))
 
 
 class Rect:
@@ -656,6 +470,14 @@ class Rect:
         self.height = height
         self.name = name
 
+    def __str__(self) -> str:
+        if self.name:
+            return f"Rect(name={self.name}, origin={self.origin}, width={self.width:.6g}, height={self.height:.6g})"
+        return f"Rect(origin={self.origin}, width={self.width:.6g}, height={self.height:.6g})"
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class Triangle:
     """A triangle defined by three points.
@@ -675,6 +497,16 @@ class Triangle:
         self.p2 = p2
         self.p3 = p3
         self.name = name
+
+    def __str__(self) -> str:
+        if self.name:
+            return (
+                f"Triangle(name={self.name}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
+            )
+        return f"Triangle(p1={self.p1}, p2={self.p2}, p3={self.p3})"
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class InfoBox:
@@ -699,6 +531,12 @@ class InfoBox:
         self.header = header
         self.notes: list[str] = notes if notes is not None else []
         self.name: str | None = None
+
+    def __str__(self) -> str:
+        return f"InfoBox(header={self.header!r}, position={self.position})"
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class Circle:
@@ -736,76 +574,38 @@ class Circle:
 
     @property
     def area(self) -> float:
-        """Calculate the area of the circle.
-
-        Returns:
-            float: The area of the circle.
-        """
+        """Area of the circle."""
         return math.pi * self.radius * self.radius
 
     @property
     def diameter(self) -> float:
-        """Calculate the diameter of the circle.
-
-        Returns:
-            float: The diameter of the circle.
-        """
+        """Diameter of the circle."""
         return 2 * self.radius
 
     @property
     def circumference(self) -> float:
-        """Calculate the circumference of the circle.
-
-        Returns:
-            float: The circumference of the circle.
-        """
+        """Circumference of the circle."""
         return 2 * math.pi * self.radius
 
     def contains_point(self, point: Point, tolerance: float = 1e-14) -> bool:
-        """Check if a point lies on the circle boundary.
-
-        Args:
-            point: The point to check.
-            tolerance: Maximum distance from the circle boundary allowed.
-
-        Returns:
-            bool: True if the point is on the circle boundary within tolerance, False otherwise.
-        """
-        distance = self.center.distance_to(point)
-        return abs(distance - self.radius) < tolerance
+        """Return True if *point* lies on the circle boundary within *tolerance*."""
+        return abs(self.center.distance_to(point) - self.radius) < tolerance
 
     def contains_point_inside(
         self, point: Point, include_boundary: bool = True
     ) -> bool:
-        """Check if a point is inside the circle.
-
-        Args:
-            point: The point to check.
-            include_boundary: If True, points on the boundary are considered inside.
-
-        Returns:
-            bool: True if the point is inside the circle (and on boundary if include_boundary),
-                 False otherwise.
-        """
-        distance = self.center.distance_to(point)
-        if include_boundary:
-            return distance <= self.radius
-        return distance < self.radius
+        """Return True if *point* is inside (or on) the circle."""
+        d = self.center.distance_to(point)
+        return d <= self.radius if include_boundary else d < self.radius
 
     def point_at_angle(self, angle_rad: float) -> Point:
-        """Get a point on the circle at the given angle.
-
-        Args:
-            angle_rad: Angle in radians. 0 is along the positive x-axis,
-                      increasing counterclockwise.
-
-        Returns:
-            Point: A point on the circle at the specified angle.
-        """
-        point_coords = self.center.coords + self.radius * np.array(
-            [math.cos(angle_rad), math.sin(angle_rad)]
+        """Return the point on the circle at the given angle (radians, CCW from +x)."""
+        return Point(
+            *(
+                self.center.coords
+                + self.radius * np.array([math.cos(angle_rad), math.sin(angle_rad)])
+            )
         )
-        return Point(*point_coords)
 
     def _intersect_with_circle(self, other: Circle) -> list[Point]:
         """Find intersection points with another circle (exact analytical solution)."""
@@ -889,6 +689,19 @@ class CubicBezier:
     def __str__(self) -> str:
         return f"CubicBezier(name={self.name}, p0={self.p0}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
 
+    def __repr__(self) -> str:
+        return self.__str__()
+
+    @property
+    def start(self) -> Point:
+        """Start point of the curve (alias for p0)."""
+        return self.p0
+
+    @property
+    def end(self) -> Point:
+        """End point of the curve (alias for p3)."""
+        return self.p3
+
     def point_at_t(self, t: float) -> Point:
         """Evaluate the Bezier curve at parameter t.
 
@@ -930,90 +743,31 @@ class CubicBezier:
             complex(self.p3.x, self.p3.y),
         )
 
+    @property
     def length(self) -> float:
-        """Compute the exact arc length of the Bézier curve.
-
-        Delegates to ``svgpathtools``, which uses Gauss-Legendre quadrature
-        for a numerically exact result – unlike a polyline approximation.
-
-        Returns:
-            Arc length of the curve in the same units as the control points.
-        """
+        """Exact arc length via Gauss-Legendre quadrature (delegated to svgpathtools)."""
         return self._svg().length()
 
     def tangent_at_t(self, t: float) -> np.ndarray:
-        """Compute the tangent vector at parameter t.
-
-        Delegates to ``svgpathtools.derivative()``, which evaluates B'(t)
-        analytically.
-
-        Args:
-            t: Parameter value, typically between 0 and 1.
-
-        Returns:
-            Tangent vector as a numpy array (not normalised).
-        """
+        """Tangent vector at *t* (not normalised), via svgpathtools B'(t)."""
         d = self._svg().derivative(t)
         return np.array([d.real, d.imag])
 
     def normal_at_t(self, t: float) -> np.ndarray:
-        """Compute the unit normal vector at parameter t.
-
-        The normal points 90° counter-clockwise from the tangent direction
-        (i.e. to the *left* of the travel direction), consistent with the
-        convention used by ``Segment.unit_normal``.
-
-        This is the correct direction vector for offsetting a point on the
-        curve by a seam allowance.
-
-        Args:
-            t: Parameter value, typically between 0 and 1.
-
-        Returns:
-            Unit normal vector as a numpy array.
-        """
+        """Unit normal at *t*: 90° counter-clockwise from the tangent (left of travel)."""
         n = self._svg().normal(t)
         return np.array([n.real, n.imag])
 
     def point_at_length(self, arc_length: float) -> Point:
-        """Return the point on the curve at a given arc length from the start.
-
-        Uses ``svgpathtools.ilength()`` (inverse arc-length) which solves for
-        the parameter *t* corresponding to the requested arc length via
-        Gauss-Legendre quadrature – the same method used by ``length()``.
-
-        Typical use: place a notch exactly 3 cm from the start of a curved
-        seam edge.
-
-        Args:
-            arc_length: Distance along the curve from p0, in the same units
-                as the control points (mm).
-
-        Returns:
-            Point on the curve at the given arc length.
-
-        Raises:
-            ValueError: If arc_length is negative or exceeds the curve length.
-        """
-        total = self.length()
+        """Return the point at *arc_length* mm from p0 (uses svgpathtools.ilength). Raises ValueError if out of range."""
+        total = self.length
         if arc_length < 0 or arc_length > total + 1e-9:
             raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
         t = self._svg().ilength(arc_length)
         return self.point_at_t(t)
 
     def split(self, t: float) -> tuple["CubicBezier", "CubicBezier"]:
-        """Split the curve at parameter t into two cubic Bézier curves.
-
-        Delegates to ``svgpathtools.split()``, which uses the de Casteljau
-        algorithm for numerically stable subdivision.
-
-        Args:
-            t: Parameter value at which to split (0 < t < 1).
-
-        Returns:
-            Tuple of (left, right) CubicBezier curves, where *left* covers
-            the original curve from 0 to t and *right* from t to 1.
-        """
+        """Split at *t* into (left, right) using de Casteljau (delegated to svgpathtools)."""
         left, right = self._svg().split(t)
         return (
             CubicBezier(
@@ -1031,17 +785,7 @@ class CubicBezier:
         )
 
     def bounding_box(self) -> tuple[Point, Point]:
-        """Compute the axis-aligned bounding box of the Bezier curve.
-
-        Only the start and end points (p0, p3) lie on the curve itself.
-        The control points p1 and p2 act as "magnets" and may lie well
-        outside the actual curve, so they must NOT be used as bounding-box
-        seeds. Instead the true extrema are found analytically by solving
-        B'(t) = 0 and evaluating the curve at the resulting t values.
-
-        Returns:
-            Tuple of (min_point, max_point) defining the bounding box.
-        """
+        """Compute the axis-aligned bounding box by finding B'(t)=0 extrema (not the control-point hull)."""
         # Seed with the two curve endpoints only (they are always on the curve)
         x_coords = [self.p0.x, self.p3.x]
         y_coords = [self.p0.y, self.p3.y]
@@ -1078,51 +822,17 @@ class CubicBezier:
 
         return Point(min_x, min_y), Point(max_x, max_y)
 
-    def point_perpendicular(self, distance_to_obj: float, t: float) -> Point:
-        """Return a point offset perpendicularly from the curve at parameter t.
+    def point_perpendicular(self, distance: float, t: float) -> Point:
+        """Return a point offset by *distance* mm in the normal direction at *t*.
 
-        Mirrors ``Segment.point_perpendicular()`` / ``Ray.point_perpendicular()``
-        / ``Line.point_perpendicular()`` for API consistency, adapted to the
-        curve case where the normal direction varies along the curve.
-
-        Positive *distance_to_obj* is to the left of the travel direction (same
-        sign convention as ``unit_normal`` on linear objects).
-
-        Typical use: offset a point on a seam line by the seam allowance.
-
-        Args:
-            distance_to_obj: Perpendicular offset in mm. Positive = left of
-                direction, negative = right of direction.
-            t: Parameter value on the curve (0 = p0, 1 = p3).
-
-        Returns:
-            Point offset by *distance_to_obj* in the normal direction at *t*.
+        Positive *distance* = left of travel direction, negative = right.
         """
         pt = self.point_at_t(t)
         nor = self.normal_at_t(t)
-        return Point(pt.x + distance_to_obj * nor[0], pt.y + distance_to_obj * nor[1])
+        return Point(pt.x + distance * nor[0], pt.y + distance * nor[1])
 
     def contains_point(self, point: Point, tolerance: float = 0.01) -> bool:
-        """Check whether a point lies on the curve within a given tolerance.
-
-        Mirrors ``Segment.contains_point()`` / ``Ray.contains_point()`` /
-        ``Line.contains_point()`` for API consistency.
-
-        Uses Shapely's GEOS ``LineString.distance()`` on a 64-segment
-        discretisation of the curve — a single C-level call that is
-        significantly faster than the previous 200-point Python scan with
-        binary search, while being accurate to well under 0.01 mm for typical
-        garment curves.
-
-        Args:
-            point: The point to test.
-            tolerance: Maximum Euclidean distance (mm) allowed for the point
-                to be considered on the curve. Defaults to 0.01 mm.
-
-        Returns:
-            True if the closest point on the curve is within *tolerance* of
-            *point*, False otherwise.
-        """
+        """Return True if *point* is within *tolerance* mm of the curve (Shapely GEOS on 64-segment discretisation)."""
         ls = _bezier_shapely(self)  # 64-segment discretisation
         return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
@@ -1132,39 +842,13 @@ class CubicBezier:
         center: Point | None = None,
         hausdorff_limit: float = 1.5,
     ) -> CubicBezier:
-        """Return an approximate offset (parallel) curve shifted by *distance*.
+        """Return an approximate offset curve using the hodograph approximation.
 
-        The offset is constructed by independently moving each of the four
-        control points in the outward normal direction at its corresponding
-        curve parameter (t = 0, 1/3, 2/3, 1 for p0 … p3).  This is the
-        *hodograph approximation* and is accurate to sub-millimetre precision
-        for seam allowances ≤ 2 cm on typical garment curves.
-
-        **Quality check:** After computing the approximation, the Hausdorff
-        distance between the original and offset polylines (64 segments each)
-        is measured via GEOS.  If it exceeds ``hausdorff_limit × |distance|``
-        the curve is split at t = 0.5, each half is offset independently, and
-        the two results are re-joined into a single ``CubicBezier``.  This
-        makes the method self-correcting for tight curvatures such as armscye
-        or crotch curves without any manual intervention.
-
-        The offset direction is chosen so that the result moves *away* from
-        *center* (outward from the pattern piece interior).  If *center* is
-        ``None`` the sign of *distance* controls the direction directly:
-        positive = left of travel direction, negative = right.
-
-        Args:
-            distance: Offset in mm.  When *center* is provided the absolute
-                value is used and direction is derived from *center*.
-            center: Interior reference point (e.g. ``PatternPart.centroid``).
-            hausdorff_limit: Multiplier applied to ``|distance|`` to form the
-                error threshold.  Approximations whose Hausdorff distance
-                exceeds ``hausdorff_limit × |distance|`` trigger the split
-                fallback.  Defaults to ``1.5``.  Set to ``math.inf`` to
-                disable the quality check entirely.
-
-        Returns:
-            A new ``CubicBezier`` approximating the offset curve.
+        Direction is away from *center* when given; otherwise sign of *distance*
+        controls direction (positive = left of travel).  If the Hausdorff error
+        against the true parallel offset exceeds ``hausdorff_limit × |distance|``,
+        the curve is split at t=0.5 and the halves are re-joined automatically.
+        Set ``hausdorff_limit=math.inf`` to disable the quality check.
         """
         # Resolve signed scalar offset distance
         if center is not None:
@@ -1219,36 +903,10 @@ class CubicBezier:
         return approx
 
     def offset_error(self, distance: float, center: Point | None = None) -> float:
-        """Return the Hausdorff distance between the hodograph approximation and
-        the true parallel offset of this curve.
+        """Return the Hausdorff distance (mm) between the hodograph approximation and the true parallel offset.
 
-        This is a quality metric for :meth:`offset`: it measures how far the
-        hodograph approximation deviates from the true parallel curve.  A value
-        well below *distance* indicates a reliable approximation; a value above
-        ``1.5 × distance`` means the curve is too tightly curved for the
-        approximation to be trustworthy.
-
-        The *true* parallel offset is sampled point-by-point (64 perpendicular
-        steps along the curve) and compared to the hodograph approximation via
-        GEOS ``hausdorff_distance()``.
-
-        Args:
-            distance: The intended offset distance in mm.
-            center: Interior reference point, forwarded to :meth:`offset` so
-                that the direction is determined consistently.
-
-        Returns:
-            Hausdorff distance in mm between the true parallel offset and the
-            hodograph approximation.
-
-        Example::
-
-            err = curve.offset_error(10.0)
-            if err > 1.5 * 10.0:
-                left, right = curve.split(0.5)
-                sa = [left.offset(10.0), right.offset(10.0)]
-            else:
-                sa = [curve.offset(10.0)]
+        Values well below *distance* indicate a reliable approximation;
+        values above ``1.5 × distance`` suggest the curve is too tightly curved.
         """
         if center is not None:
             mid = self.point_at_t(0.5)
@@ -1270,38 +928,11 @@ class CubicBezier:
         _depth: int = 0,
         _max_depth: int = 8,
     ) -> "list[CubicBezier]":
-        """Return the offset curve as a list of cubic Béziers, recursively refined.
+        """Return the offset curve as a list of Béziers, recursively split until Hausdorff error < *eps* mm.
 
-        Unlike :meth:`offset` — which always returns a single ``CubicBezier``
-        and falls back to a one-time split — this method keeps splitting each
-        sub-segment until the Hausdorff distance between the hodograph
-        approximation and the true parallel offset is below *eps*.  This
-        produces accurate results even for tight curvatures (small radii) with
-        large seam allowances.
-
-        The algorithm mirrors Freesewing's adaptive offset strategy:
-
-        1. Compute the hodograph approximation for this segment.
-        2. Measure the Hausdorff distance against the true parallel offset.
-        3. If the error is within *eps*, return ``[approximation]``.
-        4. Otherwise split at ``t = 0.5``, recurse on each half, and concatenate.
-
-        A hard depth limit of *_max_depth* (default 8, i.e. up to 256 segments)
-        prevents infinite recursion on degenerate curves.
-
-        Args:
-            distance: Offset in mm.  When *center* is provided the absolute
-                value is used and direction is derived from *center*.
-            center: Interior reference point (e.g. ``PatternPart.centroid``).
-                Forwarded unchanged to each recursive call.
-            eps: Maximum allowed Hausdorff error in mm.  Defaults to 0.1 mm
-                (sub-print-resolution for 300 dpi).
-            _depth: Internal recursion depth counter — do not set manually.
-            _max_depth: Hard recursion cap.  Defaults to 8.
-
-        Returns:
-            List of ``CubicBezier`` objects whose concatenation approximates the
-            parallel offset curve with at most *eps* mm Hausdorff error per segment.
+        Keeps splitting at t=0.5 until every sub-segment is within *eps* of the
+        true parallel offset.  Hard depth cap of *_max_depth* (default 8 = up to
+        256 segments) prevents infinite recursion on degenerate curves.
         """
         # Resolve signed distance (done once at top level; sub-calls pass
         # center=None with the already-signed distance to avoid re-deriving it).
@@ -1379,15 +1010,21 @@ def _bezier_shapely(b: CubicBezier, n: int = 64) -> _sg.LineString:
     )
 
 
-def _true_offset_ls(b: CubicBezier, d: float, n: int = 64) -> _sg.LineString:
-    """Return the true parallel offset of *b* at signed distance *d* as a
-    Shapely LineString.
+def geom_to_shapely(g: Segment | CubicBezier) -> _sg.LineString:
+    """Convert a Segment or CubicBezier to a Shapely LineString.
 
-    Each of the *n+1* sample points is shifted perpendicularly by *d* along
-    the curve normal at that parameter value.  This is the ground-truth
-    reference used by :meth:`CubicBezier.offset_error` and the Hausdorff
-    quality check in :meth:`CubicBezier.offset`.
+    Segments map to a 2-point LineString; CubicBeziers are discretised into
+    64 segments (sufficient for sub-0.1 mm accuracy on typical garment curves).
+
+    Useful for nearest-point queries via ``shapely.ops.nearest_points()``.
     """
+    if isinstance(g, Segment):
+        return _sg.LineString([(g.p1.x, g.p1.y), (g.p2.x, g.p2.y)])
+    return _bezier_shapely(g)
+
+
+def _true_offset_ls(b: CubicBezier, d: float, n: int = 64) -> _sg.LineString:
+    """Sample the true parallel offset of *b* at signed distance *d* into a Shapely LineString."""
     pts = []
     for i in range(n + 1):
         t = i / n
@@ -1497,12 +1134,12 @@ _CHAIN_SNAP = 0.5  # mm — endpoint-matching tolerance
 
 def geom_start(g: Segment | CubicBezier) -> Point:
     """Return the start point of a Segment or CubicBezier."""
-    return g.p1 if isinstance(g, Segment) else g.p0
+    return g.start
 
 
 def geom_end(g: Segment | CubicBezier) -> Point:
     """Return the end point of a Segment or CubicBezier."""
-    return g.p2 if isinstance(g, Segment) else g.p3
+    return g.end
 
 
 def with_endpoints(
@@ -1568,7 +1205,7 @@ def miter_corner(
 
     def _unit_tangent(g: Segment | CubicBezier, at_end: bool) -> np.ndarray:
         d = (
-            g.p2.coords - g.p1.coords
+            g.end.coords - g.start.coords
             if isinstance(g, Segment)
             else (g.tangent_at_t(1.0) if at_end else g.tangent_at_t(0.0))
         )
@@ -1637,7 +1274,7 @@ def round_corner(
 
     def _unit_tangent(g: "Segment | CubicBezier", at_end: bool) -> np.ndarray:
         d = (
-            g.p2.coords - g.p1.coords  # type: ignore[union-attr]
+            g.end.coords - g.start.coords  # type: ignore[union-attr]
             if isinstance(g, Segment)
             else (g.tangent_at_t(1.0) if at_end else g.tangent_at_t(0.0))
         )
@@ -1719,7 +1356,7 @@ def buffer_chain(
     Returns:
         List of (x, y) coordinate tuples forming the buffered exterior ring.
     """
-    ring_coords = [(g.p1.x, g.p1.y) for g in geoms]  # type: ignore[union-attr]
+    ring_coords = [(geom_start(g).x, geom_start(g).y) for g in geoms]
     poly = _sg.Polygon(ring_coords)
     if not poly.is_valid:
         poly = poly.buffer(0)
@@ -1732,60 +1369,41 @@ def buffer_chain(
 
 def outline_polygon(
     geoms: list[Segment | CubicBezier],
-    bezier_samples: int = 32,
+    bezier_samples: int = 64,
 ) -> _sg.Polygon | None:
     """Build a Shapely Polygon from a list of Segments and CubicBeziers.
 
-    Segments contribute their start point; CubicBeziers are discretised into
-    *bezier_samples* evenly spaced points.  Returns ``None`` if fewer than 3
-    vertices are produced.
+    The geometries are first sorted into a connected ring via :func:`build_chain`
+    (which also reverses individual elements as needed).  Segments contribute
+    their start point; CubicBeziers are discretised into *bezier_samples* evenly
+    spaced points (default 64 for sub-mm accuracy on typical garment curves).
+    The endpoint of the last geometry is appended to close the ring precisely.
+    Returns ``None`` if fewer than 3 vertices are produced.
     """
+    if not geoms:
+        return None
+    ordered = build_chain(geoms)
     coords: list[tuple[float, float]] = []
-    for g in geoms:
+    for g in ordered:
         if isinstance(g, Segment):
-            coords.append((g.p1.x, g.p1.y))
+            coords.append((g.start.x, g.start.y))
         else:
             for i in range(bezier_samples):
                 pt = g.point_at_t(i / bezier_samples)
                 coords.append((pt.x, pt.y))
+    # Append the endpoint of the last geometry so the ring closes accurately.
+    ep = geom_end(ordered[-1])
+    coords.append((ep.x, ep.y))
     if len(coords) < 3:
         return None
     return _sg.Polygon(coords)
 
 
 def seam_length(geoms: list[Segment | CubicBezier]) -> float:
-    """Return the total arc length of a list of Segments and/or CubicBeziers.
-
-    Each element contributes its exact arc length:
-
-    * ``Segment`` — Euclidean distance between its two endpoints.
-    * ``CubicBezier`` — Gauss-Legendre quadrature via ``svgpathtools``
-      (the same method used internally by ``CubicBezier.length()``).
-
-    Typical use: compare a seam edge on the front piece against the
-    matching seam edge on the back piece before finalising a pattern.
-
-    Args:
-        geoms: Any mix of ``Segment`` and ``CubicBezier`` objects that
-            together form one seam edge.  The elements do not need to be
-            connected or sorted.
-
-    Returns:
-        Total arc length in mm.
-
-    Example::
-
-        front_inseam = [front_inner_leg]          # CubicBezier
-        back_inseam  = [back_inner_seam]          # CubicBezier
-        diff = seam_length(front_inseam) - seam_length(back_inseam)
-        print(f"inseam difference: {diff:.1f} mm")
-    """
+    """Return the total arc length in mm of a list of Segments and/or CubicBeziers."""
     total = 0.0
     for g in geoms:
-        if isinstance(g, Segment):
-            total += g.length
-        else:
-            total += g.length()
+        total += g.length
     return total
 
 
@@ -1795,25 +1413,10 @@ def offset_adaptive(
     center: "Point | None" = None,
     eps: float = 0.1,
 ) -> "list[Segment | CubicBezier]":
-    """Offset *geom* by *distance*, splitting recursively until error < *eps*.
+    """Offset *geom* outward by *distance* mm, splitting until Hausdorff error < *eps*.
 
-    For a :class:`Segment` this is equivalent to a single :meth:`Segment.offset`
-    call (segments have no curvature, so no splitting is needed).
-
-    For a :class:`CubicBezier` this delegates to
-    :meth:`CubicBezier.offset_adaptive`, which recursively splits at ``t=0.5``
-    until every sub-segment's Hausdorff error against the true parallel offset
-    is below *eps* mm.
-
-    Args:
-        geom: The geometry to offset.
-        distance: Perpendicular offset distance in mm.
-        center: Interior reference point for direction resolution.
-        eps: Maximum Hausdorff error per sub-segment in mm. Defaults to 0.1 mm.
-
-    Returns:
-        List of offset geometry objects (one ``Segment``, or one or more
-        ``CubicBezier`` objects).
+    Segments are offset in a single step; CubicBeziers delegate to
+    :meth:`CubicBezier.offset_adaptive` for recursive refinement.
     """
     if isinstance(geom, Segment):
         return [geom.offset(distance, center=center)]

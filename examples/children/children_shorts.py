@@ -89,7 +89,7 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     # STEP 2: Hosenausschnitt
     pt7 = pt4.translate(0, -0.25 * meas.SiH)
     pt8 = pt4.translate((0.25 * meas.vHoB - model.ZuvHoB), 0)  # von links
-    bz_control2 = Segment(pt7, pt8).point_perpendicular(0.5 * CM, rel_pos_on_obj=0.75)
+    bz_control2 = Segment(pt7, pt8).point_perpendicular(0.5 * CM, t=0.75)
     bz_control3 = pt7.translate(0.2 * CM, 2.5 * CM)
     # Hilfsgeometrie Hosenausschnitt
     front.append(
@@ -108,7 +108,7 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     pt14 = intersect(side, knee)[0]
     pt15 = pt10.translate(pt10.x - pt14.x, 0)
     front_seam_aux = Segment(pt8, pt15)
-    bz_control = front_seam_aux.point_perpendicular(1.6 * CM, rel_pos_on_obj=0.5)
+    bz_control = front_seam_aux.point_perpendicular(1.6 * CM, t=0.5)
     inner_seam = Segment(pt13, pt15)
 
     # STEP 9a: Modellänge Vorderteil
@@ -199,7 +199,7 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     back_pt14 = pt14.translate(back_shift, 0)
     pt25 = pt15.translate(back_shift + (pt23.x - back_pt14.x), 0)
     back_aux = Segment(pt21, pt25)
-    bz_control5 = back_aux.point_perpendicular(2.5 * CM, rel_pos_on_obj=0.5)
+    bz_control5 = back_aux.point_perpendicular(2.5 * CM, t=0.5)
     back_inner_seam = Segment(pt24, pt25)
 
     # STEP 9b: Modellänge Rückteil

@@ -1,9 +1,7 @@
 """
 Style options for rendering sewing pattern elements.
 
-This module is intentionally kept separate from both ``geometry.py`` and
-``render.py`` so that geometry objects can reference ``StyleOptions`` without
-creating a circular import.
+Kept separate from geometry.py and render.py to avoid circular imports.
 """
 
 from enum import Enum
@@ -11,22 +9,16 @@ from typing import Any
 
 
 class Marker(str, Enum):
-    """Named markers that can be placed at either end of a line element.
+    """Named markers placed at line endpoints.
 
-    The string value of each member matches the SVG ``<marker id="...">``
-    defined in ``render.py``, so it can be used directly to build
-    ``marker-start="url(#<value>)"`` attributes.
+    String values match ``<marker id="…">`` in render.py.
 
     Members:
-        ARROW:    A filled triangular arrowhead pointing away from the line.
-        SCISSOR:  A pair of scissor blades indicating a cutting start/end point.
-        DISTANCE: An arrowhead with a perpendicular stop-bar; used for
-                  dimension/measurement annotations (start and end variants
-                  are selected automatically by position).
-        DOT:      A small filled circle; useful for button positions or
-                  match-point markers at line ends.
-        STOP:     A short perpendicular bar at the line end; useful for
-                  hem lines, dart ends, and adjustment lines.
+        ARROW:    Filled triangular arrowhead.
+        SCISSOR:  Scissor blades; indicates a cut start/end point.
+        DISTANCE: Arrowhead with perpendicular stop-bar for dimension lines.
+        DOT:      Small filled circle; button or match-point marker.
+        STOP:     Short perpendicular bar; hem lines, dart ends.
     """
 
     ARROW = "arrow"
@@ -37,8 +29,7 @@ class Marker(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# Stroke width constants — single source of truth for the whole library.
-# Override DEFAULT_STROKE_WIDTH here to change all pattern lines at once.
+# Stroke width constants
 # ---------------------------------------------------------------------------
 DEFAULT_STROKE_WIDTH: float = 0.5
 DEFAULT_STROKE_WIDTH_GRAIN: float = 0.2
@@ -66,41 +57,13 @@ class StyleOptions:
         seam_allowance: float = 0.0,
         corner_join: str | None = None,
     ) -> None:
-        """Initialize style options.
-
+        """
         Args:
-            stroke_color: Color of the stroke (outline).
-            stroke_width: Width of the stroke in SVG units.
-            fill_color: Fill color for closed shapes.
-            dash_array: List of values defining the dash pattern, or None for a solid line.
-            dash_offset: Starting offset into the dash pattern (``stroke-dashoffset``).
-            opacity: Opacity value between 0.0 (transparent) and 1.0 (opaque).
-            stroke_linejoin: How line corners are joined (``"miter"``, ``"round"``, ``"bevel"``).
-            stroke_miterlimit: Limit on miter joins before they are bevelled.
-            marker_start: Optional :class:`Marker` to draw at the start of the element (p1).
-                Supported values: ``Marker.ARROW``, ``Marker.SCISSOR``.
-            marker_end: Optional :class:`Marker` to draw at the end of the element (p2).
-                Supported values: ``Marker.ARROW``, ``Marker.SCISSOR``.
-            font_size_mm: Font size in mm for the element label. Defaults to ``DEFAULT_FONT_SIZE_MM``.
-            font_weight: CSS font-weight for labels (``"normal"``, ``"bold"``).
-            font_style: CSS font-style for labels (``"normal"``, ``"italic"``).
-            seam_allowance: Per-element seam allowance in mm.  When greater
-                than zero, this value overrides the global *distance* argument
-                passed to
-                :meth:`~sewpat.part.PatternPart.add_seam_allowance` for any
-                outline element that carries this style.  ``0.0`` (the
-                default) means "use the global default distance".
-            corner_join: Per-element corner join override for seam-allowance
-                generation.  One of ``"miter"``, ``"round"``, or ``"bevel"``.
-                When set, overrides the global ``corner_join`` argument of
-                :meth:`~sewpat.part.PatternPart.add_seam_allowance` for
-                **both corners** that adjoin this element.  ``None`` (the
-                default) means "use the part-level default".
-
-        Example::
-
-            # Armhole curve: override both its corners to bevel
-            StyleOptions(corner_join="bevel")
+            seam_allowance: Per-element SA override in mm; ``0.0`` = use the
+                global distance passed to ``add_seam_allowance()``.
+            corner_join: Per-element corner-join override (``"miter"``,
+                ``"round"``, ``"bevel"``); ``None`` = use the part-wide default.
+            All other arguments map directly to the identically named SVG attributes.
         """
         self.stroke_color = stroke_color
         self.stroke_width = stroke_width
@@ -117,6 +80,19 @@ class StyleOptions:
         self.font_style = font_style
         self.seam_allowance = seam_allowance
         self.corner_join: str | None = corner_join
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, StyleOptions):
+            return NotImplemented
+        return self.__dict__ == other.__dict__
+
+    def __repr__(self) -> str:
+        parts = []
+        defaults = StyleOptions()
+        for k, v in self.__dict__.items():
+            if v != getattr(defaults, k):
+                parts.append(f"{k}={v!r}")
+        return f"StyleOptions({', '.join(parts)})"
 
     def as_dict(self) -> dict[str, Any]:
         """Convert style options to a dictionary.

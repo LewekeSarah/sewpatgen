@@ -340,7 +340,7 @@ class TestAddInfoBox(unittest.TestCase):
         self.assertIsInstance(elem.geometry, InfoBox)
         ib: InfoBox = elem.geometry
         self.assertAlmostEqual(ib.position.x, centroid.x)
-        self.assertAlmostEqual(ib.position.y, centroid.y)
+        self.assertAlmostEqual(ib.position.y, centroid.translate(0, 3 * CM).y)
 
     def test_info_box_default_header_is_part_name(self):
         """Default header equals the part name."""
@@ -758,40 +758,40 @@ class TestAddGrainlineClipping(unittest.TestCase):
         self.assertAlmostEqual(seg.p2.x, 80.0, places=3)
 
     def test_start_outside_is_nudged_inward(self):
-        """Start point outside → nudged to strictly inside on the left side."""
+        """Start point outside → nudged to on or inside the boundary on the left side."""
         part = self._square_part(100)
         # Horizontal line: start at x=-20 (outside), end at x=80 (inside)
         elem = part.add_grainline(Point(-20, 50), Point(80, 50))
         seg = cast(Segment, elem.geometry)
-        # Nudged start must be strictly inside (x > 0) and close to the left edge
-        self.assertGreater(seg.p1.x, 0.0)
+        # Nudged start must be on or inside the boundary (x >= 0) and close to the left edge
+        self.assertGreaterEqual(seg.p1.x, 0.0)
         self.assertLess(seg.p1.x, 5.0)
         self.assertAlmostEqual(seg.p1.y, 50.0, places=3)
         # End was already inside — unchanged
         self.assertAlmostEqual(seg.p2.x, 80.0, places=3)
 
     def test_end_outside_is_nudged_inward(self):
-        """End point outside → nudged to strictly inside on the right side."""
+        """End point outside → nudged to on or inside the boundary on the right side."""
         part = self._square_part(100)
         elem = part.add_grainline(Point(20, 50), Point(150, 50))
         seg = cast(Segment, elem.geometry)
         # Start unchanged
         self.assertAlmostEqual(seg.p1.x, 20.0, places=3)
-        # Nudged end must be strictly inside and close to the right edge
-        self.assertLess(seg.p2.x, 100.0)
+        # Nudged end must be on or inside the boundary and close to the right edge
+        self.assertLessEqual(seg.p2.x, 100.0)
         self.assertGreater(seg.p2.x, 95.0)
         self.assertAlmostEqual(seg.p2.y, 50.0, places=3)
 
     def test_both_outside_nudged_inward(self):
-        """Both endpoints outside but line crosses the square → both nudged inside."""
+        """Both endpoints outside but line crosses the square → both nudged to boundary or inside."""
         part = self._square_part(100)
         # Vertical line crossing the full square from y=-20 to y=120
         elem = part.add_grainline(Point(50, -20), Point(50, 120))
         seg = cast(Segment, elem.geometry)
-        # Both ends must now be strictly inside [0, 100]
-        self.assertGreater(seg.p1.y, 0.0)
+        # Both ends must now be on or inside the boundary [0, 100]
+        self.assertGreaterEqual(seg.p1.y, 0.0)
         self.assertLess(seg.p1.y, 5.0)
-        self.assertLess(seg.p2.y, 100.0)
+        self.assertLessEqual(seg.p2.y, 100.0)
         self.assertGreater(seg.p2.y, 95.0)
 
     def test_no_outline_no_crash(self):
@@ -801,6 +801,25 @@ class TestAddGrainlineClipping(unittest.TestCase):
         seg = cast(Segment, elem.geometry)
         self.assertAlmostEqual(seg.p1.x, -10.0)
         self.assertAlmostEqual(seg.p2.x, 200.0)
+
+    def test_endpoint_on_boundary_nudged_along_grainline_axis(self):
+        """Endpoint exactly on the outline boundary must NOT be nudged — it is
+        a valid grainline endpoint and should be kept as-is.
+
+        Regression for the skewed/over-cropped grainline bug: when end sits
+        exactly on the hem boundary it must stay there, not be moved inward.
+        """
+        part = self._square_part(100)
+        # Vertical grainline: start inside, end exactly on the bottom boundary
+        elem = part.add_grainline(Point(50, 20), Point(50, 100))
+        seg = cast(Segment, elem.geometry)
+        # x must stay at 50 for both endpoints — no lateral drift
+        self.assertAlmostEqual(seg.p1.x, 50.0, places=6)
+        self.assertAlmostEqual(seg.p2.x, 50.0, places=6)
+        # end sits exactly on the boundary → must be kept, not nudged inward
+        self.assertAlmostEqual(seg.p2.y, 100.0, places=6)
+        # start was already inside → unchanged
+        self.assertAlmostEqual(seg.p1.y, 20.0, places=6)
 
 
 # ---------------------------------------------------------------------------
@@ -1039,9 +1058,7 @@ class TestSeamAllowanceReversal(unittest.TestCase):
         from sewpat.geometry import Segment as _S, CubicBezier as _CB
 
         return [
-            e.geometry.length if isinstance(e.geometry, _S) else e.geometry.length()
-            for e in sa_elems
-            if isinstance(e.geometry, (_S, _CB))
+            e.geometry.length for e in sa_elems if isinstance(e.geometry, (_S, _CB))
         ]
 
     def test_reversed_waistband_gets_correct_sa(self):

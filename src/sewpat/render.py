@@ -1,16 +1,21 @@
-"""
-SVG Rendering module for sewing patterns.
-
-This module provides functions to render pattern parts and geometric elements
-to SVG files.
-"""
+"""SVG rendering for sewing patterns."""
 
 import warnings
 from typing import Any, Callable
 
 import numpy as np
 
-from sewpat.geometry import Point, Segment, Circle, Rect, Triangle, InfoBox, CubicBezier
+from sewpat.geometry import (
+    Point,
+    Segment,
+    Circle,
+    Rect,
+    Triangle,
+    InfoBox,
+    CubicBezier,
+    geom_start,
+    geom_end,
+)
 
 from sewpat.part import PatternPart, PatternElement, Pattern
 from sewpat.style import (
@@ -319,29 +324,12 @@ def _make_renderers(
 
 
 def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
-    """Serialize a chain of Segment/CubicBezier geometries into an SVG path string.
-
-    The chain is assumed to be sorted (end of element i == start of element i+1).
-    A closing ``Z`` is appended when the last endpoint equals the first start point
-    within 0.01 mm.
-
-    Args:
-        geoms: Ordered list of Segment or CubicBezier objects forming the chain.
-
-    Returns:
-        SVG path ``d`` attribute string (e.g. ``"M x,y L x,y C ... Z"``).
-    """
+    """Serialize a sorted chain of Segment/CubicBezier objects into an SVG path string."""
     if not geoms:
         return ""
 
-    def _start(g: Segment | CubicBezier) -> Point:
-        return g.p1 if isinstance(g, Segment) else g.p0
-
-    def _end(g: Segment | CubicBezier) -> Point:
-        return g.p2 if isinstance(g, Segment) else g.p3
-
     parts: list[str] = []
-    first_pt = _start(geoms[0])
+    first_pt = geom_start(geoms[0])
     parts.append(f"M {first_pt.x},{first_pt.y}")
 
     for g in geoms:
@@ -350,7 +338,7 @@ def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
         else:  # CubicBezier
             parts.append(f"C {g.p1.x},{g.p1.y} {g.p2.x},{g.p2.y} {g.p3.x},{g.p3.y}")
 
-    last_pt = _end(geoms[-1])
+    last_pt = geom_end(geoms[-1])
     if float(np.linalg.norm(last_pt.coords - first_pt.coords)) < 0.01:
         parts.append("Z")
 
@@ -361,19 +349,7 @@ def _render_seam_allowance_chain(
     sa_elements: list["PatternElement"],
     style_dict: dict[str, Any],
 ) -> list[str]:
-    """Render all seam-allowance Segment/CubicBezier elements as one SVG ``<path>``.
-
-    Combining them into a single path ensures that SVG stroke-linejoin is
-    applied at every corner, producing clean mitered/beveled joints without
-    any visible gaps.
-
-    Args:
-        sa_elements: PatternElements with ``is_seam_allowance=True``.
-        style_dict: Style attributes dict from the shared SA StyleOptions.
-
-    Returns:
-        List with one ``<path … />`` SVG string (or empty list if no geometry).
-    """
+    """Render all SA Segment/CubicBezier elements as one ``<path>`` for clean linejoin corners."""
     geoms: list[Segment | CubicBezier] = [
         e.geometry
         for e in sa_elements
@@ -395,13 +371,20 @@ def _render_elements(
     svg_nodes: list[str],
     show_bezier_control_points: bool,
     show_points: bool,
+    styles: dict[str, StyleOptions] | None = None,
 ) -> None:
-    """Render a list of PatternElements into svg_nodes (in-place).
+    """Render PatternElements into *svg_nodes* in-place.
 
-    Seam-allowance elements (``is_seam_allowance=True``) are collected and
-    rendered as a single connected SVG ``<path>`` at the end so that
-    ``stroke-linejoin`` is applied at every corner.
+    SA elements are collected and flushed as a single connected ``<path>`` at
+    the end so ``stroke-linejoin`` applies at every corner.
     """
+    _TYPE_KEY = {
+        Segment: "segment",
+        CubicBezier: "cubicbezier",
+        Circle: "circle",
+        Point: "point",
+    }
+
     sa_elements: list["PatternElement"] = []
     sa_style_dict: dict[str, Any] | None = None
 
@@ -420,7 +403,15 @@ def _render_elements(
         if not show_points and isinstance(element, Point):
             continue
 
+        # Resolve effective style: use the per-element style unless it is still
+        # the plain default, in which case fall back to the type-level override
+        # from the resolved styles dict.
         style = pat_elem.style
+        if styles is not None:
+            type_key = _TYPE_KEY.get(type(element))
+            if type_key and style == StyleOptions():
+                style = styles.get(type_key, style)
+
         effective_name = pat_elem.get_name()
         renderer = renderers.get(type(element))
         if renderer is not None:
@@ -457,10 +448,7 @@ def _resolve_styles(
     style_map: dict[str, StyleOptions] | None,
     stacklevel: int = 3,
 ) -> dict[str, StyleOptions]:
-    """Merge *style_map* overrides into a copy of ``_DEFAULT_STYLES``.
-
-    Unknown keys emit a :class:`UserWarning` and are ignored.
-    """
+    """Merge *style_map* overrides into ``_DEFAULT_STYLES``; unknown keys emit a warning."""
     styles = {**_DEFAULT_STYLES}
     if style_map:
         for k, v in style_map.items():
@@ -485,8 +473,10 @@ def _build_svg(
     show_points: bool,
     show_bezier_control_points: bool,
     show_seam_allowance: bool = True,
+    styles: dict[str, StyleOptions] | None = None,
 ) -> str:
     """Build and return the SVG string for one or more element groups."""
+    resolved = styles if styles is not None else _DEFAULT_STYLES
     svg_nodes: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{width_mm}mm" height="{height_mm}mm" '
@@ -506,6 +496,7 @@ def _build_svg(
             svg_nodes,
             show_bezier_control_points,
             show_points,
+            resolved,
         )
 
     svg_nodes.append("</svg>")
@@ -523,21 +514,17 @@ def export_pattern_part_svg_mm(
     show_bezier_control_points: bool = False,
     show_seam_allowance: bool = True,
 ) -> None:
-    """Export a PatternPart as an SVG file with mm units for precise printing.
+    """Export a single PatternPart as an SVG file with mm units.
 
     Args:
-        pattern_part: The PatternPart to export.
-        filename: Output filename for the SVG.
-        width_mm: Width of the SVG canvas in mm.
-        height_mm: Height of the SVG canvas in mm.
-        margin_mm: Margin around the canvas in mm.
-        style_map: Optional mapping of element type names to StyleOptions overrides.
-            Unknown keys emit a warning and are ignored.
-        show_points: Whether to render Point elements.
-        show_bezier_control_points: Whether to render Bezier control point handles.
-        show_seam_allowance: Whether to render seam-allowance offset lines.
-            Defaults to True. Set to False to export the pattern without seam
-            allowance (e.g. for a "no seam allowance" variant).
+        pattern_part: Part to export.
+        filename: Output SVG path.
+        width_mm / height_mm: Canvas size in mm.
+        margin_mm: Canvas margin in mm.
+        style_map: Element-type → StyleOptions overrides; unknown keys warn.
+        show_points: Render Point elements.
+        show_bezier_control_points: Render Bézier control-point handles.
+        show_seam_allowance: Include SA offset lines (default True).
     """
     styles = _resolve_styles(style_map)
     svg = _build_svg(
@@ -549,6 +536,7 @@ def export_pattern_part_svg_mm(
         show_points=show_points,
         show_bezier_control_points=show_bezier_control_points,
         show_seam_allowance=show_seam_allowance,
+        styles=styles,
     )
     with open(filename, "w") as f:
         f.write(svg)
@@ -569,18 +557,15 @@ def export_pattern_svg_mm(
     """Export a Pattern (all or selected parts) as a single SVG file.
 
     Args:
-        pattern: The Pattern to export.
-        filename: Output filename for the SVG.
-        width_mm: Width of the SVG canvas in mm.
-        height_mm: Height of the SVG canvas in mm.
-        margin_mm: Margin around the canvas in mm.
-        style_map: Optional mapping of element type names to StyleOptions overrides.
-        show_points: Whether to render Point elements.
-        show_bezier_control_points: Whether to render Bezier control point handles.
-        parts: Optional list of part names to include. If None, all parts are rendered.
-        show_seam_allowance: Whether to render seam-allowance offset lines.
-            Defaults to True. Set to False to export the pattern without seam
-            allowance (e.g. for a "no seam allowance" variant).
+        pattern: Pattern to export.
+        filename: Output SVG path.
+        width_mm / height_mm: Canvas size in mm.
+        margin_mm: Canvas margin in mm.
+        style_map: Element-type → StyleOptions overrides; unknown keys warn.
+        show_points: Render Point elements.
+        show_bezier_control_points: Render Bézier control-point handles.
+        parts: Part names to include; ``None`` renders all parts.
+        show_seam_allowance: Include SA offset lines (default True).
     """
     styles = _resolve_styles(style_map)
 
@@ -605,6 +590,7 @@ def export_pattern_svg_mm(
         show_points=show_points,
         show_bezier_control_points=show_bezier_control_points,
         show_seam_allowance=show_seam_allowance,
+        styles=styles,
     )
     with open(filename, "w") as f:
         f.write(svg)

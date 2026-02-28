@@ -90,16 +90,18 @@ class TestSegment(unittest.TestCase):
     """
 
     def test_creation(self):
-        """Test line creation and attributes.
+        """Test segment creation and attributes.
 
-        Verifies that a Line can be created with two points
-        and that the points are correctly stored.
+        Verifies that a Segment can be created with two points
+        and that the points are correctly stored, including via start/end aliases.
         """
         p1 = Point(1, 1)
         p2 = Point(4, 5)
         line = Segment(p1, p2)
         self.assertEqual(line.p1, p1)
         self.assertEqual(line.p2, p2)
+        self.assertEqual(line.start, p1)
+        self.assertEqual(line.end, p2)
 
     def test_length(self):
         """Test line length calculation.
@@ -145,6 +147,66 @@ class TestSegment(unittest.TestCase):
         self.assertAlmostEqual(seg.point_at_t(1.0).x, 10.0)
         # deprecated alias
         self.assertAlmostEqual(seg.point_at_rel_dist(0.5).x, 5.0)
+
+    def test_point_perpendicular_t(self):
+        """point_perpendicular with t= places the point at the correct position."""
+        seg = Segment(Point(0, 0), Point(10, 0))  # horizontal, normal points up (+y)
+        pt = seg.point_perpendicular(5.0, t=0.5)
+        self.assertAlmostEqual(pt.x, 5.0)
+        self.assertAlmostEqual(pt.y, 5.0)
+
+    def test_point_perpendicular_arc_length(self):
+        """point_perpendicular with arc_length= gives the same result as t=."""
+        seg = Segment(Point(0, 0), Point(10, 0))
+        pt_t = seg.point_perpendicular(5.0, t=0.5)
+        pt_l = seg.point_perpendicular(5.0, arc_length=5.0)
+        self.assertAlmostEqual(pt_t.x, pt_l.x)
+        self.assertAlmostEqual(pt_t.y, pt_l.y)
+
+    def test_point_perpendicular_default_is_midpoint(self):
+        """point_perpendicular with no position arg uses the midpoint."""
+        seg = Segment(Point(0, 0), Point(10, 0))
+        pt = seg.point_perpendicular(3.0)
+        self.assertAlmostEqual(pt.x, 5.0)
+        self.assertAlmostEqual(pt.y, 3.0)
+
+    def test_point_perpendicular_negative_distance(self):
+        """Negative distance goes to the right (opposite side) of the segment."""
+        seg = Segment(Point(0, 0), Point(10, 0))
+        pos = seg.point_perpendicular(+5.0, t=0.5)
+        neg = seg.point_perpendicular(-5.0, t=0.5)
+        self.assertAlmostEqual(pos.x, neg.x)
+        self.assertAlmostEqual(pos.y, -neg.y)
+
+    def test_point_perpendicular_both_position_args_raises(self):
+        """Providing both arc_length and t must raise ValueError."""
+        seg = Segment(Point(0, 0), Point(10, 0))
+        with self.assertRaises(ValueError):
+            seg.point_perpendicular(5.0, arc_length=3.0, t=0.3)
+
+    def test_point_perpendicular_deprecated_rel_pos_on_obj(self):
+        """Old rel_pos_on_obj= kwarg still works but emits DeprecationWarning."""
+        import warnings
+
+        seg = Segment(Point(0, 0), Point(10, 0))
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            pt = seg.point_perpendicular(5.0, rel_pos_on_obj=0.5)
+        self.assertAlmostEqual(pt.x, 5.0)
+        self.assertAlmostEqual(pt.y, 5.0)
+        self.assertTrue(any(issubclass(x.category, DeprecationWarning) for x in w))
+
+    def test_point_perpendicular_deprecated_distance_on_obj(self):
+        """Old distance_on_obj= kwarg still works but emits DeprecationWarning."""
+        import warnings
+
+        seg = Segment(Point(0, 0), Point(10, 0))
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            pt = seg.point_perpendicular(5.0, distance_on_obj=5.0)
+        self.assertAlmostEqual(pt.x, 5.0)
+        self.assertAlmostEqual(pt.y, 5.0)
+        self.assertTrue(any(issubclass(x.category, DeprecationWarning) for x in w))
 
     def test_line_line_intersection(self):
         """Test intersection between two lines.
@@ -650,7 +712,7 @@ class TestCubicBezierIntersect(unittest.TestCase):
 
 
 class TestCubicBezierNewMethods(unittest.TestCase):
-    """Tests for normal_at_t(), point_at_length(), and split()."""
+    """Tests for normal_at_t(), point_at_length(), split(), and property aliases."""
 
     @staticmethod
     def _curve():
@@ -660,6 +722,26 @@ class TestCubicBezierNewMethods(unittest.TestCase):
             p2=Point(30, 20),
             p3=Point(40, 10),
         )
+
+    # ── start / end aliases ──────────────────────────────────────────────────
+
+    def test_start_is_p0(self):
+        """start property must equal p0."""
+        b = self._curve()
+        self.assertEqual(b.start, b.p0)
+
+    def test_end_is_p3(self):
+        """end property must equal p3."""
+        b = self._curve()
+        self.assertEqual(b.end, b.p3)
+
+    # ── length as property ───────────────────────────────────────────────────
+
+    def test_length_is_property(self):
+        """length must be accessible as a property (no call parentheses)."""
+        b = self._curve()
+        l = b.length  # must not raise TypeError
+        self.assertGreater(l, 0.0)
 
     # ── normal_at_t ─────────────────────────────────────────────────────────
 
@@ -701,14 +783,14 @@ class TestCubicBezierNewMethods(unittest.TestCase):
     def test_point_at_length_full_is_end(self):
         """point_at_length(total_length) must return p3."""
         b = self._curve()
-        pt = b.point_at_length(b.length())
+        pt = b.point_at_length(b.length)
         self.assertAlmostEqual(pt.x, b.p3.x, places=4)
         self.assertAlmostEqual(pt.y, b.p3.y, places=4)
 
     def test_point_at_length_midpoint_is_on_curve(self):
         """point_at_length(L/2) must lie on the curve."""
         b = self._curve()
-        half = b.length() / 2
+        half = b.length / 2
         pt = b.point_at_length(half)
         # Verify by sampling: closest sample on curve should be < 0.05 mm away
         min_d = min(pt.distance_to(b.point_at_t(k / 2000)) for k in range(2001))
@@ -717,7 +799,7 @@ class TestCubicBezierNewMethods(unittest.TestCase):
     def test_point_at_length_arc_distance_is_correct(self):
         """The arc length from p0 to point_at_length(s) must equal s."""
         b = self._curve()
-        s = b.length() * 0.3
+        s = b.length * 0.3
         # Find t for pt and integrate back – use svgpathtools ilength round-trip
         from svgpathtools import CubicBezier as SvgBez
 
@@ -741,7 +823,7 @@ class TestCubicBezierNewMethods(unittest.TestCase):
         """point_at_length() must raise ValueError if arc length > curve length."""
         b = self._curve()
         with self.assertRaises(ValueError):
-            b.point_at_length(b.length() + 1.0)
+            b.point_at_length(b.length + 1.0)
 
     # ── split ────────────────────────────────────────────────────────────────
 
@@ -779,7 +861,7 @@ class TestCubicBezierNewMethods(unittest.TestCase):
         """Left length + right length must equal the original curve length."""
         b = self._curve()
         left, right = b.split(0.5)
-        self.assertAlmostEqual(left.length() + right.length(), b.length(), places=6)
+        self.assertAlmostEqual(left.length + right.length, b.length, places=6)
 
     def test_split_returns_cubicbezier_instances(self):
         """split() must return two CubicBezier objects."""
