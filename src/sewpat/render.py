@@ -496,11 +496,11 @@ def _build_svg(
     ]
 
     for elements in element_groups:
-        visible = (
-            elements
-            if show_seam_allowance
-            else [e for e in elements if not e.is_seam_allowance]
-        )
+        if show_seam_allowance:
+            # Hide seam-line notch copies — the SA-edge copy is shown instead.
+            visible = [e for e in elements if not e.is_seam_notch]
+        else:
+            visible = [e for e in elements if not e.is_seam_allowance]
         _render_elements(
             visible,
             svg_nodes,

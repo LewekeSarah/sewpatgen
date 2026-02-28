@@ -1262,6 +1262,87 @@ class CubicBezier:
         ls_off = _bezier_shapely(approx)
         return float(ls_true.hausdorff_distance(ls_off))
 
+    def offset_adaptive(
+        self,
+        distance: float,
+        center: "Point | None" = None,
+        eps: float = 0.1,
+        _depth: int = 0,
+        _max_depth: int = 8,
+    ) -> "list[CubicBezier]":
+        """Return the offset curve as a list of cubic Béziers, recursively refined.
+
+        Unlike :meth:`offset` — which always returns a single ``CubicBezier``
+        and falls back to a one-time split — this method keeps splitting each
+        sub-segment until the Hausdorff distance between the hodograph
+        approximation and the true parallel offset is below *eps*.  This
+        produces accurate results even for tight curvatures (small radii) with
+        large seam allowances.
+
+        The algorithm mirrors Freesewing's adaptive offset strategy:
+
+        1. Compute the hodograph approximation for this segment.
+        2. Measure the Hausdorff distance against the true parallel offset.
+        3. If the error is within *eps*, return ``[approximation]``.
+        4. Otherwise split at ``t = 0.5``, recurse on each half, and concatenate.
+
+        A hard depth limit of *_max_depth* (default 8, i.e. up to 256 segments)
+        prevents infinite recursion on degenerate curves.
+
+        Args:
+            distance: Offset in mm.  When *center* is provided the absolute
+                value is used and direction is derived from *center*.
+            center: Interior reference point (e.g. ``PatternPart.centroid``).
+                Forwarded unchanged to each recursive call.
+            eps: Maximum allowed Hausdorff error in mm.  Defaults to 0.1 mm
+                (sub-print-resolution for 300 dpi).
+            _depth: Internal recursion depth counter — do not set manually.
+            _max_depth: Hard recursion cap.  Defaults to 8.
+
+        Returns:
+            List of ``CubicBezier`` objects whose concatenation approximates the
+            parallel offset curve with at most *eps* mm Hausdorff error per segment.
+        """
+        # Resolve signed distance (done once at top level; sub-calls pass
+        # center=None with the already-signed distance to avoid re-deriving it).
+        if center is not None:
+            mid = self.point_at_t(0.5)
+            n_mid = self.normal_at_t(0.5)
+            sign = 1.0 if np.dot(n_mid, mid.coords - center.coords) >= 0 else -1.0
+            d = sign * abs(distance)
+        else:
+            d = distance
+
+        # Hodograph approximation for this segment.
+        def _shifted(pt: "Point", t: float) -> "Point":
+            n = self.normal_at_t(t)
+            return Point(pt.x + d * n[0], pt.y + d * n[1])
+
+        approx = CubicBezier(
+            _shifted(self.p0, 0.0),
+            _shifted(self.p1, 1 / 3),
+            _shifted(self.p2, 2 / 3),
+            _shifted(self.p3, 1.0),
+            name=self.name,
+        )
+
+        # Base cases: depth limit or error within tolerance.
+        if _depth >= _max_depth:
+            return [approx]
+
+        ls_true = _true_offset_ls(self, d)
+        ls_off = _bezier_shapely(approx)
+        if ls_true.hausdorff_distance(ls_off) <= eps:
+            return [approx]
+
+        # Error too large — split and recurse.
+        left, right = self.split(0.5)
+        return left.offset_adaptive(
+            d, center=None, eps=eps, _depth=_depth + 1, _max_depth=_max_depth
+        ) + right.offset_adaptive(
+            d, center=None, eps=eps, _depth=_depth + 1, _max_depth=_max_depth
+        )
+
 
 def _intersect_bezier_bezier(
     a: CubicBezier, b: CubicBezier, tol: float = 1e-12
@@ -1706,3 +1787,34 @@ def seam_length(geoms: list[Segment | CubicBezier]) -> float:
         else:
             total += g.length()
     return total
+
+
+def offset_adaptive(
+    geom: "Segment | CubicBezier",
+    distance: float,
+    center: "Point | None" = None,
+    eps: float = 0.1,
+) -> "list[Segment | CubicBezier]":
+    """Offset *geom* by *distance*, splitting recursively until error < *eps*.
+
+    For a :class:`Segment` this is equivalent to a single :meth:`Segment.offset`
+    call (segments have no curvature, so no splitting is needed).
+
+    For a :class:`CubicBezier` this delegates to
+    :meth:`CubicBezier.offset_adaptive`, which recursively splits at ``t=0.5``
+    until every sub-segment's Hausdorff error against the true parallel offset
+    is below *eps* mm.
+
+    Args:
+        geom: The geometry to offset.
+        distance: Perpendicular offset distance in mm.
+        center: Interior reference point for direction resolution.
+        eps: Maximum Hausdorff error per sub-segment in mm. Defaults to 0.1 mm.
+
+    Returns:
+        List of offset geometry objects (one ``Segment``, or one or more
+        ``CubicBezier`` objects).
+    """
+    if isinstance(geom, Segment):
+        return [geom.offset(distance, center=center)]
+    return geom.offset_adaptive(distance, center=center, eps=eps)

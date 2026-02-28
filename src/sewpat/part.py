@@ -18,6 +18,7 @@ from .geometry import (
     miter_corner,
     round_corner,
     outline_polygon,
+    offset_adaptive as _offset_adaptive,
     seam_length as _geom_seam_length,
 )
 from .units import CM, MM
@@ -36,6 +37,9 @@ class PatternElement:
         is_seam_allowance: Whether this element was generated as a seam-allowance
             offset line.  Elements with this flag can be hidden by passing
             ``show_seam_allowance=False`` to the export functions.
+        is_seam_notch: Whether this element is the seam-line copy of a notch
+            triangle.  When a SA counterpart exists, this copy is hidden when
+            ``show_seam_allowance=True`` so that only the cut-edge notch is visible.
     """
 
     def __init__(
@@ -51,6 +55,7 @@ class PatternElement:
         self.name = name
         self.is_outline = is_outline
         self.is_seam_allowance = is_seam_allowance
+        self.is_seam_notch: bool = False  # set by add_notches() when SA twin exists
 
     def get_name(self) -> str | None:
         """Return the effective name (element name overrides geometry name)."""
@@ -383,10 +388,23 @@ class PatternPart:
         used.  Without ``seam_edge``, a vertical triangle centred on the point
         is used.
 
+        **Automatic SA projection:** when seam-allowance elements are already
+        present on the part (added via :meth:`add_seam_allowance`), two
+        triangles are generated per notch:
+
+        * one on the **seam line** (``is_seam_allowance=False``) — shown when
+          the pattern is exported without SA (``show_seam_allowance=False``).
+        * one on the **cut edge** (``is_seam_allowance=True``) — shown when
+          the pattern is exported with SA (``show_seam_allowance=True``).
+
+        This means :meth:`add_notches` must be called **after**
+        :meth:`add_seam_allowance` if SA projection is desired; calling it
+        before produces only the seam-line triangle (no warning is raised).
+
         Args:
             *points: One or more reference points for the notches.
-            seam_edge: Segment or CubicBezier (seam edge) on which the notches
-                stand.
+            seam_edge: Segment or CubicBezier (seam line) used to project the
+                notch position and derive the tangent/normal direction.
             length: Distance from base to tip of the triangle. Defaults to 0.8 cm.
             width: Width of the triangle base on the seam edge. Defaults to 0.4 cm.
             is_back: If True, render two neighbouring triangles instead of one
@@ -398,52 +416,102 @@ class PatternPart:
         half_w = width / 2
         gap = width * 0.5
 
-        for pt in points:
-            if isinstance(seam_edge, Segment):
-                notch_pt = seam_edge.project_point(pt)
-                along = seam_edge.unit_direction
-                normal = seam_edge.unit_normal
-                if inward_ref is not None:
-                    dot = normal[0] * (inward_ref.x - notch_pt.x) + normal[1] * (
-                        inward_ref.y - notch_pt.y
-                    )
-                    if dot < 0:
-                        normal = -normal
-            elif isinstance(seam_edge, CubicBezier):
-                result = minimize_scalar(
-                    lambda t: seam_edge.point_at_t(t).distance_to(pt),
+        # Collect SA geometries (present when add_seam_allowance was called first).
+        sa_geoms: list[Segment | CubicBezier] = [
+            e.geometry
+            for e in self.elements
+            if e.is_seam_allowance and isinstance(e.geometry, (Segment, CubicBezier))
+        ]
+
+        def _project(edge: Segment | CubicBezier, ref: Point) -> tuple:
+            """Return (notch_pt, along, inward_normal) for *edge* closest to *ref*."""
+            if isinstance(edge, Segment):
+                notch_pt = edge.project_point(ref)
+                along = edge.unit_direction
+                normal = edge.unit_normal
+            else:
+                res = minimize_scalar(
+                    lambda t, _e=edge: _e.point_at_t(t).distance_to(ref),
                     bounds=(0.0, 1.0),
                     method="bounded",
                 )
-                t_closest = float(result.x)
-                notch_pt = seam_edge.point_at_t(t_closest)
-                tangent = seam_edge.tangent_at_t(t_closest)
+                t_c = float(res.x)
+                notch_pt = edge.point_at_t(t_c)
+                tangent = edge.tangent_at_t(t_c)
                 tang_len = float((tangent[0] ** 2 + tangent[1] ** 2) ** 0.5)
                 along = tangent / tang_len if tang_len > 1e-12 else tangent
-                normal = seam_edge.normal_at_t(t_closest)
-                if inward_ref is not None:
-                    dot = normal[0] * (inward_ref.x - notch_pt.x) + normal[1] * (
-                        inward_ref.y - notch_pt.y
-                    )
-                    if dot < 0:
-                        normal = -normal
-            else:
-                notch_pt = pt
-                along = (1.0, 0.0)
-                normal = (0.0, -1.0)
+                normal = edge.normal_at_t(t_c)
+            if inward_ref is not None:
+                dot = normal[0] * (inward_ref.x - notch_pt.x) + normal[1] * (
+                    inward_ref.y - notch_pt.y
+                )
+                if dot < 0:
+                    normal = -normal
+            return notch_pt, along, normal
 
+        def _closest_sa_edge(ref: Point) -> Segment | CubicBezier | None:
+            """Return the SA element whose closest point is nearest to *ref*."""
+            best_edge: Segment | CubicBezier | None = None
+            best_dist = float("inf")
+            for g in sa_geoms:
+                if isinstance(g, Segment):
+                    proj = g.project_point(ref)
+                    t = float(
+                        (proj.x - g.p1.x) * (g.p2.x - g.p1.x)
+                        + (proj.y - g.p1.y) * (g.p2.y - g.p1.y)
+                    ) / max(g.length**2, 1e-12)
+                    t = max(0.0, min(1.0, t))
+                    d = ref.distance_to(g.point_at_t(t))
+                else:
+                    res = minimize_scalar(
+                        lambda t, _g=g: _g.point_at_t(t).distance_to(ref),
+                        bounds=(0.0, 1.0),
+                        method="bounded",
+                    )
+                    d = float(res.fun)
+                if d < best_dist:
+                    best_dist = d
+                    best_edge = g
+            return best_edge
+
+        def _place_triangles(notch_pt: Point, along, normal, is_sa: bool) -> list:
             ax, ay = float(along[0]), float(along[1])
             nx, ny = float(normal[0]), float(normal[1])
-            offsets = [0.0]
-            if is_back:
-                offsets = [-(half_w + gap / 2), +(half_w + gap / 2)]
-
+            offsets = (
+                [0.0] if not is_back else [-(half_w + gap / 2), +(half_w + gap / 2)]
+            )
+            created = []
             for offset in offsets:
                 centre = notch_pt.translate(offset * ax, offset * ay)
                 bl = centre.translate(-half_w * ax, -half_w * ay)
                 br = centre.translate(half_w * ax, half_w * ay)
                 tip = centre.translate(nx * length, ny * length)
-                self.append(Triangle(bl, br, tip))
+                elem = self.append(Triangle(bl, br, tip))
+                elem.is_seam_allowance = is_sa
+                created.append(elem)
+            return created
+
+        for pt in points:
+            # ── Seam-line notch (always) ──────────────────────────────────
+            if seam_edge is not None:
+                notch_pt, along, normal = _project(seam_edge, pt)
+            else:
+                notch_pt = pt
+                along = (1.0, 0.0)
+                normal = (0.0, -1.0)
+            seam_elems = _place_triangles(notch_pt, along, normal, is_sa=False)
+
+            # ── SA-line notch (only when SA elements exist) ───────────────
+            if sa_geoms:
+                seam_proj = notch_pt  # already projected onto seam line
+                sa_edge = _closest_sa_edge(seam_proj)
+                if sa_edge is not None:
+                    sa_notch_pt, sa_along, sa_normal = _project(sa_edge, seam_proj)
+                    _place_triangles(sa_notch_pt, sa_along, sa_normal, is_sa=True)
+                    # Hide the seam-line copy when SA is shown — the cut-edge
+                    # notch takes over.
+                    for e in seam_elems:
+                        e.is_seam_notch = True
 
     def add_seam_allowance(
         self,
@@ -595,50 +663,70 @@ class PatternPart:
                 )
             elem_cj[_ep_key(e.geometry)] = val
 
-        offset_geoms = [
-            g.offset(elem_sa.get(_ep_key(g), distance), center) for g in chain_mixed
+        # Offset each element adaptively (1 original → 1..n sub-segments).
+        # offset_groups[i] is the list of offset sub-segments for chain_mixed[i].
+        offset_groups: list[list[Segment | CubicBezier]] = [
+            _offset_adaptive(g, elem_sa.get(_ep_key(g), distance), center)
+            for g in chain_mixed
         ]
-        n = len(offset_geoms)
-        arc_inserts: list[tuple[int, CubicBezier]] = []  # (after-index, arc)
+
+        # Stitch corners between consecutive original elements.
+        # Only the LAST sub-segment of group i and the FIRST sub-segment of
+        # group i+1 need a corner join — the sub-segments within one group are
+        # already connected by construction (split endpoints touch).
+        n = len(offset_groups)
+        arc_inserts: list[tuple[int, int, CubicBezier]] = []  # (group_i, CubicBezier)
         for i in range(n):
             j = (i + 1) % n
-            ga, gb = offset_geoms[i], offset_geoms[j]
+            ga = offset_groups[i][-1]  # last sub-seg of group i
+            gb = offset_groups[j][0]  # first sub-seg of group j
             if geom_end(ga).distance_to(geom_start(gb)) > 0.01:
-                # Resolution order: element i's override → element j's override
-                # → part-level default.
                 key_a = _ep_key(chain_mixed[i])
                 key_b = _ep_key(chain_mixed[j])
                 effective_cj = elem_cj.get(key_a) or elem_cj.get(key_b) or corner_join
 
                 if effective_cj == "miter":
                     corner = miter_corner(ga, gb, distance)
-                    offset_geoms[i] = with_endpoints(ga, geom_start(ga), corner)
-                    offset_geoms[j] = with_endpoints(gb, corner, geom_end(gb))
+                    offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), corner)
+                    offset_groups[j][0] = with_endpoints(gb, corner, geom_end(gb))
                 elif effective_cj == "round":
                     arc = round_corner(ga, gb)
                     if isinstance(arc, CubicBezier):
-                        # Trim ga to end at arc start, gb to start at arc end.
-                        offset_geoms[i] = with_endpoints(ga, geom_start(ga), arc.p0)
-                        offset_geoms[j] = with_endpoints(gb, arc.p3, geom_end(gb))
+                        offset_groups[i][-1] = with_endpoints(
+                            ga, geom_start(ga), arc.p0
+                        )
+                        offset_groups[j][0] = with_endpoints(gb, arc.p3, geom_end(gb))
                         arc_inserts.append((i, arc))
                     else:
-                        # Fallback: arc is a Point (bevel midpoint)
                         corner = arc
-                        offset_geoms[i] = with_endpoints(ga, geom_start(ga), corner)
-                        offset_geoms[j] = with_endpoints(gb, corner, geom_end(gb))
-                else:
-                    # "bevel": simple midpoint cut
+                        offset_groups[i][-1] = with_endpoints(
+                            ga, geom_start(ga), corner
+                        )
+                        offset_groups[j][0] = with_endpoints(gb, corner, geom_end(gb))
+                else:  # bevel
                     _ea = geom_end(ga)
                     _sb = geom_start(gb)
                     corner = Point(*(0.5 * (_ea.coords + _sb.coords)))
-                    offset_geoms[i] = with_endpoints(ga, geom_start(ga), corner)
-                    offset_geoms[j] = with_endpoints(gb, corner, geom_end(gb))
+                    offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), corner)
+                    offset_groups[j][0] = with_endpoints(gb, corner, geom_end(gb))
 
-        # Insert arc elements in reverse order so indices stay valid.
-        for insert_after, arc in sorted(arc_inserts, key=lambda x: x[0], reverse=True):
-            offset_geoms.insert(insert_after + 1, arc)
+        # Flatten groups into a single ordered list, inserting round-corner arcs
+        # after their group (in reverse order to keep indices stable).
+        flat: list[Segment | CubicBezier] = []
+        for i, group in enumerate(offset_groups):
+            flat.extend(group)
+        # arc_inserts: insert arc after the last element of group i.
+        # Compute flat indices of "end of group i".
+        group_end_flat: list[int] = []
+        pos = 0
+        for group in offset_groups:
+            pos += len(group)
+            group_end_flat.append(pos - 1)
+        for group_i, arc in sorted(arc_inserts, key=lambda x: x[0], reverse=True):
+            flat.insert(group_end_flat[group_i] + 1, arc)
+
         added_mixed: list["PatternElement"] = []
-        for geom in offset_geoms:
+        for geom in flat:
             elem = self.append(geom, style=sa_style)
             elem.is_seam_allowance = True
             added_mixed.append(elem)

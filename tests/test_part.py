@@ -433,7 +433,7 @@ class TestAddNotches(unittest.TestCase):
         self.assertLess(tri.p3.y, base_y)
 
     def test_multiple_notches(self):
-        """Multiple point arguments each produce one Triangle."""
+        """Multiple point arguments each produce one Triangle (no SA present)."""
         part = PatternPart(name="Body")
         part.add_notches(Point(0, 0), Point(5, 0), Point(10, 0))
         triangles = [e for e in part.elements if isinstance(e.geometry, Triangle)]
@@ -486,6 +486,114 @@ class TestAddNotches(unittest.TestCase):
         ) ** 2
         self.assertAlmostEqual(base_width, 0.6 * CM, places=6)
         self.assertAlmostEqual(math.sqrt(tip_dist), 1.5 * CM, places=6)
+
+    # ------------------------------------------------------------------
+    # Automatic dual-notch (seam-line + SA-line) tests
+    # ------------------------------------------------------------------
+
+    def _square_part_with_sa(self, sa_dist: float = 10.0) -> "PatternPart":
+        """100×100 mm square with seam allowance already added."""
+        part = PatternPart(name="Square")
+        part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
+        part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True)
+        part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
+        part.append(Segment(Point(0, 100), Point(0, 0)), is_outline=True)
+        part.add_seam_allowance(sa_dist)
+        return part
+
+    def test_with_sa_produces_two_notch_triangles(self):
+        """After add_seam_allowance, add_notches produces two triangles per point:
+        one on the seam line (is_seam_allowance=False) and one on the SA edge
+        (is_seam_allowance=True)."""
+        part = self._square_part_with_sa(10.0)
+        seam_seg = Segment(Point(0, 0), Point(100, 0))
+        n_before = len(part.elements)
+        part.add_notches(Point(50, 0), seam_edge=seam_seg)
+        triangles = [
+            e for e in part.elements[n_before:] if isinstance(e.geometry, Triangle)
+        ]
+        self.assertEqual(len(triangles), 2)
+        sa_flags = [e.is_seam_allowance for e in triangles]
+        self.assertIn(
+            False, sa_flags, "Expected one seam-line triangle (is_seam_allowance=False)"
+        )
+        self.assertIn(
+            True, sa_flags, "Expected one SA-line triangle (is_seam_allowance=True)"
+        )
+
+    def test_without_sa_produces_one_notch_triangle(self):
+        """Without add_seam_allowance, add_notches produces only one triangle
+        (on the seam line, is_seam_allowance=False)."""
+        part = PatternPart(name="NoSA")
+        part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
+        part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True)
+        part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
+        part.append(Segment(Point(0, 100), Point(0, 0)), is_outline=True)
+        seam_seg = Segment(Point(0, 0), Point(100, 0))
+        n_before = len(part.elements)
+        part.add_notches(Point(50, 0), seam_edge=seam_seg)
+        triangles = [
+            e for e in part.elements[n_before:] if isinstance(e.geometry, Triangle)
+        ]
+        self.assertEqual(len(triangles), 1)
+        self.assertFalse(triangles[0].is_seam_allowance)
+
+    def test_seam_line_notch_sits_on_seam(self):
+        """The seam-line triangle (is_seam_allowance=False) has its base on y=0."""
+        part = self._square_part_with_sa(10.0)
+        seam_seg = Segment(Point(0, 0), Point(100, 0))
+        n_before = len(part.elements)
+        part.add_notches(Point(50, 0), seam_edge=seam_seg)
+        seam_tri = next(
+            e
+            for e in part.elements[n_before:]
+            if isinstance(e.geometry, Triangle) and not e.is_seam_allowance
+        )
+        base_y = (seam_tri.geometry.p1.y + seam_tri.geometry.p2.y) / 2
+        self.assertAlmostEqual(base_y, 0.0, delta=0.5)
+
+    def test_sa_notch_sits_on_sa_edge(self):
+        """The SA triangle (is_seam_allowance=True) has its base on the SA edge (y≈-10)."""
+        sa_dist = 10.0
+        part = self._square_part_with_sa(sa_dist)
+        seam_seg = Segment(Point(0, 0), Point(100, 0))
+        n_before = len(part.elements)
+        part.add_notches(Point(50, 0), seam_edge=seam_seg)
+        sa_tri = next(
+            e
+            for e in part.elements[n_before:]
+            if isinstance(e.geometry, Triangle) and e.is_seam_allowance
+        )
+        base_y = (sa_tri.geometry.p1.y + sa_tri.geometry.p2.y) / 2
+        self.assertAlmostEqual(base_y, -sa_dist, delta=0.5)
+
+    def test_sa_notch_tip_points_inward(self):
+        """The SA triangle tip must point toward the interior (larger y than base)."""
+        part = self._square_part_with_sa(10.0)
+        seam_seg = Segment(Point(0, 0), Point(100, 0))
+        n_before = len(part.elements)
+        part.add_notches(Point(50, 0), seam_edge=seam_seg)
+        sa_tri = next(
+            e
+            for e in part.elements[n_before:]
+            if isinstance(e.geometry, Triangle) and e.is_seam_allowance
+        )
+        base_y = (sa_tri.geometry.p1.y + sa_tri.geometry.p2.y) / 2
+        self.assertGreater(sa_tri.geometry.p3.y, base_y)
+
+    def test_sa_notch_x_position_preserved(self):
+        """The SA triangle base centre x matches the reference point x."""
+        part = self._square_part_with_sa(10.0)
+        seam_seg = Segment(Point(0, 0), Point(100, 0))
+        n_before = len(part.elements)
+        part.add_notches(Point(50, 0), seam_edge=seam_seg)
+        sa_tri = next(
+            e
+            for e in part.elements[n_before:]
+            if isinstance(e.geometry, Triangle) and e.is_seam_allowance
+        )
+        base_x = (sa_tri.geometry.p1.x + sa_tri.geometry.p2.x) / 2
+        self.assertAlmostEqual(base_x, 50.0, delta=1.0)
 
 
 # ---------------------------------------------------------------------------

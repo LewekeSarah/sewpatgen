@@ -143,15 +143,6 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     grain_end = intersect(Segment(pt9, pt11), seam)
     front.add_grainline(start=pt9, end=grain_end[0])
 
-    # Kerben
-    front.add_notches(pt14, seam_edge=Segment(pt14, pt33))  # Seitennaht am Knie
-    front.add_notches(pt15, seam_edge=inner_seam)  # Innenbeinnaht am Saum
-    front.add_notches(pt7, seam_edge=front_curve.geometry)  # Hosenausschnitt (Kurve)
-    front.add_notches(
-        front_inner_leg.geometry.point_at_t(0.5),
-        seam_edge=front_inner_leg.geometry,
-    )  # Innennaht Mitte
-
     # Info-Box
     front.add_info_box(
         notes=[
@@ -161,8 +152,17 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
         ]
     )
 
-    # Nahtzugabe Vorderteil
+    # Nahtzugabe Vorderteil — muss vor add_notches(on_seam_allowance=True) stehen
     front.add_seam_allowance(model.seam_allowance)
+
+    # Kerben (auf Schnittkante — SA muss bereits vorhanden sein)
+    front.add_notches(pt14, seam_edge=Segment(pt14, pt33))  # Seitennaht am Knie
+    front.add_notches(pt15, seam_edge=inner_seam)  # Innenbeinnaht am Saum
+    front.add_notches(pt7, seam_edge=front_curve.geometry)  # Hosenausschnitt (Kurve)
+    front.add_notches(
+        front_inner_leg.geometry.point_at_t(0.5),
+        seam_edge=front_inner_leg.geometry,
+    )  # Innennaht Mitte
 
     # -----------------------------------------------------------------------
     # RÜCKTEIL
@@ -231,7 +231,19 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     grain_end_back = intersect(Segment(back_pt10, back_pt11), seam)
     back.add_grainline(start=back_pt9, end=grain_end_back[0])
 
-    # Kerben
+    # Info-Box
+    back.add_info_box(
+        notes=[
+            f"Modellänge {model.MoL / CM:.1f} cm",
+            f"SiH {meas.SiH / CM:.1f} cm",
+            "1× Stoff (gegengleich)",
+        ]
+    )
+
+    # Nahtzugabe Rückteil — muss vor add_notches(on_seam_allowance=True) stehen
+    back.add_seam_allowance(model.seam_allowance)
+
+    # Kerben (auf Schnittkante — SA muss bereits vorhanden sein)
     back.add_notches(pt23, seam_edge=side_back, is_back=True)  # Seitennaht am Knie
     back.add_notches(
         pt25, seam_edge=back_inner_seam.geometry, is_back=True
@@ -242,18 +254,6 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
         seam_edge=back_inner_seam.geometry,
         is_back=True,
     )  # Innennaht Mitte
-
-    # Info-Box
-    back.add_info_box(
-        notes=[
-            f"Modellänge {model.MoL / CM:.1f} cm",
-            f"SiH {meas.SiH / CM:.1f} cm",
-            "1× Stoff (gegengleich)",
-        ]
-    )
-
-    # Nahtzugabe Rückteil
-    back.add_seam_allowance(model.seam_allowance)
 
     # -----------------------------------------------------------------------
     # Nahtlängen-Kontrolle Seitennaht (Vorderteil vs. Rückteil)
