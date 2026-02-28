@@ -1,3 +1,4 @@
+import math
 import shapely.geometry as _sg
 
 from .style import StyleOptions, STYLE_GRAINLINE, STYLE_SEAM_ALLOWANCE
@@ -240,6 +241,50 @@ class PatternPart:
             return False
         return bool(poly.contains(_sg.Point(point.x, point.y)))
 
+    def _nudge_point_inside(
+        self,
+        point: Point,
+        inward_ref: Point,
+        step: float = 1.0,
+        max_steps: int = 200,
+    ) -> Point:
+        """Move *point* toward *inward_ref* until :meth:`contains_point` returns True.
+
+        Each step moves the point by *step* mm along the line toward
+        *inward_ref*.  Returns the original point unchanged if it is already
+        inside, if *inward_ref* equals *point*, or if no movement succeeded
+        within *max_steps*.
+
+        Args:
+            point: The point to check and potentially move.
+            inward_ref: Direction target (usually the midpoint of the grainline).
+            step: Step size in mm for each nudge iteration. Defaults to 1 mm.
+            max_steps: Minimum iteration cap; the actual number of steps is
+                at least ``ceil(dist / step) + 1`` so the full line is always
+                walked. Defaults to 200.
+
+        Returns:
+            A Point that is inside the outline polygon, or the original if no
+            movement was possible within *max_steps*.
+        """
+        if self.contains_point(point):
+            return point
+
+        dx = inward_ref.x - point.x
+        dy = inward_ref.y - point.y
+        dist = (dx**2 + dy**2) ** 0.5
+        if dist < 1e-9:
+            return point
+        ux, uy = dx / dist, dy / dist
+
+        steps = max(max_steps, math.ceil(dist / step) + 1)
+        for i in range(1, steps + 1):
+            candidate = Point(point.x + ux * step * i, point.y + uy * step * i)
+            if self.contains_point(candidate):
+                return candidate
+
+        return point
+
     def add_grainline(
         self,
         start: Point,
@@ -248,11 +293,12 @@ class PatternPart:
     ) -> PatternElement:
         """Add a grainline to this pattern part.
 
-        If either endpoint lies outside the outline polygon the grainline is
-        automatically shortened: the segment is intersected with the outline
-        boundary and the out-of-bounds endpoint is replaced by the nearest
-        intersection point.  This keeps the grainline visually inside the
-        piece without requiring manual adjustment of the coordinates.
+        Before adding the grainline, both endpoints are checked against the
+        outline polygon via :meth:`contains_point`.  If either point lies
+        outside the polygon, it is nudged inward along the grainline direction
+        in 1 mm steps until it is strictly inside.  This requires that at
+        least some ``is_outline`` elements have been appended before calling
+        this method.
 
         The grainline is optional — not every part requires one.
 
@@ -264,34 +310,9 @@ class PatternPart:
         Returns:
             The created PatternElement.
         """
-        poly = self._outline_polygon()
-        if poly is not None and not poly.is_empty:
-            sg_line = _sg.LineString([(start.x, start.y), (end.x, end.y)])
-            start_inside = bool(poly.contains(_sg.Point(start.x, start.y)))
-            end_inside = bool(poly.contains(_sg.Point(end.x, end.y)))
-
-            if not start_inside or not end_inside:
-                # Find where the segment crosses the outline boundary
-                hits = sg_line.intersection(poly.boundary)
-                hit_pts: list[_sg.Point] = []
-                if hits.geom_type == "Point":
-                    hit_pts = [hits]
-                elif hits.geom_type in ("MultiPoint", "GeometryCollection"):
-                    hit_pts = [g for g in hits.geoms if g.geom_type == "Point"]
-
-                if hit_pts:
-                    # Sort intersections along the original direction
-                    def _dist_from_start(p: _sg.Point) -> float:
-                        return (p.x - start.x) ** 2 + (p.y - start.y) ** 2
-
-                    hit_pts.sort(key=_dist_from_start)
-
-                    if not start_inside:
-                        h = hit_pts[0]
-                        start = Point(h.x, h.y)
-                    if not end_inside:
-                        h = hit_pts[-1]
-                        end = Point(h.x, h.y)
+        mid = Point((start.x + end.x) / 2, (start.y + end.y) / 2)
+        start = self._nudge_point_inside(start, mid)
+        end = self._nudge_point_inside(end, mid)
 
         return self.append(Segment(start, end, name=name), style=STYLE_GRAINLINE)
 
@@ -485,7 +506,15 @@ class PatternPart:
         ]
 
         # ── Pure-segment path: delegate entirely to Shapely ───────────────────
-        if not any(isinstance(g, CubicBezier) for g in geoms):
+        # Only use the uniform Shapely buffer when there are no Béziers AND no
+        # per-element SA overrides.  If any element carries its own
+        # seam_allowance, fall through to the mixed path which respects them.
+        has_per_elem_sa = any(
+            getattr(e.style, "seam_allowance", 0.0) > 0
+            for e in outline_elements
+            if isinstance(e.geometry, (Segment, CubicBezier))
+        )
+        if not any(isinstance(g, CubicBezier) for g in geoms) and not has_per_elem_sa:
             chain = build_chain(geoms)
             buf_coords = buffer_chain(chain, distance)
             added: list["PatternElement"] = []

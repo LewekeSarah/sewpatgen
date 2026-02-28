@@ -618,12 +618,20 @@ class TestPatternPartContainsPoint(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# PatternPart – add_grainline clipping
+# PatternPart – add_grainline nudging
 # ---------------------------------------------------------------------------
 
 
 class TestAddGrainlineClipping(unittest.TestCase):
-    """Tests for automatic grainline shortening in add_grainline."""
+    """Tests for automatic grainline endpoint nudging in add_grainline.
+
+    The implementation moves outside endpoints inward in 1 mm steps until
+    ``contains_point`` returns True (strictly inside).  Points on the boundary
+    are also considered outside, so the first accepted position is 1 mm inside
+    the boundary.  Tests use ``assertGreater``/``assertLess`` where applicable
+    to stay robust against the step size, and only verify the direction and
+    rough magnitude of the correction.
+    """
 
     def _square_part(self, size: float = 100.0) -> PatternPart:
         part = PatternPart(name="Square")
@@ -634,46 +642,52 @@ class TestAddGrainlineClipping(unittest.TestCase):
         return part
 
     def test_fully_inside_unchanged(self):
-        """A grainline whose both endpoints are inside is not modified."""
+        """A grainline whose both endpoints are already inside is not modified."""
         part = self._square_part(100)
         elem = part.add_grainline(Point(20, 50), Point(80, 50))
         seg = cast(Segment, elem.geometry)
         self.assertAlmostEqual(seg.p1.x, 20.0, places=3)
         self.assertAlmostEqual(seg.p2.x, 80.0, places=3)
 
-    def test_start_outside_is_clipped(self):
-        """Start point outside → clipped to the boundary on the left edge."""
+    def test_start_outside_is_nudged_inward(self):
+        """Start point outside → nudged to strictly inside on the left side."""
         part = self._square_part(100)
-        # Horizontal line: start is at x=-20 (outside), end at x=80 (inside)
+        # Horizontal line: start at x=-20 (outside), end at x=80 (inside)
         elem = part.add_grainline(Point(-20, 50), Point(80, 50))
         seg = cast(Segment, elem.geometry)
-        # After clipping start should land on x=0
-        self.assertAlmostEqual(seg.p1.x, 0.0, places=3)
+        # Nudged start must be strictly inside (x > 0) and close to the left edge
+        self.assertGreater(seg.p1.x, 0.0)
+        self.assertLess(seg.p1.x, 5.0)
         self.assertAlmostEqual(seg.p1.y, 50.0, places=3)
-        # End unchanged
+        # End was already inside — unchanged
         self.assertAlmostEqual(seg.p2.x, 80.0, places=3)
 
-    def test_end_outside_is_clipped(self):
-        """End point outside → clipped to the boundary on the right edge."""
+    def test_end_outside_is_nudged_inward(self):
+        """End point outside → nudged to strictly inside on the right side."""
         part = self._square_part(100)
         elem = part.add_grainline(Point(20, 50), Point(150, 50))
         seg = cast(Segment, elem.geometry)
+        # Start unchanged
         self.assertAlmostEqual(seg.p1.x, 20.0, places=3)
-        # End clipped to right edge x=100
-        self.assertAlmostEqual(seg.p2.x, 100.0, places=3)
+        # Nudged end must be strictly inside and close to the right edge
+        self.assertLess(seg.p2.x, 100.0)
+        self.assertGreater(seg.p2.x, 95.0)
         self.assertAlmostEqual(seg.p2.y, 50.0, places=3)
 
-    def test_both_outside_clipped_to_chord(self):
-        """Both endpoints outside but line crosses the square → chord inside."""
+    def test_both_outside_nudged_inward(self):
+        """Both endpoints outside but line crosses the square → both nudged inside."""
         part = self._square_part(100)
         # Vertical line crossing the full square from y=-20 to y=120
         elem = part.add_grainline(Point(50, -20), Point(50, 120))
         seg = cast(Segment, elem.geometry)
-        self.assertAlmostEqual(seg.p1.y, 0.0, places=3)
-        self.assertAlmostEqual(seg.p2.y, 100.0, places=3)
+        # Both ends must now be strictly inside [0, 100]
+        self.assertGreater(seg.p1.y, 0.0)
+        self.assertLess(seg.p1.y, 5.0)
+        self.assertLess(seg.p2.y, 100.0)
+        self.assertGreater(seg.p2.y, 95.0)
 
     def test_no_outline_no_crash(self):
-        """add_grainline on a part without an outline just uses the given points."""
+        """add_grainline on a part without an outline leaves points unchanged."""
         part = PatternPart(name="NoOutline")
         elem = part.add_grainline(Point(-10, -10), Point(200, 200))
         seg = cast(Segment, elem.geometry)
