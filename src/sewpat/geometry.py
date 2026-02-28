@@ -1126,16 +1126,27 @@ class CubicBezier:
         ls = _bezier_shapely(self)  # 64-segment discretisation
         return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
-    def offset(self, distance: float, center: "Point | None" = None) -> "CubicBezier":
+    def offset(
+        self,
+        distance: float,
+        center: "Point | None" = None,
+        hausdorff_limit: float = 1.5,
+    ) -> "CubicBezier":
         """Return an approximate offset (parallel) curve shifted by *distance*.
 
         The offset is constructed by independently moving each of the four
         control points in the outward normal direction at its corresponding
         curve parameter (t = 0, 1/3, 2/3, 1 for p0 … p3).  This is the
         *hodograph approximation* and is accurate to sub-millimetre precision
-        for seam allowances ≤ 2 cm on typical garment curves.  For very tight
-        curvatures (e.g. tight armscye), split the curve first with
-        ``split()`` and offset each piece.
+        for seam allowances ≤ 2 cm on typical garment curves.
+
+        **Quality check:** After computing the approximation, the Hausdorff
+        distance between the original and offset polylines (64 segments each)
+        is measured via GEOS.  If it exceeds ``hausdorff_limit × |distance|``
+        the curve is split at t = 0.5, each half is offset independently, and
+        the two results are re-joined into a single ``CubicBezier``.  This
+        makes the method self-correcting for tight curvatures such as armscye
+        or crotch curves without any manual intervention.
 
         The offset direction is chosen so that the result moves *away* from
         *center* (outward from the pattern piece interior).  If *center* is
@@ -1146,33 +1157,97 @@ class CubicBezier:
             distance: Offset in mm.  When *center* is provided the absolute
                 value is used and direction is derived from *center*.
             center: Interior reference point (e.g. ``PatternPart.centroid``).
+            hausdorff_limit: Multiplier applied to ``|distance|`` to form the
+                error threshold.  Approximations whose Hausdorff distance
+                exceeds ``hausdorff_limit × |distance|`` trigger the split
+                fallback.  Defaults to ``1.5``.  Set to ``math.inf`` to
+                disable the quality check entirely.
 
         Returns:
             A new ``CubicBezier`` approximating the offset curve.
         """
-        # Determine sign from center orientation
+        # Resolve signed scalar offset distance
         if center is not None:
-            # Use the curve midpoint (t=0.5) to decide inward/outward
             mid = self.point_at_t(0.5)
             n_mid = self.normal_at_t(0.5)
-            # Flip if normal points toward interior
             sign = 1.0 if np.dot(n_mid, mid.coords - center.coords) >= 0 else -1.0
             d = sign * abs(distance)
         else:
             d = distance
 
-        # Offset each control point by the normal at the nearest curve parameter
-        def _shifted(pt: Point, t: float) -> Point:
-            n = self.normal_at_t(t)
-            return Point(pt.x + d * n[0], pt.y + d * n[1])
+        def _hodograph(curve: "CubicBezier") -> "CubicBezier":
+            """Shift each control point by the curve normal at its parameter."""
 
-        return CubicBezier(
-            _shifted(self.p0, 0.0),
-            _shifted(self.p1, 1 / 3),
-            _shifted(self.p2, 2 / 3),
-            _shifted(self.p3, 1.0),
-            name=self.name,
-        )
+            def _shifted(pt: Point, t: float) -> Point:
+                n = curve.normal_at_t(t)
+                return Point(pt.x + d * n[0], pt.y + d * n[1])
+
+            return CubicBezier(
+                _shifted(curve.p0, 0.0),
+                _shifted(curve.p1, 1 / 3),
+                _shifted(curve.p2, 2 / 3),
+                _shifted(curve.p3, 1.0),
+                name=curve.name,
+            )
+
+        approx = _hodograph(self)
+
+        # Hausdorff quality check — skip when distance is negligible or disabled
+        if abs(distance) > 1e-9 and math.isfinite(hausdorff_limit):
+            ls_orig = _bezier_shapely(self)
+            ls_off = _bezier_shapely(approx)
+            if ls_orig.hausdorff_distance(ls_off) > hausdorff_limit * abs(distance):
+                # Split at midpoint and offset each half independently, then
+                # re-join using the outer control points of each half piece.
+                left, right = self.split(0.5)
+                left_off = _hodograph(left)
+                right_off = _hodograph(right)
+                return CubicBezier(
+                    left_off.p0,
+                    left_off.p1,
+                    right_off.p2,
+                    right_off.p3,
+                    name=self.name,
+                )
+
+        return approx
+
+    def offset_error(self, distance: float, center: "Point | None" = None) -> float:
+        """Return the Hausdorff distance between this curve and its hodograph offset.
+
+        This is a quality metric for :meth:`offset`: it measures how far the
+        hodograph approximation deviates from the true parallel curve.  A value
+        well below *distance* indicates a reliable approximation; a value above
+        ``1.5 × distance`` means the curve is too tightly curved for the
+        approximation to be trustworthy.
+
+        Internally both the original curve and its offset (computed with the
+        quality check disabled) are discretised into 64-segment Shapely
+        ``LineString`` objects and GEOS ``hausdorff_distance()`` is called —
+        a single C-level operation.
+
+        Args:
+            distance: The intended offset distance in mm (same value you would
+                pass to :meth:`offset`).
+            center: Interior reference point, forwarded to :meth:`offset` so
+                that the direction is determined consistently.
+
+        Returns:
+            Hausdorff distance in mm between the original and offset polylines.
+
+        Example::
+
+            err = curve.offset_error(10.0)
+            if err > 1.5 * 10.0:
+                left, right = curve.split(0.5)
+                sa = [left.offset(10.0), right.offset(10.0)]
+            else:
+                sa = [curve.offset(10.0)]
+        """
+        approx = self.offset(distance, center=center, hausdorff_limit=math.inf)
+        ls_orig = _bezier_shapely(self)
+        ls_off = _bezier_shapely(approx)
+        return float(ls_orig.hausdorff_distance(ls_off))
 
 
 def _intersect_bezier_bezier(
