@@ -447,9 +447,9 @@ class PatternPart:
     def add_seam_allowance(
         self,
         distance: float,
-        outline_elements: list["PatternElement"] | None = None,
-        style: "StyleOptions | None" = None,
-    ) -> list["PatternElement"]:
+        outline_elements: list[PatternElement] | None = None,
+        style: StyleOptions | None = None,
+    ) -> list[PatternElement]:
         """Add seam-allowance lines around the outline of this pattern part.
 
         - :class:`~sewpat.geometry.Rect` outlines are expanded uniformly.
@@ -533,7 +533,7 @@ class PatternPart:
         # Build a lookup: endpoint-pair → per-element SA distance.
         # Keying by frozenset of (start, end) coords means a segment that
         # build_chain reversed still matches its original style entry.
-        def _ep_key(g: "Segment | CubicBezier") -> frozenset:
+        def _ep_key(g: Segment | CubicBezier) -> frozenset:
             s, e = geom_start(g), geom_end(g)
             return frozenset(
                 [(round(s.x, 6), round(s.y, 6)), (round(e.x, 6), round(e.y, 6))]
@@ -594,7 +594,7 @@ class Pattern:
         origin: Point,
         edge_length: float = 3 * CM,
         style: StyleOptions | None = None,
-        part: "PatternPart | None" = None,
+        part: PatternPart | None = None,
     ) -> PatternElement:
         """Set a reference square for print-scale verification.
 

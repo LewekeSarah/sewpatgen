@@ -98,7 +98,7 @@ class Point:
         else:
             return float(np.linalg.norm(self.coords - other))
 
-    def translate(self, dx: float, dy: float) -> "Point":
+    def translate(self, dx: float, dy: float) -> Point:
         """Return a new point translated by the given vector.
 
         Args:
@@ -111,7 +111,7 @@ class Point:
         translation = np.array([dx, dy])
         return Point(*(self.coords + translation))
 
-    def rotate(self, center: "Point", angle_rad: float) -> "Point":
+    def rotate(self, center: Point, angle_rad: float) -> Point:
         """Rotate the point around a specified center.
 
         Args:
@@ -280,7 +280,7 @@ class Segment:
 
         return Point(*(base + self.unit_normal * distance_to_obj))
 
-    def project_point(self, point: "Point") -> "Point":
+    def project_point(self, point: Point) -> Point:
         """Return the orthogonal projection of *point* onto this segment's line.
 
         The result is the closest point on the infinite line through p1 and p2.
@@ -315,7 +315,7 @@ class Segment:
         ls = _sg.LineString([(self.p1.x, self.p1.y), (self.p2.x, self.p2.y)])
         return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
-    def point_at_length(self, arc_length: float) -> "Point":
+    def point_at_length(self, arc_length: float) -> Point:
         """Return the point at a given arc length from p1 along the segment.
 
         Mirrors ``CubicBezier.point_at_length()`` for API consistency.
@@ -334,7 +334,7 @@ class Segment:
             raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
         return self.point_at_rel_dist(arc_length / total)
 
-    def bounding_box(self) -> tuple["Point", "Point"]:
+    def bounding_box(self) -> tuple[Point, Point]:
         """Return the axis-aligned bounding box of the segment.
 
         Mirrors ``CubicBezier.bounding_box()`` for API consistency.
@@ -348,7 +348,7 @@ class Segment:
         max_y = max(self.p1.y, self.p2.y)
         return Point(min_x, min_y), Point(max_x, max_y)
 
-    def offset(self, distance: float, center: "Point | None" = None) -> "Segment":
+    def offset(self, distance: float, center: Point | None = None) -> Segment:
         """Return a new Segment offset perpendicularly by *distance*.
 
         The offset direction is chosen so that the result moves *away* from
@@ -693,7 +693,7 @@ class InfoBox:
         self,
         position: Point,
         header: str,
-        notes: "list[str] | None" = None,
+        notes: list[str] | None = None,
     ):
         self.position = position
         self.header = header
@@ -807,7 +807,7 @@ class Circle:
         )
         return Point(*point_coords)
 
-    def _intersect_with_circle(self, other: "Circle") -> "list[Point]":
+    def _intersect_with_circle(self, other: Circle) -> list[Point]:
         """Find intersection points with another circle (exact analytical solution)."""
         d = float(np.linalg.norm(self.center.coords - other.center.coords))
         r1, r2 = self.radius, other.radius
@@ -827,15 +827,15 @@ class Circle:
 def _intersect_linear_linear(
     p1: np.ndarray,
     p2: np.ndarray,
-    a: "Segment | Ray | Line",
-    b: "Segment | Ray | Line",
+    a: Segment | Ray | Line,
+    b: Segment | Ray | Line,
     check1: bool,
     check2: bool,
-) -> "list[Point]":
+) -> list[Point]:
     """Find the intersection point between two linear objects using Shapely."""
     far = 1e9
 
-    def _to_shapely(obj: "Segment | Ray | Line") -> "_sg.LineString":
+    def _to_shapely(obj: Segment | Ray | Line) -> _sg.LineString:
         if isinstance(obj, Segment):
             return _sg.LineString([(obj.p1.x, obj.p1.y), (obj.p2.x, obj.p2.y)])
         elif isinstance(obj, Ray):
@@ -975,7 +975,7 @@ class CubicBezier:
         n = self._svg().normal(t)
         return np.array([n.real, n.imag])
 
-    def point_at_length(self, arc_length: float) -> "Point":
+    def point_at_length(self, arc_length: float) -> Point:
         """Return the point on the curve at a given arc length from the start.
 
         Uses ``svgpathtools.ilength()`` (inverse arc-length) which solves for
@@ -1078,7 +1078,7 @@ class CubicBezier:
 
         return Point(min_x, min_y), Point(max_x, max_y)
 
-    def point_perpendicular(self, distance_to_obj: float, t: float) -> "Point":
+    def point_perpendicular(self, distance_to_obj: float, t: float) -> Point:
         """Return a point offset perpendicularly from the curve at parameter t.
 
         Mirrors ``Segment.point_perpendicular()`` / ``Ray.point_perpendicular()``
@@ -1102,7 +1102,7 @@ class CubicBezier:
         nor = self.normal_at_t(t)
         return Point(pt.x + distance_to_obj * nor[0], pt.y + distance_to_obj * nor[1])
 
-    def contains_point(self, point: "Point", tolerance: float = 0.01) -> bool:
+    def contains_point(self, point: Point, tolerance: float = 0.01) -> bool:
         """Check whether a point lies on the curve within a given tolerance.
 
         Mirrors ``Segment.contains_point()`` / ``Ray.contains_point()`` /
@@ -1129,9 +1129,9 @@ class CubicBezier:
     def offset(
         self,
         distance: float,
-        center: "Point | None" = None,
+        center: Point | None = None,
         hausdorff_limit: float = 1.5,
-    ) -> "CubicBezier":
+    ) -> CubicBezier:
         """Return an approximate offset (parallel) curve shifted by *distance*.
 
         The offset is constructed by independently moving each of the four
@@ -1175,7 +1175,7 @@ class CubicBezier:
         else:
             d = distance
 
-        def _hodograph(curve: "CubicBezier") -> "CubicBezier":
+        def _hodograph(curve: CubicBezier) -> CubicBezier:
             """Shift each control point by the curve normal at its parameter."""
 
             def _shifted(pt: Point, t: float) -> Point:
@@ -1192,28 +1192,35 @@ class CubicBezier:
 
         approx = _hodograph(self)
 
-        # Hausdorff quality check — skip when distance is negligible or disabled
+        # Hausdorff quality check — compare the hodograph approximation against
+        # the true parallel offset (sampled point-by-point) rather than against
+        # the original curve.  Comparing against the original always yields ≈
+        # distance and never triggers the fallback.
         if abs(distance) > 1e-9 and math.isfinite(hausdorff_limit):
-            ls_orig = _bezier_shapely(self)
+            ls_true = _true_offset_ls(self, d)
             ls_off = _bezier_shapely(approx)
-            if ls_orig.hausdorff_distance(ls_off) > hausdorff_limit * abs(distance):
+            if ls_true.hausdorff_distance(ls_off) > hausdorff_limit * abs(distance):
                 # Split at midpoint and offset each half independently, then
-                # re-join using the outer control points of each half piece.
+                # re-join: use the inner control points (p2 from the left half,
+                # p1 from the right half) which encode the geometry near the
+                # split point and produce a much better mid-curve approximation
+                # than the outer tangent-only control points.
                 left, right = self.split(0.5)
                 left_off = _hodograph(left)
                 right_off = _hodograph(right)
                 return CubicBezier(
                     left_off.p0,
-                    left_off.p1,
-                    right_off.p2,
+                    left_off.p2,
+                    right_off.p1,
                     right_off.p3,
                     name=self.name,
                 )
 
         return approx
 
-    def offset_error(self, distance: float, center: "Point | None" = None) -> float:
-        """Return the Hausdorff distance between this curve and its hodograph offset.
+    def offset_error(self, distance: float, center: Point | None = None) -> float:
+        """Return the Hausdorff distance between the hodograph approximation and
+        the true parallel offset of this curve.
 
         This is a quality metric for :meth:`offset`: it measures how far the
         hodograph approximation deviates from the true parallel curve.  A value
@@ -1221,19 +1228,18 @@ class CubicBezier:
         ``1.5 × distance`` means the curve is too tightly curved for the
         approximation to be trustworthy.
 
-        Internally both the original curve and its offset (computed with the
-        quality check disabled) are discretised into 64-segment Shapely
-        ``LineString`` objects and GEOS ``hausdorff_distance()`` is called —
-        a single C-level operation.
+        The *true* parallel offset is sampled point-by-point (64 perpendicular
+        steps along the curve) and compared to the hodograph approximation via
+        GEOS ``hausdorff_distance()``.
 
         Args:
-            distance: The intended offset distance in mm (same value you would
-                pass to :meth:`offset`).
+            distance: The intended offset distance in mm.
             center: Interior reference point, forwarded to :meth:`offset` so
                 that the direction is determined consistently.
 
         Returns:
-            Hausdorff distance in mm between the original and offset polylines.
+            Hausdorff distance in mm between the true parallel offset and the
+            hodograph approximation.
 
         Example::
 
@@ -1244,15 +1250,22 @@ class CubicBezier:
             else:
                 sa = [curve.offset(10.0)]
         """
+        if center is not None:
+            mid = self.point_at_t(0.5)
+            n_mid = self.normal_at_t(0.5)
+            sign = 1.0 if np.dot(n_mid, mid.coords - center.coords) >= 0 else -1.0
+            d = sign * abs(distance)
+        else:
+            d = distance
         approx = self.offset(distance, center=center, hausdorff_limit=math.inf)
-        ls_orig = _bezier_shapely(self)
+        ls_true = _true_offset_ls(self, d)
         ls_off = _bezier_shapely(approx)
-        return float(ls_orig.hausdorff_distance(ls_off))
+        return float(ls_true.hausdorff_distance(ls_off))
 
 
 def _intersect_bezier_bezier(
-    a: "CubicBezier", b: "CubicBezier", tol: float = 1e-12
-) -> "list[Point]":
+    a: CubicBezier, b: CubicBezier, tol: float = 1e-12
+) -> list[Point]:
     """Find intersections between two cubic Bézier curves.
 
     Uses ``svgpathtools`` as a backend, which implements the numerically robust
@@ -1278,14 +1291,32 @@ def _intersect_bezier_bezier(
     return intersections
 
 
-def _bezier_shapely(b: "CubicBezier", n: int = 64) -> "_sg.LineString":
+def _bezier_shapely(b: CubicBezier, n: int = 64) -> _sg.LineString:
     """Discretise a CubicBezier into a Shapely LineString with *n* segments."""
     return _sg.LineString(
         [(b.point_at_t(i / n).x, b.point_at_t(i / n).y) for i in range(n + 1)]
     )
 
 
-def _linear_shapely(obj: "Segment | Ray | Line", far: float = 1e9) -> "_sg.LineString":
+def _true_offset_ls(b: CubicBezier, d: float, n: int = 64) -> _sg.LineString:
+    """Return the true parallel offset of *b* at signed distance *d* as a
+    Shapely LineString.
+
+    Each of the *n+1* sample points is shifted perpendicularly by *d* along
+    the curve normal at that parameter value.  This is the ground-truth
+    reference used by :meth:`CubicBezier.offset_error` and the Hausdorff
+    quality check in :meth:`CubicBezier.offset`.
+    """
+    pts = []
+    for i in range(n + 1):
+        t = i / n
+        pt = b.point_at_t(t)
+        nor = b.normal_at_t(t)
+        pts.append((pt.x + d * nor[0], pt.y + d * nor[1]))
+    return _sg.LineString(pts)
+
+
+def _linear_shapely(obj: Segment | Ray | Line, far: float = 1e9) -> _sg.LineString:
     """Convert a Segment, Ray or Line to a Shapely LineString."""
     if isinstance(obj, Segment):
         return _sg.LineString([(obj.p1.x, obj.p1.y), (obj.p2.x, obj.p2.y)])
@@ -1298,7 +1329,7 @@ def _linear_shapely(obj: "Segment | Ray | Line", far: float = 1e9) -> "_sg.LineS
         return _sg.LineString([(start[0], start[1]), (end[0], end[1])])
 
 
-def _shapely_to_points(result: "_sg.base.BaseGeometry") -> "list[Point]":
+def _shapely_to_points(result: _sg.base.BaseGeometry) -> list[Point]:
     """Extract a list of Points from a Shapely intersection result."""
     if result.is_empty:
         return []
@@ -1314,7 +1345,7 @@ GEOMETRIC_TYPE = (
 )
 
 
-def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> "list[Point]":
+def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
     """Find intersections between two geometric objects.
 
     Linear objects (Segment, Ray, Line) and circles are handled via Shapely's
@@ -1370,7 +1401,7 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> "list[Point]":
 
 def segment_to_intersection(
     start: Point, dir: np.ndarray, obj: GEOMETRIC_TYPE
-) -> "tuple[Point, Segment]":
+) -> tuple[Point, Segment]:
     """Create a Segment from start to the first intersection with obj in direction dir."""
     pt = intersect(Ray(start, dir), obj)[0]
     return pt, Segment(start, pt)
@@ -1383,19 +1414,19 @@ def segment_to_intersection(
 _CHAIN_SNAP = 0.5  # mm — endpoint-matching tolerance
 
 
-def geom_start(g: "Segment | CubicBezier") -> Point:
+def geom_start(g: Segment | CubicBezier) -> Point:
     """Return the start point of a Segment or CubicBezier."""
     return g.p1 if isinstance(g, Segment) else g.p0
 
 
-def geom_end(g: "Segment | CubicBezier") -> Point:
+def geom_end(g: Segment | CubicBezier) -> Point:
     """Return the end point of a Segment or CubicBezier."""
     return g.p2 if isinstance(g, Segment) else g.p3
 
 
 def with_endpoints(
-    g: "Segment | CubicBezier", new_start: Point, new_end: Point
-) -> "Segment | CubicBezier":
+    g: Segment | CubicBezier, new_start: Point, new_end: Point
+) -> Segment | CubicBezier:
     """Return a copy of *g* with replaced start and end points."""
     if isinstance(g, Segment):
         return Segment(new_start, new_end, name=g.name)
@@ -1403,8 +1434,8 @@ def with_endpoints(
 
 
 def build_chain(
-    geoms: "list[Segment | CubicBezier]",
-) -> "list[Segment | CubicBezier]":
+    geoms: list[Segment | CubicBezier],
+) -> list[Segment | CubicBezier]:
     """Sort *geoms* into a single connected chain, reversing pieces as needed.
 
     Walks through *geoms* greedily: the next piece whose start or end lies
@@ -1435,8 +1466,8 @@ def build_chain(
 
 
 def miter_corner(
-    ga: "Segment | CubicBezier",
-    gb: "Segment | CubicBezier",
+    ga: Segment | CubicBezier,
+    gb: Segment | CubicBezier,
     sa_distance: float,
     miter_limit: float = 4.0,
 ) -> Point:
@@ -1448,7 +1479,7 @@ def miter_corner(
     *miter_limit* × *sa_distance*.
     """
 
-    def _unit_tangent(g: "Segment | CubicBezier", at_end: bool) -> np.ndarray:
+    def _unit_tangent(g: Segment | CubicBezier, at_end: bool) -> np.ndarray:
         d = (
             g.p2.coords - g.p1.coords
             if isinstance(g, Segment)
@@ -1478,11 +1509,11 @@ def miter_corner(
 
 
 def buffer_chain(
-    geoms: "list[Segment | CubicBezier]",
+    geoms: list[Segment | CubicBezier],
     distance: float,
     join_style: int = 2,
     mitre_limit: float = 4.0,
-) -> "list[tuple[float, float]]":
+) -> list[tuple[float, float]]:
     """Buffer a connected chain of Segments outward by *distance* using Shapely.
 
     Builds a Shapely Polygon from the chain, applies ``Polygon.buffer()``,
@@ -1510,9 +1541,9 @@ def buffer_chain(
 
 
 def outline_polygon(
-    geoms: "list[Segment | CubicBezier]",
+    geoms: list[Segment | CubicBezier],
     bezier_samples: int = 32,
-) -> "_sg.Polygon | None":
+) -> _sg.Polygon | None:
     """Build a Shapely Polygon from a list of Segments and CubicBeziers.
 
     Segments contribute their start point; CubicBeziers are discretised into
@@ -1532,7 +1563,7 @@ def outline_polygon(
     return _sg.Polygon(coords)
 
 
-def seam_length(geoms: "list[Segment | CubicBezier]") -> float:
+def seam_length(geoms: list[Segment | CubicBezier]) -> float:
     """Return the total arc length of a list of Segments and/or CubicBeziers.
 
     Each element contributes its exact arc length:
