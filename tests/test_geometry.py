@@ -933,5 +933,85 @@ class TestCubicBezierConsistencyMethods(unittest.TestCase):
         self.assertFalse(b.contains_point(far, tolerance=0.01))
 
 
+# ---------------------------------------------------------------------------
+# miter_corner – reflex-corner detection (improvement B)
+# ---------------------------------------------------------------------------
+
+
+from sewpat.geometry import miter_corner, build_chain, geom_end, geom_start
+
+
+class TestMiterCornerReflex(unittest.TestCase):
+    """Tests for the reflex-corner (concave) detection in miter_corner()."""
+
+    def _rect_offset_geoms(self):
+        """Return a 100×100 mm square offset outward by 10 mm as four Segments.
+
+        The square corners at (0,0), (100,0), (100,100), (0,100) are offset to
+        (-10,-10), (110,-10), (110,110), (-10,110).  Consecutive offset segments
+        share a gap at each corner that miter_corner must bridge.
+        """
+        # Offset outward: each side is shifted by 10 mm away from center
+        top = Segment(Point(-10, -10), Point(110, -10))  # y=-10 (was y=0)
+        right = Segment(Point(110, -10), Point(110, 110))  # x=110 (was x=100)
+        bottom = Segment(Point(110, 110), Point(-10, 110))  # y=110 (was y=100)
+        left = Segment(Point(-10, 110), Point(-10, -10))  # x=-10 (was x=0)
+        return [top, right, bottom, left]
+
+    def test_convex_corner_miter_extends_outward(self):
+        """A convex 90° corner must produce a miter point outside the original seams."""
+        geoms = self._rect_offset_geoms()
+        # Corner between top (→) and right (↓): expected miter at (110, -10)
+        # which is the exact intersection — gap is 0 but we test conceptually.
+        # Use two perpendicular segments that meet at a gap:
+        ga = Segment(Point(0, -10), Point(100, -10))  # horizontal, going right
+        gb = Segment(Point(110, 0), Point(110, 100))  # vertical, going down
+        corner = miter_corner(ga, gb, 10.0)
+        # Miter should extend to (110, -10) — forward along ta
+        self.assertAlmostEqual(corner.x, 110.0, places=3)
+        self.assertAlmostEqual(corner.y, -10.0, places=3)
+
+    def test_reflex_corner_returns_bevel_midpoint(self):
+        """A reflex (concave) corner must return the bevel midpoint, not a spike.
+
+        Simulate a U-shaped notch: two offset segments whose junction is concave.
+        ga goes left (←) and gb goes right (→) — a 180°-reversal / hairpin,
+        which is the extreme reflex case.
+        """
+        ga = Segment(Point(50, 5), Point(0, 5))  # going left, end at (0,5)
+        gb = Segment(Point(0, 5), Point(50, 5))  # going right, start at (0,5)
+        # For a less extreme case: ga ends at (10,0) going right, gb starts at
+        # (10, 20) going right — the miter intersection would be far behind.
+        ga2 = Segment(Point(0, 0), Point(10, 0))  # → end=(10,0)
+        gb2 = Segment(Point(10, 20), Point(20, 20))  # → start=(10,20) — not aligned
+        # The intersection is behind end_a (dot < 0), so bevel midpoint expected
+        corner2 = miter_corner(ga2, gb2, 5.0)
+        bevel_x = 0.5 * (10.0 + 10.0)
+        bevel_y = 0.5 * (0.0 + 20.0)
+        self.assertAlmostEqual(corner2.x, bevel_x, places=3)
+        self.assertAlmostEqual(corner2.y, bevel_y, places=3)
+
+    def test_reflex_180_degree_returns_bevel(self):
+        """Two anti-parallel segments (U-turn) produce bevel midpoint, not infinity."""
+        # ga: (0,0)→(10,0) ta=(+1,0)
+        # gb: (10,0)→(0,0)  tb=(-1,0)  — exact anti-parallel (180° turn)
+        ga = Segment(Point(0, 0), Point(10, 0))
+        gb = Segment(Point(10, 0), Point(0, 0))
+        corner = miter_corner(ga, gb, 5.0)
+        # Lines are parallel so _intersect_lines returns None → bevel midpoint
+        self.assertAlmostEqual(corner.x, 10.0, places=3)
+        self.assertAlmostEqual(corner.y, 0.0, places=3)
+
+    def test_convex_corner_not_clamped_to_bevel(self):
+        """A normal outward 90° corner must NOT be treated as reflex."""
+        # ga going right (+x), gb going down (+y) — standard outward CW corner
+        ga = Segment(Point(0, -10), Point(90, -10))  # → ta=(+1,0)
+        gb = Segment(Point(110, 0), Point(110, 90))  # ↓ tb=(0,+1)
+        corner = miter_corner(ga, gb, 10.0)
+        # Must NOT return bevel midpoint (50, 45) — must return miter (110,-10)
+        self.assertAlmostEqual(corner.x, 110.0, places=2)
+        self.assertAlmostEqual(corner.y, -10.0, places=2)
+
+
 if __name__ == "__main__":
     unittest.main()

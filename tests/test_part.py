@@ -998,5 +998,99 @@ class TestSeamAllowanceReversal(unittest.TestCase):
         )
 
 
+# ---------------------------------------------------------------------------
+# add_seam_allowance – corner_join parameter (improvement E)
+# ---------------------------------------------------------------------------
+
+
+class TestSeamAllowanceCornerJoin(unittest.TestCase):
+    """Tests for the corner_join parameter of add_seam_allowance()."""
+
+    def _square_part(self) -> PatternPart:
+        """Return a 100×100 mm square as a pure-segment PatternPart."""
+        part = PatternPart(name="Square")
+        part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
+        part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True)
+        part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
+        part.append(Segment(Point(0, 100), Point(0, 0)), is_outline=True)
+        return part
+
+    def test_default_is_miter(self):
+        """add_seam_allowance() with no corner_join argument uses miter (default)."""
+        part = self._square_part()
+        sa_elems = part.add_seam_allowance(10.0)
+        self.assertTrue(len(sa_elems) > 0)
+        self.assertTrue(all(e.is_seam_allowance for e in sa_elems))
+
+    def test_miter_explicit(self):
+        """corner_join='miter' is accepted and produces SA elements."""
+        part = self._square_part()
+        sa_elems = part.add_seam_allowance(10.0, corner_join="miter")
+        self.assertTrue(len(sa_elems) > 0)
+
+    def test_round_join(self):
+        """corner_join='round' is accepted and produces SA elements."""
+        part = self._square_part()
+        sa_elems = part.add_seam_allowance(10.0, corner_join="round")
+        self.assertTrue(len(sa_elems) > 0)
+        self.assertTrue(all(e.is_seam_allowance for e in sa_elems))
+
+    def test_bevel_join(self):
+        """corner_join='bevel' is accepted and produces SA elements."""
+        part = self._square_part()
+        sa_elems = part.add_seam_allowance(10.0, corner_join="bevel")
+        self.assertTrue(len(sa_elems) > 0)
+        self.assertTrue(all(e.is_seam_allowance for e in sa_elems))
+
+    def test_invalid_corner_join_raises(self):
+        """An unknown corner_join value raises ValueError."""
+        part = self._square_part()
+        with self.assertRaises(ValueError):
+            part.add_seam_allowance(10.0, corner_join="zigzag")
+
+    def test_round_produces_more_segments_than_bevel(self):
+        """Round join inserts arc segments at corners; bevel does not.
+
+        For a pure-segment square Shapely round join (join_style=1) generates
+        arc approximation points at corners, so it produces more output
+        segments than a bevel join (join_style=3).
+        """
+        part_round = self._square_part()
+        part_bevel = self._square_part()
+        n_round = len(part_round.add_seam_allowance(10.0, corner_join="round"))
+        n_bevel = len(part_bevel.add_seam_allowance(10.0, corner_join="bevel"))
+        self.assertGreater(
+            n_round,
+            n_bevel,
+            f"Round ({n_round} segs) should have more segments than bevel ({n_bevel} segs)",
+        )
+
+    def test_miter_corner_join_on_bezier_path(self):
+        """corner_join='miter' works on a mixed Bézier outline."""
+        part = PatternPart(name="Curved")
+        part.append(
+            CubicBezier(Point(0, 0), Point(33, -30), Point(67, -30), Point(100, 0)),
+            is_outline=True,
+        )
+        part.append(Segment(Point(100, 0), Point(100, 50)), is_outline=True)
+        part.append(Segment(Point(100, 50), Point(0, 50)), is_outline=True)
+        part.append(Segment(Point(0, 50), Point(0, 0)), is_outline=True)
+        sa_elems = part.add_seam_allowance(10.0, corner_join="miter")
+        self.assertTrue(len(sa_elems) > 0)
+
+    def test_bevel_corner_join_on_bezier_path(self):
+        """corner_join='bevel' works on a mixed Bézier outline."""
+        part = PatternPart(name="Curved")
+        part.append(
+            CubicBezier(Point(0, 0), Point(33, -30), Point(67, -30), Point(100, 0)),
+            is_outline=True,
+        )
+        part.append(Segment(Point(100, 0), Point(100, 50)), is_outline=True)
+        part.append(Segment(Point(100, 50), Point(0, 50)), is_outline=True)
+        part.append(Segment(Point(0, 50), Point(0, 0)), is_outline=True)
+        sa_elems = part.add_seam_allowance(10.0, corner_join="bevel")
+        self.assertTrue(len(sa_elems) > 0)
+
+
 if __name__ == "__main__":
     unittest.main()

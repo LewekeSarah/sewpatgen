@@ -39,7 +39,7 @@ class PatternElement:
 
     def __init__(
         self,
-        geometry: object,
+        geometry: Segment | Rect | Circle | Triangle | CubicBezier | Point | InfoBox,
         style: StyleOptions | None = None,
         name: str | None = None,
         is_outline: bool = False,
@@ -449,12 +449,13 @@ class PatternPart:
         distance: float,
         outline_elements: list[PatternElement] | None = None,
         style: StyleOptions | None = None,
+        corner_join: str = "miter",
     ) -> list[PatternElement]:
         """Add seam-allowance lines around the outline of this pattern part.
 
         - :class:`~sewpat.geometry.Rect` outlines are expanded uniformly.
         - Pure-segment outlines use a Shapely ``Polygon.buffer()`` (GEOS
-          Miter-join, limit 4.0) — robust and concave-safe.
+          join, limit 4.0) — robust and concave-safe.
         - Mixed or Bézier outlines offset each element individually via
           :meth:`~sewpat.geometry.CubicBezier.offset` /
           :meth:`~sewpat.geometry.Segment.offset` and stitch corners with a
@@ -466,10 +467,25 @@ class PatternPart:
                 to all elements whose ``is_outline`` flag is ``True``.
             style: Style for the generated elements. Defaults to
                 :data:`~sewpat.style.STYLE_SEAM_ALLOWANCE`.
+            corner_join: Corner join style for the offset path.  One of
+                ``"miter"`` (default), ``"round"``, or ``"bevel"``.
+
+                * ``"miter"`` — tangent-line intersection clamped by a miter
+                  limit of 4 × *distance*; reflex corners fall back to bevel.
+                * ``"round"`` — circular arc at outside corners (Shapely
+                  join_style=1 for pure-segment paths; bevel midpoint used for
+                  the mixed/Bézier path as a conservative fallback).
+                * ``"bevel"`` — straight cut across the corner.
 
         Returns:
             List of the newly created :class:`PatternElement` objects.
         """
+        _CORNER_JOIN_STYLES = {"miter": 2, "round": 1, "bevel": 3}
+        if corner_join not in _CORNER_JOIN_STYLES:
+            raise ValueError(
+                f"corner_join must be one of {list(_CORNER_JOIN_STYLES)!r}, "
+                f"got {corner_join!r}"
+            )
         if distance <= 0:
             raise ValueError(
                 f"seam allowance distance must be positive, got {distance}"
@@ -516,7 +532,11 @@ class PatternPart:
         )
         if not any(isinstance(g, CubicBezier) for g in geoms) and not has_per_elem_sa:
             chain = build_chain(geoms)
-            buf_coords = buffer_chain(chain, distance)
+            buf_coords = buffer_chain(
+                chain,
+                distance,
+                join_style=_CORNER_JOIN_STYLES[corner_join],
+            )
             added: list["PatternElement"] = []
             for (x1, y1), (x2, y2) in zip(buf_coords, buf_coords[1:]):
                 elem = self.append(
@@ -553,7 +573,15 @@ class PatternPart:
             j = (i + 1) % n
             ga, gb = offset_geoms[i], offset_geoms[j]
             if geom_end(ga).distance_to(geom_start(gb)) > 0.01:
-                corner = miter_corner(ga, gb, distance)
+                if corner_join == "miter":
+                    corner = miter_corner(ga, gb, distance)
+                else:
+                    # "bevel" or "round": for the mixed/Bézier path use the
+                    # bevel midpoint as a conservative, spike-free fallback.
+                    # (True round arcs for Bézier paths are improvement F.)
+                    _ea = geom_end(ga)
+                    _sb = geom_start(gb)
+                    corner = Point(*(0.5 * (_ea.coords + _sb.coords)))
                 offset_geoms[i] = with_endpoints(ga, geom_start(ga), corner)
                 offset_geoms[j] = with_endpoints(gb, corner, geom_end(gb))
         added_mixed: list["PatternElement"] = []

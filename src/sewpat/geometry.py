@@ -1475,8 +1475,14 @@ def miter_corner(
 
     Extends the end-tangent of *ga* and the start-tangent of *gb* as infinite
     lines and returns their intersection.  Falls back to the bevel midpoint
-    when the lines are parallel or the miter extension exceeds
-    *miter_limit* × *sa_distance*.
+    when:
+
+    * the lines are parallel,
+    * the miter extension exceeds *miter_limit* × *sa_distance*, or
+    * the corner is a **reflex** angle (interior angle > 180°, i.e. a
+      concave corner on the offset curve).  For reflex corners the miter
+      intersection would shoot inward and create a spike; using the bevel
+      midpoint keeps the offset curve well-behaved.
     """
 
     def _unit_tangent(g: Segment | CubicBezier, at_end: bool) -> np.ndarray:
@@ -1492,6 +1498,9 @@ def miter_corner(
     start_b = geom_start(gb)
     ta = _unit_tangent(ga, at_end=True)
     tb = _unit_tangent(gb, at_end=False)
+
+    bevel_mid = Point(*(0.5 * (end_a.coords + start_b.coords)))
+
     pt = _intersect_lines(
         end_a.coords,
         np.array([-ta[1], ta[0]]),
@@ -1499,12 +1508,21 @@ def miter_corner(
         np.array([-tb[1], tb[0]]),
     )
     if pt is None:
-        return Point(*(0.5 * (end_a.coords + start_b.coords)))
+        return bevel_mid
+
+    # Reflex-corner detection: if the intersection point lies *behind* the
+    # end of ga (i.e. in the opposite direction of ta) the corner is concave
+    # on the offset curve and the miter would punch inward, creating a spike.
+    # This check is winding-direction-independent: dot(pt - end_a, ta) < 0
+    # is true for reflex corners regardless of whether the outline is CW or CCW.
+    if float(np.dot(pt - end_a.coords, ta)) < 0.0:
+        return bevel_mid
+
     if (
         sa_distance > 1e-9
         and float(np.linalg.norm(pt - end_a.coords)) > miter_limit * sa_distance
     ):
-        return Point(*(0.5 * (end_a.coords + start_b.coords)))
+        return bevel_mid
     return Point(*pt)
 
 
