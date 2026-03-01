@@ -5,24 +5,29 @@ from typing import Any, Callable
 import numpy as np
 
 from sewpat.geometry import (
-    Point,
-    Segment,
     Circle,
-    Rect,
-    Triangle,
-    InfoBox,
     CubicBezier,
-    geom_start,
+    InfoBox,
+    Point,
+    Rect,
+    Segment,
+    Triangle,
     geom_end,
-)
-
-from sewpat.part import PatternPart, PatternElement, Pattern, ConstructionGridPart, Block, OverlayPart
-from sewpat.style import (
-    StyleOptions,
-    Marker,
-    DEFAULT_FONT_SIZE_MM,
+    geom_start,
 )
 from sewpat.markers import ARROW_DEFS, SCISSOR_BLADE_OVERHANG
+from sewpat.part import (
+    Block,
+    ConstructionGridPart,
+    Pattern,
+    PatternElement,
+    PatternPart,
+)
+from sewpat.style import (
+    DEFAULT_FONT_SIZE_MM,
+    Marker,
+    StyleOptions,
+)
 
 __all__ = [
     "StyleOptions",

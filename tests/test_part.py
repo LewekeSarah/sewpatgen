@@ -27,7 +27,6 @@ from sewpat.part import Block, OverlayPart, Pattern, PatternElement, PatternPart
 from sewpat.style import STYLE_GRAINLINE, StyleOptions
 from sewpat.units import CM, MM
 
-
 # ---------------------------------------------------------------------------
 # PatternElement
 # ---------------------------------------------------------------------------
@@ -1057,7 +1056,8 @@ class TestSeamAllowanceReversal(unittest.TestCase):
     def _sa_distances(self, part: PatternPart, global_sa: float) -> list[float]:
         """Return the lengths of all SA segments added to *part*."""
         sa_elems = [e for e in part.elements if e.is_seam_allowance]
-        from sewpat.geometry import Segment as _S, CubicBezier as _CB
+        from sewpat.geometry import CubicBezier as _CB
+        from sewpat.geometry import Segment as _S
 
         return [
             e.geometry.length for e in sa_elems if isinstance(e.geometry, (_S, _CB))
@@ -1310,9 +1310,10 @@ class TestBlock(unittest.TestCase):
 
     def test_excluded_from_default_export(self):
         """Block must not appear in export_pattern_svg_mm output by default."""
-        from sewpat.render import export_pattern_svg_mm
         import tempfile
         from pathlib import Path
+
+        from sewpat.render import export_pattern_svg_mm
 
         block = Block(name="Grundschnitt")
         block.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True)
@@ -1337,9 +1338,10 @@ class TestBlock(unittest.TestCase):
 
     def test_included_when_requested_by_name(self):
         """Block is rendered when its name is passed via parts=."""
-        from sewpat.render import export_pattern_svg_mm
         import tempfile
         from pathlib import Path
+
+        from sewpat.render import export_pattern_svg_mm
 
         block = Block(name="Grundschnitt")
         block.append(Segment(Point(0, 0), Point(50, 0), name="Oberkante"), is_outline=True)

@@ -1,28 +1,37 @@
-import math
 import shapely.geometry as _sg
 
-from .style import StyleOptions, STYLE_GRAINLINE, STYLE_SEAM_ALLOWANCE, STYLE_CONSTRUCTION_GRID
 from .geometry import (
-    Rect,
-    Point,
-    Segment,
     Circle,
-    Triangle,
-    InfoBox,
     CubicBezier,
-    edge_tangent,
-    geom_start,
-    geom_end,
-    geom_to_shapely,
-    with_endpoints,
-    build_chain,
+    InfoBox,
+    Point,
+    Ray,
+    Rect,
+    Segment,
+    Triangle,
     buffer_chain,
+    build_chain,
+    edge_tangent,
+    geom_end,
+    geom_start,
+    geom_to_shapely,
     miter_corner,
-    round_corner,
     outline_polygon,
     project_onto_edge,
+    round_corner,
+    with_endpoints,
+)
+from .geometry import (
     offset_adaptive as _offset_adaptive,
+)
+from .geometry import (
     seam_length as _geom_seam_length,
+)
+from .style import (
+    STYLE_CONSTRUCTION_GRID,
+    STYLE_GRAINLINE,
+    STYLE_SEAM_ALLOWANCE,
+    StyleOptions,
 )
 from .units import CM, MM
 
@@ -522,7 +531,6 @@ class PatternPart:
         style: StyleOptions | None = None,
     ) -> PatternElement:
         """Append a construction-grid line (never ``is_outline``; defaults to grid style)."""
-        from .geometry import Ray as _Ray
         return self.append(
             geometry,
             style=style if style is not None else STYLE_CONSTRUCTION_GRID,
@@ -546,12 +554,14 @@ class PatternPart:
         within *corner_clearance* mm).  Horizontal grid lines take priority over
         vertical ones when two candidates are within *min_spacing* mm of each other.
         """
-        from .geometry import intersect as _intersect, Ray as _Ray
         import math as _math
+
         import numpy as _np
 
+        from .geometry import intersect as _intersect
+
         outline_elems = [e for e in self.elements if e.is_outline and isinstance(e.geometry, (Segment, CubicBezier))]
-        grid_geoms = [e.geometry for e in grid_part.elements if isinstance(e.geometry, (Segment, CubicBezier, _Ray))]
+        grid_geoms = [e.geometry for e in grid_part.elements if isinstance(e.geometry, (Segment, CubicBezier, Ray))]
 
         # Build map of forward tangents at each outline endpoint for corner detection.
         ep_tangents: dict[tuple, list] = {}
@@ -583,7 +593,7 @@ class PatternPart:
                         return True   # sharp corner
             return False
 
-        def _is_horizontal(g: Segment | CubicBezier | _Ray) -> bool:
+        def _is_horizontal(g: Segment | CubicBezier | Ray) -> bool:
             if isinstance(g, Segment):
                 return abs(geom_start(g).y - geom_end(g).y) < 1e-6
             return False
@@ -862,8 +872,8 @@ class Pattern:
                 p for p in self.parts
                 if not isinstance(p, (ConstructionGridPart, Block))
             ]
-        if target_part is None and len(self.parts) == 1:
-            target_part = self.parts[0]
+            if len(regular) == 1:
+                target_part = regular[0]
 
         final_origin = origin
         if target_part is not None:

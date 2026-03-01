@@ -7,14 +7,18 @@ from sewpat.geometry import (
     Point,
     Segment,
     intersect,
-    segment_to_intersection,
 )
-from sewpat.units import CM
-from sewpat.measurements import Allowance, BlouseMeasurements, ModelConfig, make_blouse_measurements
+from sewpat.measurements import (
+    Allowance,
+    BlouseMeasurements,
+    ModelConfig,
+    make_blouse_measurements,
+)
 from sewpat.pages import DinA0
-from sewpat.part import PatternPart, Pattern, ConstructionGrid
+from sewpat.part import ConstructionGrid, Pattern, PatternPart
+from sewpat.person import BalanceAdjustments, Person
 from sewpat.render import export_pattern_svg_mm
-from sewpat.person import Person, BalanceAdjustments
+from sewpat.units import CM
 
 
 def make_person() -> Person:

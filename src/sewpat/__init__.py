@@ -12,46 +12,54 @@ Modules:
 """
 
 from .geometry import (
-    Point,
-    Segment,
-    Ray,
     Circle,
-    Line,
-    Rect,
-    Triangle,
     CubicBezier,
+    Line,
+    Point,
+    Ray,
+    Rect,
+    Segment,
+    Triangle,
     edge_tangent,
     intersect,
-    segment_to_intersection,
     seam_length,
+    segment_to_intersection,
 )
-from .units import MM, CM, INCH
-from .part import PatternPart, PatternElement, Pattern, ConstructionGrid, ConstructionGridPart, Block, OverlayPart
-from .pages import DinA4, DinA2, DinA1, DinA0
 from .measurements import (
     Allowance,
     BlouseMeasurements,
-    TrouserMeasurements,
     ModelConfig,
+    TrouserMeasurements,
     make_blouse_measurements,
     make_measurements_trouser,
 )
+from .pages import DinA0, DinA1, DinA2, DinA4
+from .part import (
+    Block,
+    ConstructionGrid,
+    ConstructionGridPart,
+    OverlayPart,
+    Pattern,
+    PatternElement,
+    PatternPart,
+)
 from .style import (
-    StyleOptions,
-    Marker,
     DEFAULT_STROKE_WIDTH,
     DEFAULT_STROKE_WIDTH_GRAIN,
-    STYLE_GRAINLINE,
-    STYLE_FOLD,
-    STYLE_HEM,
-    STYLE_CUT,
-    STYLE_STITCH,
     STYLE_CENTER_LINE,
-    STYLE_WAISTBAND,
-    STYLE_SEAM_ALLOWANCE,
     STYLE_CONSTRUCTION_GRID,
+    STYLE_CUT,
     STYLE_DEBUG_RED,
+    STYLE_FOLD,
+    STYLE_GRAINLINE,
+    STYLE_HEM,
+    STYLE_SEAM_ALLOWANCE,
+    STYLE_STITCH,
+    STYLE_WAISTBAND,
+    Marker,
+    StyleOptions,
 )
+from .units import CM, INCH, MM
 
 __all__ = [
     # Geometry primitives
@@ -64,6 +72,7 @@ __all__ = [
     "Triangle",
     "CubicBezier",
     # Geometry helpers
+    "edge_tangent",
     "intersect",
     "segment_to_intersection",
     "seam_length",
@@ -104,5 +113,6 @@ __all__ = [
     "STYLE_WAISTBAND",
     "STYLE_CENTER_LINE",
     "STYLE_SEAM_ALLOWANCE",
+    "STYLE_CONSTRUCTION_GRID",
     "STYLE_DEBUG_RED",
 ]

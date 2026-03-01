@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
+from sewpat.person import BalanceAdjustments, Gender, Person, PersonAnalyser
 from sewpat.units import CM
-from sewpat.person import Gender, Person, BalanceAdjustments, PersonAnalyser
 
 
 @dataclass

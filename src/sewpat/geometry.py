@@ -1,11 +1,10 @@
 """2D geometry primitives for sewing pattern generation."""
 
 import math
-import numpy as np
 from dataclasses import dataclass
-from sewpat.units import MM, CM
-import shapely.geometry as _sg
 
+import numpy as np
+import shapely.geometry as _sg
 from svgpathtools import CubicBezier as _SvgCubicBezier
 
 

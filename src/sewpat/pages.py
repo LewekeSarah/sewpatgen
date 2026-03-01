@@ -1,26 +1,28 @@
 from dataclasses import dataclass
+from typing import ClassVar
+
 from sewpat.units import MM
 
 
-@dataclass
+@dataclass(frozen=True)
 class DinA4:
-    width: float = 210 * MM
-    height: float = 297 * MM
+    width: ClassVar[float] = 210 * MM
+    height: ClassVar[float] = 297 * MM
 
 
-@dataclass
+@dataclass(frozen=True)
 class DinA2:
-    width: float = 420 * MM
-    height: float = 594 * MM
+    width: ClassVar[float] = 420 * MM
+    height: ClassVar[float] = 594 * MM
 
 
-@dataclass
+@dataclass(frozen=True)
 class DinA1:
-    width: float = 594 * MM
-    height: float = 841 * MM
+    width: ClassVar[float] = 594 * MM
+    height: ClassVar[float] = 841 * MM
 
 
-@dataclass
+@dataclass(frozen=True)
 class DinA0:
-    width: float = 841 * MM
-    height: float = 1189 * MM
+    width: ClassVar[float] = 841 * MM
+    height: ClassVar[float] = 1189 * MM

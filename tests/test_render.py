@@ -30,12 +30,11 @@ from sewpat.render import (
     export_pattern_svg_mm,
 )
 from sewpat.style import (
-    StyleOptions,
     STYLE_GRAINLINE,
     STYLE_STITCH,
+    StyleOptions,
 )
 from sewpat.units import CM
-
 
 # ---------------------------------------------------------------------------
 # Helpers

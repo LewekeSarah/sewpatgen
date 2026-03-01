@@ -6,8 +6,10 @@ defined in the geometry module: Point, Segment, Ray, and Circle.
 
 import math
 import unittest
+
 import numpy as np
-from sewpat.geometry import Point, Segment, Ray, Circle, CubicBezier, intersect
+
+from sewpat.geometry import Circle, CubicBezier, Point, Ray, Segment, intersect
 
 
 class TestPoint(unittest.TestCase):

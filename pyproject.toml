@@ -25,13 +25,19 @@ dependencies = [
 requires = ["uv_build>=0.8.3,<0.9.0"]
 build-backend = "uv_build"
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ["py313"]
+target-version = "py314"
 
-[tool.isort]
-profile = "black"
-line_length = 88
+[tool.ruff.lint]
+select = ["E", "F", "I"]  # pycodestyle errors, pyflakes, isort
+
+[tool.ruff.lint.isort]
+known-first-party = ["sewpat"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -42,6 +48,6 @@ venv = ".venv"
 
 [dependency-groups]
 dev = [
-    "black>=25.1.0",
     "pytest>=8.4.1",
+    "ruff>=0.15.4",
 ]

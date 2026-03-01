@@ -1,31 +1,32 @@
+from pathlib import Path
+
 from sewpat import (
-    Segment,
-    PatternPart,
-    Pattern,
-    ConstructionGrid,
     STYLE_HEM,
-    STYLE_WAISTBAND,
     STYLE_STITCH,
+    STYLE_WAISTBAND,
+    ConstructionGrid,
+    Pattern,
+    PatternPart,
+    Segment,
 )
 from sewpat.geometry import (
-    Point,
-    intersect,
-    Ray,
     Circle,
     CubicBezier,
+    Point,
+    Ray,
+    intersect,
 )
-from sewpat.units import CM
 from sewpat.measurements import (
-    ModelConfig,
     Allowance,
-    make_measurements_trouser,
+    ModelConfig,
     TrouserMeasurements,
+    make_measurements_trouser,
 )
 from sewpat.pages import DinA1
 from sewpat.person import Gender, Person
 from sewpat.render import export_pattern_svg_mm
 from sewpat.style import StyleOptions
-from pathlib import Path
+from sewpat.units import CM
 
 
 def make_person() -> Person:

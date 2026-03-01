@@ -8,16 +8,20 @@ Covers:
   - parts= name-based grid inclusion in the renderer
 """
 
-import unittest
 import tempfile
+import unittest
 from pathlib import Path
 
-from sewpat.geometry import Circle, CubicBezier, Point, Rect, Segment, Triangle
-from sewpat.part import ConstructionGrid, ConstructionGridPart, Pattern, PatternElement, PatternPart
+from sewpat.geometry import Point, Segment, Triangle
+from sewpat.part import (
+    ConstructionGrid,
+    ConstructionGridPart,
+    Pattern,
+    PatternElement,
+    PatternPart,
+)
 from sewpat.render import _build_svg, export_pattern_svg_mm
 from sewpat.style import STYLE_CONSTRUCTION_GRID, StyleOptions
-from sewpat.units import CM, MM
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -1,13 +1,22 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from sewpat import Pattern, PatternPart, Point, Segment, STYLE_HEM, STYLE_WAISTBAND, STYLE_STITCH, OverlayPart
+from sewpat import (
+    STYLE_HEM,
+    STYLE_STITCH,
+    STYLE_WAISTBAND,
+    OverlayPart,
+    Pattern,
+    PatternPart,
+    Point,
+    Segment,
+)
 from sewpat.geometry import Rect, intersect
-from sewpat.part import ConstructionGrid
-from sewpat.units import CM
-from sewpat.style import StyleOptions
 from sewpat.pages import DinA4
+from sewpat.part import ConstructionGrid
 from sewpat.render import export_pattern_svg_mm
+from sewpat.style import StyleOptions
+from sewpat.units import CM
 
 
 @dataclass
