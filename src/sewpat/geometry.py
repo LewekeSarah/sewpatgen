@@ -1142,6 +1142,21 @@ def geom_end(g: Segment | CubicBezier) -> Point:
     return g.end
 
 
+def edge_tangent(g: Segment | CubicBezier, at_end: bool) -> np.ndarray:
+    """Unit tangent of *g* in the direction of travel at its start or end.
+
+    Args:
+        at_end: ``True`` → tangent at t=1 (arriving); ``False`` → tangent at t=0 (leaving).
+    """
+    import numpy as _np
+    if isinstance(g, Segment):
+        d = g.end.coords - g.start.coords
+    else:
+        d = g.tangent_at_t(1.0) if at_end else g.tangent_at_t(0.0)
+    norm = float(_np.linalg.norm(d))
+    return d / norm if norm > 1e-12 else d
+
+
 def with_endpoints(
     g: Segment | CubicBezier, new_start: Point, new_end: Point
 ) -> Segment | CubicBezier:
