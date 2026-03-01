@@ -1206,31 +1206,16 @@ def miter_corner(
 ) -> Point:
     """Return the miter-join corner between the end of *ga* and the start of *gb*.
 
-    Extends the end-tangent of *ga* and the start-tangent of *gb* as infinite
-    lines and returns their intersection.  Falls back to the bevel midpoint
-    when:
-
-    * the lines are parallel,
-    * the miter extension exceeds *miter_limit* × *sa_distance*, or
-    * the corner is a **reflex** angle (interior angle > 180°, i.e. a
-      concave corner on the offset curve).  For reflex corners the miter
-      intersection would shoot inward and create a spike; using the bevel
-      midpoint keeps the offset curve well-behaved.
+    Extends the end-tangent of *ga* and start-tangent of *gb* as infinite lines
+    and returns their intersection.  Falls back to the bevel midpoint when the
+    lines are parallel, the miter extension exceeds *miter_limit* × *sa_distance*,
+    or the corner is reflex (concave on the offset curve).
     """
-
-    def _unit_tangent(g: Segment | CubicBezier, at_end: bool) -> np.ndarray:
-        d = (
-            g.end.coords - g.start.coords
-            if isinstance(g, Segment)
-            else (g.tangent_at_t(1.0) if at_end else g.tangent_at_t(0.0))
-        )
-        norm = float(np.linalg.norm(d))
-        return d / norm if norm > 1e-12 else d
 
     end_a = geom_end(ga)
     start_b = geom_start(gb)
-    ta = _unit_tangent(ga, at_end=True)
-    tb = _unit_tangent(gb, at_end=False)
+    ta = edge_tangent(ga, at_end=True)
+    tb = edge_tangent(gb, at_end=False)
 
     bevel_mid = Point(*(0.5 * (end_a.coords + start_b.coords)))
 
@@ -1263,45 +1248,20 @@ def round_corner(
     ga: "Segment | CubicBezier",
     gb: "Segment | CubicBezier",
 ) -> "CubicBezier | Point":
-    """Return a cubic Bézier arc approximation for a round join at a convex corner.
+    """Return a cubic Bézier arc for a round join at a convex corner.
 
-    Constructs a cubic Bézier that approximates the circular arc connecting
-    ``geom_end(ga)`` to ``geom_start(gb)`` around the outside of the corner.
-    The arc centre is the intersection of the outward normals at the two
-    endpoints (i.e. the miter point).  Handle lengths follow the standard
-    **k = (4/3) tan(θ/4)** formula, giving a maximum radial error < 0.027 %
-    of the arc radius for included angles up to 90°.
-
-    Falls back to the bevel midpoint (as a :class:`Point`) for:
-
-    * parallel or anti-parallel tangents (degenerate corner),
-    * reflex (concave) corners where the arc would curve inward,
-    * degenerate geometry (zero chord, zero radius, …).
-
-    Args:
-        ga: The outgoing offset element whose *end* point is the arc start.
-        gb: The incoming offset element whose *start* point is the arc end.
-
-    Returns:
-        A :class:`CubicBezier` arc, or a :class:`Point` bevel midpoint
-        fallback.
+    Connects ``geom_end(ga)`` to ``geom_start(gb)`` using handle lengths from
+    the standard **k = (4/3) tan(θ/4)** formula (< 0.027 % radial error up to
+    90°).  Falls back to a :class:`Point` bevel midpoint for parallel/anti-parallel
+    tangents, reflex corners, or degenerate geometry.
     """
-
-    def _unit_tangent(g: "Segment | CubicBezier", at_end: bool) -> np.ndarray:
-        d = (
-            g.end.coords - g.start.coords  # type: ignore[union-attr]
-            if isinstance(g, Segment)
-            else (g.tangent_at_t(1.0) if at_end else g.tangent_at_t(0.0))
-        )
-        norm = float(np.linalg.norm(d))
-        return d / norm if norm > 1e-12 else d
 
     end_a = geom_end(ga)
     start_b = geom_start(gb)
     bevel_mid = Point(*(0.5 * (end_a.coords + start_b.coords)))
 
-    ta = _unit_tangent(ga, at_end=True)
-    tb = _unit_tangent(gb, at_end=False)
+    ta = edge_tangent(ga, at_end=True)
+    tb = edge_tangent(gb, at_end=False)
 
     # Signed angle from ta to tb.  Positive → left turn (convex outward arc).
     cross = float(ta[0] * tb[1] - ta[1] * tb[0])
@@ -1420,6 +1380,44 @@ def seam_length(geoms: list[Segment | CubicBezier]) -> float:
     for g in geoms:
         total += g.length
     return total
+
+
+def project_onto_edge(
+    edge: "Segment | CubicBezier",
+    ref: "Point",
+    inward_ref: "Point | None" = None,
+) -> "tuple[Point, np.ndarray, np.ndarray]":
+    """Project *ref* onto *edge* and return ``(notch_pt, along, normal)``.
+
+    ``along`` is the unit tangent at the projected point; ``normal`` is the
+    unit normal flipped to point toward *inward_ref* when given.
+    """
+    import shapely.ops as _so
+
+    if isinstance(edge, Segment):
+        notch_pt = edge.project_point(ref)
+        along = edge.unit_direction
+        normal = edge.unit_normal
+    else:
+        ls = geom_to_shapely(edge)
+        _, nearest = _so.nearest_points(_sg.Point(ref.x, ref.y), ls)
+        notch_pt = Point(nearest.x, nearest.y)
+        # Recover t from arc-length fraction along the chord approximation.
+        frac = ls.project(_sg.Point(nearest.x, nearest.y), normalized=True)
+        t_c = float(np.clip(frac, 0.0, 1.0))
+        raw = edge.tangent_at_t(t_c)
+        norm = float(np.linalg.norm(raw))
+        along = raw / norm if norm > 1e-12 else raw
+        normal = edge.normal_at_t(t_c)
+
+    if inward_ref is not None:
+        dot = float(normal[0]) * (inward_ref.x - notch_pt.x) + float(normal[1]) * (
+            inward_ref.y - notch_pt.y
+        )
+        if dot < 0:
+            normal = -normal
+
+    return notch_pt, along, normal
 
 
 def offset_adaptive(

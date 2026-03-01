@@ -1,6 +1,5 @@
 import math
 import shapely.geometry as _sg
-import shapely.ops as _so
 
 from .style import StyleOptions, STYLE_GRAINLINE, STYLE_SEAM_ALLOWANCE, STYLE_CONSTRUCTION_GRID
 from .geometry import (
@@ -21,6 +20,7 @@ from .geometry import (
     miter_corner,
     round_corner,
     outline_polygon,
+    project_onto_edge,
     offset_adaptive as _offset_adaptive,
     seam_length as _geom_seam_length,
 )
@@ -187,42 +187,27 @@ class PatternPart:
         step: float = 1.0,
         max_steps: int = 200,
     ) -> Point:
-        """Walk *point* toward *inward_ref* until it lies inside (or on) the outline.
+        """Return *point* moved inside the outline if it lies strictly outside.
 
-        Points already inside, on the boundary, or within 0.1 mm of it (Bézier
-        discretisation tolerance) are returned unchanged.  The walk always stays
-        on the *point* → *inward_ref* axis so the caller controls the direction.
+        Points already inside or on the boundary (within 0.1 mm) are returned
+        unchanged — boundary endpoints are valid grainline endpoints.
         """
-        if self.contains_point(point):
-            return point
-
         poly = self._outline_polygon()
         if poly is None or poly.is_empty:
             return point
-
-        dx = inward_ref.x - point.x
-        dy = inward_ref.y - point.y
+        sp = _sg.Point(point.x, point.y)
+        # Keep points that are inside or on (≤ 0.1 mm from) the boundary.
+        if poly.contains(sp) or poly.exterior.distance(sp) <= 0.1:
+            return point
+        # Point is strictly outside — snap to boundary, then nudge inward.
+        snapped = poly.exterior.interpolate(poly.exterior.project(sp))
+        dx = inward_ref.x - snapped.x
+        dy = inward_ref.y - snapped.y
         dist = (dx**2 + dy**2) ** 0.5
         if dist < 1e-9:
             return point
-        ux, uy = dx / dist, dy / dist
-
-        # 0.1 mm buffer absorbs Bézier-to-polyline discretisation rounding.
-        buffered = poly.buffer(0.1)
-
-        def _inside(p: Point) -> bool:
-            return bool(buffered.contains(_sg.Point(p.x, p.y)))
-
-        if _inside(point):
-            return point
-
-        steps = max(max_steps, math.ceil(dist / step) + 1)
-        for i in range(1, steps + 1):
-            candidate = Point(point.x + ux * step * i, point.y + uy * step * i)
-            if _inside(candidate):
-                return candidate
-
-        return point
+        nudge = min(step, dist * 0.5)
+        return Point(snapped.x + nudge * dx / dist, snapped.y + nudge * dy / dist)
 
     def add_grainline(
         self,
@@ -280,15 +265,11 @@ class PatternPart:
 
         Args:
             *points: Reference points for the notches.
-            seam_edge: Edge to project onto and derive tangent/normal from.
-                Without it a vertical triangle centred on the point is used.
+            seam_edge: Edge to project onto for tangent/normal; without it a
+                vertical triangle centred on the point is used.
             length: Tip-to-base distance. Defaults to 0.8 cm.
             width: Base width on the seam edge. Defaults to 0.4 cm.
             is_back: Two neighbouring triangles (back piece convention) if True.
-
-        When SA elements are already present (i.e. :meth:`add_seam_allowance`
-        was called first), a second triangle is projected onto the cut edge and
-        the seam-line copy is flagged ``is_seam_notch`` so rendering can hide it.
         """
         inward_ref = self.centroid
         half_w = width / 2
@@ -300,43 +281,11 @@ class PatternPart:
             if e.is_seam_allowance and isinstance(e.geometry, (Segment, CubicBezier))
         ]
 
-        def _project(edge: Segment | CubicBezier, ref: Point) -> tuple:
-            if isinstance(edge, Segment):
-                notch_pt = edge.project_point(ref)
-                along = edge.unit_direction
-                normal = edge.unit_normal
-            else:
-                _, nearest = _so.nearest_points(
-                    _sg.Point(ref.x, ref.y), geom_to_shapely(edge)
-                )
-                notch_pt = Point(nearest.x, nearest.y)
-                t_c = (
-                    min(
-                        range(65),
-                        key=lambda k: edge.point_at_t(k / 64).distance_to(notch_pt),
-                    )
-                    / 64
-                )
-                tangent = edge.tangent_at_t(t_c)
-                tang_len = float((tangent[0] ** 2 + tangent[1] ** 2) ** 0.5)
-                along = tangent / tang_len if tang_len > 1e-12 else tangent
-                normal = edge.normal_at_t(t_c)
-            if inward_ref is not None:
-                dot = normal[0] * (inward_ref.x - notch_pt.x) + normal[1] * (
-                    inward_ref.y - notch_pt.y
-                )
-                if dot < 0:
-                    normal = -normal
-            return notch_pt, along, normal
-
         def _closest_sa_edge(ref: Point) -> Segment | CubicBezier | None:
-            best_edge, best_dist = None, float("inf")
+            if not sa_geoms:
+                return None
             sp = _sg.Point(ref.x, ref.y)
-            for g in sa_geoms:
-                d = sp.distance(geom_to_shapely(g))
-                if d < best_dist:
-                    best_dist, best_edge = d, g
-            return best_edge
+            return min(sa_geoms, key=lambda g: sp.distance(geom_to_shapely(g)))
 
         def _place_triangles(notch_pt: Point, along, normal, is_sa: bool) -> list:
             ax, ay = float(along[0]), float(along[1])
@@ -357,7 +306,7 @@ class PatternPart:
 
         for pt in points:
             if seam_edge is not None:
-                notch_pt, along, normal = _project(seam_edge, pt)
+                notch_pt, along, normal = project_onto_edge(seam_edge, pt, inward_ref)
             else:
                 notch_pt, along, normal = pt, (1.0, 0.0), (0.0, -1.0)
             seam_elems = _place_triangles(notch_pt, along, normal, is_sa=False)
@@ -365,7 +314,9 @@ class PatternPart:
             if sa_geoms:
                 sa_edge = _closest_sa_edge(notch_pt)
                 if sa_edge is not None:
-                    sa_notch_pt, sa_along, sa_normal = _project(sa_edge, notch_pt)
+                    sa_notch_pt, sa_along, sa_normal = project_onto_edge(
+                        sa_edge, notch_pt, inward_ref
+                    )
                     _place_triangles(sa_notch_pt, sa_along, sa_normal, is_sa=True)
                     for e in seam_elems:
                         e.is_seam_notch = True
@@ -379,21 +330,17 @@ class PatternPart:
     ) -> list[PatternElement]:
         """Offset the outline outward by *distance* mm and add the result as SA elements.
 
-        Three code paths:
-        - **Rect** outlines are expanded uniformly.
-        - **Pure-segment** outlines (no Béziers, no per-element overrides) use
-          ``Shapely.Polygon.buffer()`` — fast and concave-safe.
-        - **Mixed / Bézier** outlines offset each element individually and stitch
-          corners according to *corner_join*.
+        Three code paths: **Rect** outlines expand uniformly; **pure-segment**
+        outlines use ``Shapely.Polygon.buffer()``; **mixed/Bézier** outlines
+        offset each element and stitch corners via *corner_join*.
 
-        Corner join and distance can be overridden per-element via
-        ``StyleOptions(corner_join=…, seam_allowance=…)`` on any outline element;
-        per-element values take priority over the arguments here.
+        Per-element ``StyleOptions(corner_join=…, seam_allowance=…)`` overrides
+        the arguments here.
 
         Args:
             distance: Seam allowance in mm (must be positive).
             outline_elements: Defaults to all ``is_outline`` elements.
-            style: Style for the generated elements. Defaults to ``STYLE_SEAM_ALLOWANCE``.
+            style: Defaults to ``STYLE_SEAM_ALLOWANCE``.
             corner_join: ``"miter"`` (default), ``"round"``, or ``"bevel"``.
 
         Returns:
@@ -581,15 +528,9 @@ class PatternPart:
     ) -> list[PatternElement]:
         """Add notches where outline edges intersect construction lines.
 
-        Intersections at or near a sharp corner vertex (angle > *corner_angle_threshold*°
-        or free endpoint) are skipped — first exactly (within *tolerance* mm) by
-        ``_is_corner_endpoint``, then by proximity: any intersection within
-        *corner_clearance* mm of a sharp corner vertex is also suppressed.
-        Smooth chain joints are deliberately not treated as corners, so notches
-        that coincide with a measurement-line crossing at a chain vertex are kept.
-        When two candidates are closer than *min_spacing* mm, the one from a horizontal
-        grid line takes priority.  Duplicates within *tolerance* mm of an existing
-        notch are also suppressed.
+        Sharp corners and free endpoints are skipped (within *tolerance* mm and
+        within *corner_clearance* mm).  Horizontal grid lines take priority over
+        vertical ones when two candidates are within *min_spacing* mm of each other.
         """
         from .geometry import intersect as _intersect, Ray as _Ray
         import math as _math
@@ -795,20 +736,13 @@ class Pattern:
         style: StyleOptions | None = None,
         part: PatternPart | None = None,
     ) -> PatternElement:
-        """Add a print-scale verification square to the pattern.
-
-        If *part* is given (or the pattern has exactly one part) and *origin*
-        falls outside the bounding box, the square is clamped inside with 2 mm
-        padding.
+        """Add a print-scale verification square, clamped inside the bounding box with 2 mm padding.
 
         Args:
             origin: Preferred top-left corner.
             edge_length: Side length. Defaults to 3 cm.
-            style: Defaults to ``StyleOptions(stroke_width=DEFAULT_STROKE_WIDTH)``.
-            part: Part used for boundary clamping. Auto-detected for single-part patterns.
-
-        Returns:
-            The created PatternElement (also stored in ``self.reference_square``).
+            style: Defaults to a plain stroke style.
+            part: Part for boundary clamping; auto-detected for single-part patterns.
         """
         from .style import DEFAULT_STROKE_WIDTH
 
