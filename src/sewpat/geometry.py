@@ -108,6 +108,10 @@ class Segment:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def translate(self, dx: float, dy: float) -> "Segment":
+        """Return a copy translated by (dx, dy)."""
+        return Segment(self.p1.translate(dx, dy), self.p2.translate(dx, dy), name=self.name)
+
     @property
     def start(self) -> Point:
         """Start point of the segment (alias for p1)."""
@@ -358,6 +362,10 @@ class Ray:
         base = self.origin.coords + arc_length * self.direction
         return Point(*(base + self.unit_normal * distance))
 
+    def translate(self, dx: float, dy: float) -> "Ray":
+        """Return a copy translated by (dx, dy)."""
+        return Ray(self.origin.translate(dx, dy), self.direction, name=self.name)
+
 
 class Line:
     """An infinite line going in a specific direction.
@@ -447,6 +455,10 @@ class Line:
         base = self.point.coords + arc_length * self.direction
         return Point(*(base + self.unit_normal * distance))
 
+    def translate(self, dx: float, dy: float) -> "Line":
+        """Return a copy translated by (dx, dy)."""
+        return Line(self.point.translate(dx, dy), self.direction, name=self.name)
+
 
 class Rect:
     """An axis-aligned rectangle defined by its top-left corner, width and height.
@@ -476,7 +488,11 @@ class Rect:
         return f"Rect(origin={self.origin}, width={self.width:.6g}, height={self.height:.6g})"
 
     def __repr__(self) -> str:
-        return self.__str__()
+        return f"Rect(origin={self.origin}, width={self.width:.6g}, height={self.height:.6g})"
+
+    def translate(self, dx: float, dy: float) -> "Rect":
+        """Return a copy translated by (dx, dy)."""
+        return Rect(self.origin.translate(dx, dy), self.width, self.height, name=self.name)
 
 
 class Triangle:
@@ -508,6 +524,15 @@ class Triangle:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def translate(self, dx: float, dy: float) -> "Triangle":
+        """Return a copy translated by (dx, dy)."""
+        return Triangle(
+            self.p1.translate(dx, dy),
+            self.p2.translate(dx, dy),
+            self.p3.translate(dx, dy),
+            name=self.name,
+        )
+
 
 class InfoBox:
     """A text info box displayed at a given position.
@@ -537,6 +562,12 @@ class InfoBox:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def translate(self, dx: float, dy: float) -> "InfoBox":
+        """Return a copy translated by (dx, dy)."""
+        moved = InfoBox(self.position.translate(dx, dy), self.header, list(self.notes))
+        moved.name = self.name
+        return moved
 
 
 class Circle:
@@ -606,6 +637,10 @@ class Circle:
                 + self.radius * np.array([math.cos(angle_rad), math.sin(angle_rad)])
             )
         )
+
+    def translate(self, dx: float, dy: float) -> "Circle":
+        """Return a copy translated by (dx, dy)."""
+        return Circle(self.center.translate(dx, dy), self.radius, name=self.name)
 
     def _intersect_with_circle(self, other: Circle) -> list[Point]:
         """Find intersection points with another circle (exact analytical solution)."""
@@ -701,6 +736,16 @@ class CubicBezier:
     def end(self) -> Point:
         """End point of the curve (alias for p3)."""
         return self.p3
+
+    def translate(self, dx: float, dy: float) -> "CubicBezier":
+        """Return a copy translated by (dx, dy)."""
+        return CubicBezier(
+            self.p0.translate(dx, dy),
+            self.p1.translate(dx, dy),
+            self.p2.translate(dx, dy),
+            self.p3.translate(dx, dy),
+            name=self.name,
+        )
 
     def point_at_t(self, t: float) -> Point:
         """Evaluate the Bezier curve at parameter t.

@@ -26,7 +26,7 @@ from .geometry import (
     seam_length,
 )
 from .units import MM, CM, INCH
-from .part import PatternPart, PatternElement, Pattern, ConstructionGrid
+from .part import PatternPart, PatternElement, Pattern, ConstructionGrid, ConstructionGridPart, Block, OverlayPart
 from .style import (
     StyleOptions,
     Marker,
@@ -66,6 +66,10 @@ __all__ = [
     "PatternPart",
     "PatternElement",
     "Pattern",
+    "ConstructionGrid",
+    "ConstructionGridPart",
+    "Block",
+    "OverlayPart",
     # Style
     "StyleOptions",
     "Marker",

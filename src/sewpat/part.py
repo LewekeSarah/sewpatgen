@@ -669,6 +669,112 @@ class PatternPart:
         return created
 
 
+class ConstructionGridPart(PatternPart):
+    """A :class:`PatternPart` that represents a construction grid.
+
+    Grid elements are kept separate from the main pattern pieces when rendering
+    by default — they are only included when requested explicitly by name via
+    the ``parts=`` argument of the export functions.
+
+    Prefer building instances via :class:`ConstructionGrid` rather than
+    creating them directly.
+    """
+
+    def __init__(self, name: str = "Konstruktionsgitter", elements: list[PatternElement] | None = None) -> None:
+        super().__init__(name=name, elements=elements)
+
+
+class Block(PatternPart):
+    """A base-block pattern piece derived from balanced measurements.
+
+    A block captures the fundamental shape of a garment *without* personal
+    fitting adjustments or style details.  It serves as a reusable starting
+    point for new patterns and can be shown/hidden via the ``show_blocks``
+    flag in the SVG export helpers.
+
+    The part is identified by ``isinstance(part, Block)``.
+    """
+
+    def __init__(self, name: str, elements: list[PatternElement] | None = None) -> None:
+        super().__init__(name=name, elements=elements)
+
+
+class OverlayPart(PatternPart):
+    """A pattern piece drafted directly on top of a parent part (same coordinate space).
+
+    The overlay is constructed normally — its geometry lives in the same
+    coordinate system as *parent*, so it can share reference points and edges
+    directly.  When drafting is done, call :meth:`explode` to produce an
+    independent, repositioned :class:`PatternPart` that can be cut separately.
+
+    The parent receives a small precision-point marker at the overlay's anchor
+    so the sewer knows where to place it back on the garment.
+
+    Args:
+        name: Name of the overlay piece.
+        parent: The pattern part this overlay is drafted on.
+        anchor: A reference point on the parent that marks the overlay's
+            position.  Written onto the parent as a precision mark when
+            :meth:`explode` is called.  Defaults to the first outline point.
+
+    Example::
+
+        pocket = OverlayPart("Tasche", parent=front, anchor=pocket_top_left)
+        pocket.append(Segment(pocket_top_left, pocket_top_right), is_outline=True)
+        # … add more geometry …
+        exploded = pocket.explode(offset=Point(10*CM, 0))
+        pattern.add_part(pocket)     # visible on the front piece during drafting
+        pattern.add_part(exploded)   # separate cut piece
+    """
+
+    def __init__(
+        self,
+        name: str,
+        parent: PatternPart,
+        anchor: Point | None = None,
+        elements: list[PatternElement] | None = None,
+    ) -> None:
+        super().__init__(name=name, elements=elements)
+        self.parent = parent
+        self.anchor = anchor
+
+    def explode(self, offset: Point, name: str | None = None) -> PatternPart:
+        """Detach this overlay into a standalone :class:`PatternPart`.
+
+        Every element's geometry is translated by *offset* so the new part
+        sits next to the parent on the page rather than on top of it.  The
+        parent receives a precision-point marker at :attr:`anchor` (or at the
+        first outline point if no anchor was given) so the cut position on the
+        original piece is preserved.
+
+        Args:
+            offset: Translation applied to all geometry in the exploded part.
+                Typically ``Point(parent_width + gap, 0)`` to place it to the
+                right of the parent.
+            name: Name for the exploded part.  Defaults to ``self.name``.
+
+        Returns:
+            A new plain :class:`PatternPart` with translated geometry.
+        """
+        dx, dy = offset.x, offset.y
+
+        # Build the exploded part by translating every element's geometry.
+        exploded = PatternPart(name=name if name is not None else self.name)
+        for elem in self.elements:
+            new_geom = elem.geometry.translate(dx, dy)
+            new_elem = PatternElement(
+                geometry=new_geom,
+                style=elem.style,
+                name=elem.name,
+                is_outline=elem.is_outline,
+                is_seam_allowance=elem.is_seam_allowance,
+            )
+            new_elem.is_seam_notch = elem.is_seam_notch
+            exploded.elements.append(new_elem)
+
+        return exploded
+
+
 class ConstructionGrid:
     """Builds an orthogonal construction grid as a :class:`PatternPart`.
 

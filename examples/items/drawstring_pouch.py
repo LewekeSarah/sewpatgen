@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from sewpat import Pattern, PatternPart, Point, Segment, STYLE_HEM, STYLE_WAISTBAND, STYLE_STITCH
+from sewpat import Pattern, PatternPart, Point, Segment, STYLE_HEM, STYLE_WAISTBAND, STYLE_STITCH, OverlayPart
 from sewpat.geometry import Rect, intersect
 from sewpat.part import ConstructionGrid
 from sewpat.units import CM
@@ -122,20 +122,47 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     body.add_grid_notches(grid_part, corner_clearance = 0.0,)
 
     # -----------------------------------------------------------------------
-    # Part 2: Drawstring channel
+    # Part 2: Drawstring channel — drafted as an overlay on the body,
+    # then exploded into a standalone cut piece.
     # -----------------------------------------------------------------------
-    drawstring = PatternPart(name="drawstring")
-    pattern.add_part(drawstring)
-
+    ds_origin = intersect(g_ds_top, g_left)[0]
+    drawstring = OverlayPart(
+        name="Tunnelzug",
+        parent=body,
+        anchor=ds_origin,
+    )
     drawstring.append(
         Rect(
-            origin=intersect(g_ds_top, g_left)[0],
+            origin=ds_origin,
             width=model.width,
             height=model.drawstring_height,
-            name="drawstring / Tunnelzug",
+            name="Tunnelzug",
         ),
         style=StyleOptions(dash_array=[5.0, 2.0]),
+        is_outline=True,
     )
+    drawstring.add_grainline(
+        start=Point(ds_origin.x + model.width * 0.5, ds_origin.y ),
+        end=Point(ds_origin.x + model.width * 0.5, ds_origin.y + model.drawstring_height),
+    )
+
+    # Explode first (before SA), then add SA only to the standalone cut piece.
+    gap = 1.5 * CM
+    explode_offset = Point(0, model.height + gap)
+    drawstring_cut = drawstring.explode(
+        offset=explode_offset,
+        name="Tunnelzug (Schnitteil)",
+    )
+    drawstring_cut.add_seam_allowance(model.seam_allowance)
+    drawstring_cut.add_info_box(
+        header="Drawstring",
+        notes=[
+        f"Nahtzugabe {model.seam_allowance / CM:.0f} cm",
+        "Testing purpose only",
+    ])
+
+    pattern.add_part(drawstring)      # overlay — visible on body during drafting
+    pattern.add_part(drawstring_cut)  # standalone cut piece
 
     return pattern
 
@@ -151,28 +178,38 @@ if __name__ == "__main__":
     )
     pattern = make_drawstring_pouch(drawstring_pouch)
 
-    # Export complete pattern (body + drawstring channel)
+    # Full drafting view: body with overlay drawstring channel shown in place
     export_pattern_svg_mm(
         pattern,
         filename=str(Path(__file__).parent / "drawstring_pouch.svg"),
         width_mm=DinA4.height,
-        height_mm=DinA4.width,
+        height_mm=2 * DinA4.width,
+        parts=["body", "Tunnelzug"],
     )
 
-    # Export body only (without drawstring channel markings)
+    # Cut layout: body + exploded drawstring channel as separate pieces
+    # (OverlayPart is excluded by default, only the exploded cut piece appears)
+    export_pattern_svg_mm(
+        pattern,
+        filename=str(Path(__file__).parent / "drawstring_pouch_cut.svg"),
+        width_mm=DinA4.height,
+        height_mm=2 * DinA4.width,
+    )
+
+    # Body only
     export_pattern_svg_mm(
         pattern,
         filename=str(Path(__file__).parent / "drawstring_pouch_body_only.svg"),
         width_mm=DinA4.height,
-        height_mm=DinA4.width,
+        height_mm=2 * DinA4.width,
         parts=["body"],
     )
 
-    # Export complete pattern without seam allowance lines
+    # Without seam allowance
     export_pattern_svg_mm(
         pattern,
         filename=str(Path(__file__).parent / "drawstring_pouch_no_sa.svg"),
         width_mm=DinA4.height,
-        height_mm=DinA4.width,
+        height_mm=2 * DinA4.width,
         show_seam_allowance=False,
     )

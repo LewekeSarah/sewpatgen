@@ -17,7 +17,7 @@ from sewpat.geometry import (
     geom_end,
 )
 
-from sewpat.part import PatternPart, PatternElement, Pattern
+from sewpat.part import PatternPart, PatternElement, Pattern, ConstructionGridPart, Block, OverlayPart
 from sewpat.style import (
     StyleOptions,
     Marker,
@@ -570,17 +570,21 @@ def export_pattern_svg_mm(
         style_map: Element-type → StyleOptions overrides; unknown keys warn.
         show_points: Render Point elements.
         show_bezier_control_points: Render Bézier control-point handles.
-        parts: Part names to include; ``None`` renders all parts.
+        parts: Part names to include.  When ``None``, all parts are rendered
+            except :class:`ConstructionGridPart`, :class:`Block`, and
+            :class:`OverlayPart` — those must be requested explicitly by name.
         show_seam_allowance: Include SA offset lines (default True).
         show_construction_grid: Include construction grid elements (default True).
     """
     styles = _resolve_styles(style_map)
 
-    selected_parts = (
-        [p for p in pattern.parts if p.name in parts]
-        if parts is not None
-        else pattern.parts
-    )
+    if parts is not None:
+        selected_parts = [p for p in pattern.parts if p.name in parts]
+    else:
+        selected_parts = [
+            p for p in pattern.parts
+            if not isinstance(p, (ConstructionGridPart, Block, OverlayPart))
+        ]
 
     element_groups: list[list[PatternElement]] = []
     if pattern.reference_square is not None:
