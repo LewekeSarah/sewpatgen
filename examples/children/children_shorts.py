@@ -202,12 +202,6 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     ])
     front.add_seam_allowance(model.seam_allowance)
 
-    # Kerben (manuell — Kurven, Innenbeinmitte; Gitterkerben kommen später)
-    front.add_notches(pt14, seam_edge=Segment(pt14, pt33))
-    front.add_notches(pt15, seam_edge=inner_seam)
-    front.add_notches(pt7, seam_edge=front_curve.geometry)
-    front.add_notches(front_inner_leg.geometry.point_at_t(0.5), seam_edge=front_inner_leg.geometry)
-
     # -----------------------------------------------------------------------
     # RÜCKTEIL
     # -----------------------------------------------------------------------
@@ -269,12 +263,6 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
         "1× Stoff (gegengleich)",
     ])
     back.add_seam_allowance(model.seam_allowance)
-
-    # Kerben (manuell — Kurven, Innenbeinmitte)
-    back.add_notches(pt23, seam_edge=side_back, is_back=True)
-    back.add_notches(pt25, seam_edge=back_inner_seam.geometry, is_back=True)
-    back.add_notches(pt19, seam_edge=Segment(pt17, pt19), is_back=True)
-    back.add_notches(back_inner_seam.geometry.point_at_t(0.5), seam_edge=back_inner_seam.geometry, is_back=True)
 
     # -----------------------------------------------------------------------
     # Nahtlängen-Kontrolle
