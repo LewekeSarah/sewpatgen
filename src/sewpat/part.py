@@ -1,3 +1,6 @@
+    def build(self) -> PatternPart:
+        """Build and return the construction-grid :class:`PatternPart`."""
+        part = PatternPart(name=self.part_name, is_construction=True)
 import math
 import shapely.geometry as _sg
 
@@ -814,9 +817,9 @@ class ConstructionGrid:
         self.part_name = part_name
         self.style = style if style is not None else STYLE_CONSTRUCTION_GRID
 
-    def build(self) -> PatternPart:
-        """Build and return the construction-grid :class:`PatternPart`."""
-        part = PatternPart(name=self.part_name, is_construction=True)
+    def build(self) -> ConstructionGridPart:
+        """Build and return the construction-grid as a :class:`ConstructionGridPart`."""
+        part = ConstructionGridPart(name=self.part_name)
         ax, ay = self.anchor.x, self.anchor.y
         for name, x_off in self.verticals:
             x = ax + x_off
@@ -832,7 +835,7 @@ class Pattern:
 
     Attributes:
         name: Pattern name.
-        parts: Ordered list of PatternPart objects.
+        parts: Ordered list of all :class:`PatternPart` objects.
         anchor: Top-left origin on the page. Defaults to (1.5 cm, 1.5 cm).
         reference_square: Optional scale-verification square added via
             :meth:`add_reference_square`.
@@ -862,11 +865,17 @@ class Pattern:
             origin: Preferred top-left corner.
             edge_length: Side length. Defaults to 3 cm.
             style: Defaults to a plain stroke style.
-            part: Part for boundary clamping; auto-detected for single-part patterns.
+            part: Part for boundary clamping; auto-detected for single non-grid
+                non-block parts.
         """
         from .style import DEFAULT_STROKE_WIDTH
 
         target_part: PatternPart | None = part
+        if target_part is None:
+            regular = [
+                p for p in self.parts
+                if not isinstance(p, (ConstructionGridPart, Block))
+            ]
         if target_part is None and len(self.parts) == 1:
             target_part = self.parts[0]
 

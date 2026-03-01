@@ -473,7 +473,6 @@ def _build_svg(
     show_points: bool,
     show_bezier_control_points: bool,
     show_seam_allowance: bool = True,
-    show_construction_grid: bool = True,
     styles: dict[str, StyleOptions] | None = None,
 ) -> str:
     """Build and return the SVG string for one or more element groups."""
@@ -491,8 +490,6 @@ def _build_svg(
             visible = [e for e in elements if not e.is_seam_notch]
         else:
             visible = [e for e in elements if not e.is_seam_allowance]
-        if not show_construction_grid:
-            visible = [e for e in visible if not e.is_construction]
         _render_elements(
             visible,
             svg_nodes,
@@ -515,7 +512,6 @@ def export_pattern_part_svg_mm(
     show_points: bool = True,
     show_bezier_control_points: bool = False,
     show_seam_allowance: bool = True,
-    show_construction_grid: bool = True,
 ) -> None:
     """Export a single PatternPart as an SVG file with mm units.
 
@@ -528,7 +524,6 @@ def export_pattern_part_svg_mm(
         show_points: Render Point elements.
         show_bezier_control_points: Render Bézier control-point handles.
         show_seam_allowance: Include SA offset lines (default True).
-        show_construction_grid: Include construction grid elements (default True).
     """
     styles = _resolve_styles(style_map)
     svg = _build_svg(
@@ -540,7 +535,6 @@ def export_pattern_part_svg_mm(
         show_points=show_points,
         show_bezier_control_points=show_bezier_control_points,
         show_seam_allowance=show_seam_allowance,
-        show_construction_grid=show_construction_grid,
         styles=styles,
     )
     with open(filename, "w") as f:
@@ -558,7 +552,6 @@ def export_pattern_svg_mm(
     show_bezier_control_points: bool = False,
     parts: list[str] | None = None,
     show_seam_allowance: bool = True,
-    show_construction_grid: bool = False,
 ) -> None:
     """Export a Pattern (all or selected parts) as a single SVG file.
 
@@ -571,10 +564,9 @@ def export_pattern_svg_mm(
         show_points: Render Point elements.
         show_bezier_control_points: Render Bézier control-point handles.
         parts: Part names to include.  When ``None``, all parts are rendered
-            except :class:`ConstructionGridPart`, :class:`Block`, and
-            :class:`OverlayPart` — those must be requested explicitly by name.
+            except :class:`ConstructionGridPart` and :class:`Block` — those
+            must be requested explicitly by name.
         show_seam_allowance: Include SA offset lines (default True).
-        show_construction_grid: Include construction grid elements (default True).
     """
     styles = _resolve_styles(style_map)
 
@@ -583,7 +575,7 @@ def export_pattern_svg_mm(
     else:
         selected_parts = [
             p for p in pattern.parts
-            if not isinstance(p, (ConstructionGridPart, Block, OverlayPart))
+            if not isinstance(p, (ConstructionGridPart, Block))
         ]
 
     element_groups: list[list[PatternElement]] = []
@@ -600,7 +592,6 @@ def export_pattern_svg_mm(
         show_points=show_points,
         show_bezier_control_points=show_bezier_control_points,
         show_seam_allowance=show_seam_allowance,
-        show_construction_grid=show_construction_grid,
         styles=styles,
     )
     with open(filename, "w") as f:
