@@ -2,7 +2,7 @@
 Comprehensive tests for the render module.
 
 Covers:
-  - _resolve_styles: default copy, valid overrides, unknown-key warning
+  - _resolve_styles: default copy, valid overrides, unknown-key error
   - _build_svg: SVG envelope, title, arrow defs, element groups
   - _render_* helpers: Segment, Circle, Triangle, Rect, Point, InfoBox, CubicBezier
   - export_pattern_part_svg_mm: file output, content, optional args
@@ -11,7 +11,6 @@ Covers:
 
 import tempfile
 import unittest
-import warnings
 from pathlib import Path
 
 from sewpat.geometry import (
@@ -107,16 +106,14 @@ class TestResolveStyles(unittest.TestCase):
         self.assertEqual(styles["segment"].stroke_color, "green")
         self.assertEqual(styles["segment"].stroke_width, 2.0)
 
-    def test_unknown_key_emits_user_warning(self):
-        with self.assertWarns(UserWarning) as cm:
+    def test_unknown_key_raises_value_error(self):
+        with self.assertRaises(ValueError) as cm:
             _resolve_styles({"nonexistent_key": StyleOptions()})
-        self.assertIn("nonexistent_key", str(cm.warning))
+        self.assertIn("nonexistent_key", str(cm.exception))
 
     def test_unknown_key_does_not_alter_known_entries(self):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            styles = _resolve_styles({"unknown": StyleOptions(stroke_color="pink")})
-        self.assertNotIn("unknown", styles)
+        with self.assertRaises(ValueError):
+            _resolve_styles({"unknown": StyleOptions(stroke_color="pink")})
 
     def test_multiple_overrides(self):
         styles = _resolve_styles(
@@ -557,25 +554,23 @@ class TestExportPatternPartSvgMm(unittest.TestCase):
         content = Path(fname).read_text()
         self.assertIn("2,2", content)  # dashed control handle
 
-    def test_style_map_known_key_does_not_warn(self):
-        # A known style_map key must not emit a warning.
+    def test_style_map_known_key_does_not_raise(self):
+        # A known style_map key must not raise.
         part = PatternPart(name="p")
         part.append(Segment(Point(0, 0), Point(10, 0)))
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            export_pattern_part_svg_mm(
-                part,
-                fname,
-                style_map={"segment": StyleOptions(stroke_color="purple")},
-            )
+        export_pattern_part_svg_mm(
+            part,
+            fname,
+            style_map={"segment": StyleOptions(stroke_color="purple")},
+        )
 
-    def test_style_map_unknown_key_warns(self):
+    def test_style_map_unknown_key_raises(self):
         part = _simple_part()
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
-        with self.assertWarns(UserWarning):
+        with self.assertRaises(ValueError):
             export_pattern_part_svg_mm(
                 part, fname, style_map={"no_such_key": StyleOptions()}
             )
@@ -690,27 +685,25 @@ class TestExportPatternSvgMm(unittest.TestCase):
         self.assertIn('width="150mm"', content)
         self.assertIn('height="200mm"', content)
 
-    def test_style_map_known_key_does_not_warn(self):
-        # A known style_map key must not emit a warning.
+    def test_style_map_known_key_does_not_raise(self):
+        # A known style_map key must not raise.
         pat = Pattern(name="p")
         part = PatternPart(name="a")
         part.append(CubicBezier(Point(0, 0), Point(5, 5), Point(15, 5), Point(20, 0)))
         pat.add_part(part)
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            export_pattern_svg_mm(
-                pat,
-                fname,
-                style_map={"cubicbezier": StyleOptions(stroke_color="teal")},
-            )
+        export_pattern_svg_mm(
+            pat,
+            fname,
+            style_map={"cubicbezier": StyleOptions(stroke_color="teal")},
+        )
 
-    def test_style_map_unknown_key_warns(self):
+    def test_style_map_unknown_key_raises(self):
         pat = _simple_pattern()
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
-        with self.assertWarns(UserWarning):
+        with self.assertRaises(ValueError):
             export_pattern_svg_mm(pat, fname, style_map={"bogus": StyleOptions()})
 
     def test_empty_pattern_produces_valid_svg(self):

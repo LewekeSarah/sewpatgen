@@ -140,13 +140,11 @@ class TestSegment(unittest.TestCase):
         self.assertFalse(line.contains_point(Point(11, 11)))
 
     def test_point_at_t(self):
-        """Test point_at_t() and that deprecated alias point_at_rel_dist() still works."""
+        """Test point_at_t()."""
         seg = Segment(Point(0, 0), Point(10, 0))
         self.assertAlmostEqual(seg.point_at_t(0.0).x, 0.0)
         self.assertAlmostEqual(seg.point_at_t(0.5).x, 5.0)
         self.assertAlmostEqual(seg.point_at_t(1.0).x, 10.0)
-        # deprecated alias
-        self.assertAlmostEqual(seg.point_at_rel_dist(0.5).x, 5.0)
 
     def test_point_perpendicular_t(self):
         """point_perpendicular with t= places the point at the correct position."""
@@ -184,29 +182,6 @@ class TestSegment(unittest.TestCase):
         with self.assertRaises(ValueError):
             seg.point_perpendicular(5.0, arc_length=3.0, t=0.3)
 
-    def test_point_perpendicular_deprecated_rel_pos_on_obj(self):
-        """Old rel_pos_on_obj= kwarg still works but emits DeprecationWarning."""
-        import warnings
-
-        seg = Segment(Point(0, 0), Point(10, 0))
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            pt = seg.point_perpendicular(5.0, rel_pos_on_obj=0.5)
-        self.assertAlmostEqual(pt.x, 5.0)
-        self.assertAlmostEqual(pt.y, 5.0)
-        self.assertTrue(any(issubclass(x.category, DeprecationWarning) for x in w))
-
-    def test_point_perpendicular_deprecated_distance_on_obj(self):
-        """Old distance_on_obj= kwarg still works but emits DeprecationWarning."""
-        import warnings
-
-        seg = Segment(Point(0, 0), Point(10, 0))
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            pt = seg.point_perpendicular(5.0, distance_on_obj=5.0)
-        self.assertAlmostEqual(pt.x, 5.0)
-        self.assertAlmostEqual(pt.y, 5.0)
-        self.assertTrue(any(issubclass(x.category, DeprecationWarning) for x in w))
 
     def test_line_line_intersection(self):
         """Test intersection between two lines.

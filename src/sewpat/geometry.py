@@ -154,19 +154,11 @@ class Segment:
         assert (0 <= t) and (t <= 1), f"{t = } expected in [0, 1]"
         return Point(*((1.0 - t) * self.p1.coords + t * self.p2.coords))
 
-    def point_at_rel_dist(self, rel_pos: float) -> Point:
-        """Deprecated alias for ``point_at_t()``. Use ``point_at_t()`` instead."""
-        return self.point_at_t(rel_pos)
-
     def point_perpendicular(
         self,
         distance: float,
         arc_length: float | None = None,
         t: float | None = None,
-        # Deprecated kwargs — kept for backward compatibility
-        distance_to_obj: float | None = None,
-        distance_on_obj: float | None = None,
-        rel_pos_on_obj: float | None = None,
     ) -> Point:
         """Return a point offset perpendicularly from the segment.
 
@@ -176,33 +168,6 @@ class Segment:
         Raises:
             ValueError: If both *arc_length* and *t* are given.
         """
-        import warnings as _warnings
-
-        # ── Backward-compat shim ─────────────────────────────────────────────
-        if distance_to_obj is not None:
-            _warnings.warn(
-                "The 'distance_to_obj' keyword argument is deprecated. "
-                "Use the positional 'distance' argument instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            distance = distance_to_obj
-        if distance_on_obj is not None:
-            _warnings.warn(
-                "The 'distance_on_obj' keyword argument is deprecated. "
-                "Use 'arc_length' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            arc_length = distance_on_obj
-        if rel_pos_on_obj is not None:
-            _warnings.warn(
-                "The 'rel_pos_on_obj' keyword argument is deprecated. "
-                "Use 't' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            t = rel_pos_on_obj
         # ── Resolve position ─────────────────────────────────────────────────
         if arc_length is not None and t is not None:
             raise ValueError("Specify at most one of 'arc_length' and 't'.")
@@ -243,7 +208,7 @@ class Segment:
         total = self.length
         if arc_length < 0 or arc_length > total + 1e-9:
             raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
-        return self.point_at_rel_dist(arc_length / total)
+        return self.point_at_t(arc_length / total)
 
     def bounding_box(self) -> tuple[Point, Point]:
         """Return the axis-aligned bounding box as ``(min_point, max_point)``."""

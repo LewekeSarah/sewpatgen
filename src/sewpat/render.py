@@ -1,6 +1,5 @@
 """SVG rendering for sewing patterns."""
 
-import warnings
 from typing import Any, Callable
 
 import numpy as np
@@ -446,20 +445,17 @@ def _render_elements(
 
 def _resolve_styles(
     style_map: dict[str, StyleOptions] | None,
-    stacklevel: int = 3,
 ) -> dict[str, StyleOptions]:
-    """Merge *style_map* overrides into ``_DEFAULT_STYLES``; unknown keys emit a warning."""
+    """Merge *style_map* overrides into ``_DEFAULT_STYLES``; unknown keys raise ``ValueError``."""
     styles = {**_DEFAULT_STYLES}
     if style_map:
         for k, v in style_map.items():
             if k in styles:
                 styles[k] = v
             else:
-                warnings.warn(
+                raise ValueError(
                     f"style_map key {k!r} does not match any known element type "
-                    f"({list(styles.keys())}); it will be ignored.",
-                    UserWarning,
-                    stacklevel=stacklevel,
+                    f"({list(styles.keys())})"
                 )
     return styles
 
