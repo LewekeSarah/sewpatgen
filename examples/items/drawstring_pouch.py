@@ -129,7 +129,6 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     drawstring = OverlayPart(
         name="Tunnelzug",
         parent=body,
-        anchor=ds_origin,
     )
     drawstring.append(
         Rect(

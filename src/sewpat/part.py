@@ -707,19 +707,13 @@ class OverlayPart(PatternPart):
     directly.  When drafting is done, call :meth:`explode` to produce an
     independent, repositioned :class:`PatternPart` that can be cut separately.
 
-    The parent receives a small precision-point marker at the overlay's anchor
-    so the sewer knows where to place it back on the garment.
-
     Args:
         name: Name of the overlay piece.
         parent: The pattern part this overlay is drafted on.
-        anchor: A reference point on the parent that marks the overlay's
-            position.  Written onto the parent as a precision mark when
-            :meth:`explode` is called.  Defaults to the first outline point.
 
     Example::
 
-        pocket = OverlayPart("Tasche", parent=front, anchor=pocket_top_left)
+        pocket = OverlayPart("Tasche", parent=front)
         pocket.append(Segment(pocket_top_left, pocket_top_right), is_outline=True)
         # … add more geometry …
         exploded = pocket.explode(offset=Point(10*CM, 0))
@@ -731,21 +725,16 @@ class OverlayPart(PatternPart):
         self,
         name: str,
         parent: PatternPart,
-        anchor: Point | None = None,
         elements: list[PatternElement] | None = None,
     ) -> None:
         super().__init__(name=name, elements=elements)
         self.parent = parent
-        self.anchor = anchor
 
     def explode(self, offset: Point, name: str | None = None) -> PatternPart:
         """Detach this overlay into a standalone :class:`PatternPart`.
 
         Every element's geometry is translated by *offset* so the new part
-        sits next to the parent on the page rather than on top of it.  The
-        parent receives a precision-point marker at :attr:`anchor` (or at the
-        first outline point if no anchor was given) so the cut position on the
-        original piece is preserved.
+        sits next to the parent on the page rather than on top of it.
 
         Args:
             offset: Translation applied to all geometry in the exploded part.
