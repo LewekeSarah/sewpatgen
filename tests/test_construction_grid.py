@@ -271,13 +271,20 @@ class TestAddGridNotches(unittest.TestCase):
         self.assertEqual(len(triangles), 0)
 
     def test_collinear_join_not_skipped(self):
-        """Near-collinear join (angle ≈ 0°) → notch kept."""
+        """Near-collinear join (angle ≈ 0°) at interior of chain → notch kept.
+
+        Two collinear segments share a smooth join at (50, 0).  A vertical grid
+        line at x=25 crosses the first segment well inside it (25mm from each
+        endpoint) — not near any corner — so the notch must be placed.
+        corner_clearance=0 disables the vertex-proximity guard entirely.
+        """
         part = PatternPart(name="Chain")
         part.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True)
         part.append(Segment(Point(50, 0), Point(100, 0)), is_outline=True)
         grid = PatternPart(name="Grid", is_construction=True)
-        grid.add_construction_line(Segment(Point(50, -50), Point(50, 50)))
-        created = part.add_grid_notches(grid)
+        # x=25 crosses the first segment at its midpoint — 25mm from each end
+        grid.add_construction_line(Segment(Point(25, -50), Point(25, 50)))
+        created = part.add_grid_notches(grid, corner_clearance=0.0)
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 1)
 
@@ -304,7 +311,33 @@ class TestAddGridNotches(unittest.TestCase):
 
     # --- horizontal priority / min_spacing ---
 
-    def test_horizontal_takes_priority_over_nearby_vertical(self):
+    def test_horizontal_on_element_suppresses_vertical_on_same_element(self):
+        """Once a horizontal notch is placed on an element, all verticals on
+        that same element are suppressed — regardless of distance."""
+        # Diagonal segment crosses one horizontal and one vertical grid line
+        # at well-separated points (>> min_spacing).
+        part = PatternPart(name="p")
+        part.append(Segment(Point(0, 0), Point(100, 100)), is_outline=True)
+        grid = PatternPart(name="Grid", is_construction=True)
+        grid.add_construction_line(Segment(Point(-200, 50), Point(200, 50), name="H"))   # horiz
+        grid.add_construction_line(Segment(Point(80, -200), Point(80, 200), name="V"))   # vert
+        # H crosses segment at (50, 50); V crosses at (80, 80) — 42 mm apart.
+        # Horizontal is placed first; vertical is suppressed (same element).
+        created = part.add_grid_notches(grid, min_spacing=8.0, corner_clearance=0.0)
+        triangles = [e for e in created if isinstance(e.geometry, Triangle)]
+        self.assertEqual(len(triangles), 1)
+
+    def test_vertical_kept_on_element_without_horizontal(self):
+        """Vertical notch is kept when no horizontal has been placed on the element."""
+        part = PatternPart(name="p")
+        part.append(Segment(Point(0, 0), Point(100, 100)), is_outline=True)
+        grid = PatternPart(name="Grid", is_construction=True)
+        grid.add_construction_line(Segment(Point(50, -200), Point(50, 200), name="V"))   # vert only
+        created = part.add_grid_notches(grid, min_spacing=8.0, corner_clearance=0.0)
+        triangles = [e for e in created if isinstance(e.geometry, Triangle)]
+        self.assertEqual(len(triangles), 1)
+
+
         """When a horizontal and vertical intersection are < min_spacing apart,
         only the horizontal notch is placed."""
         # Two segments meeting at a gentle angle at (50,50)
@@ -334,6 +367,50 @@ class TestAddGridNotches(unittest.TestCase):
         created = part.add_grid_notches(grid, min_spacing=8.0)
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 4)
+
+    # --- corner_clearance ---
+
+    def test_corner_clearance_suppresses_nearby_vertex_notch(self):
+        """Intersection within corner_clearance of an outline vertex → suppressed."""
+        part = _square_part(side=100.0)
+        grid = PatternPart(name="Grid", is_construction=True)
+        # Grid line at y=15: intersects left edge (vertex at y=0) at distance 15mm
+        grid.add_construction_line(Segment(Point(-200, 15), Point(200, 15)))
+        # With clearance=20 the notch at y=15 (15mm from corner) should be suppressed
+        created = part.add_grid_notches(grid, corner_clearance=20.0, min_spacing=1.0)
+        triangles = [e for e in created if isinstance(e.geometry, Triangle)]
+        self.assertEqual(len(triangles), 0)
+
+    def test_corner_clearance_keeps_notch_beyond_clearance(self):
+        """Intersection beyond corner_clearance → kept."""
+        part = _square_part(side=100.0)
+        grid = PatternPart(name="Grid", is_construction=True)
+        # Grid line at y=50: intersects left/right edges 50mm from corners
+        grid.add_construction_line(Segment(Point(-200, 50), Point(200, 50)))
+        created = part.add_grid_notches(grid, corner_clearance=20.0, min_spacing=1.0)
+        triangles = [e for e in created if isinstance(e.geometry, Triangle)]
+        self.assertEqual(len(triangles), 2)
+
+    def test_corner_clearance_zero_disables_guard(self):
+        """corner_clearance=0 disables the vertex-proximity guard."""
+        part = _square_part(side=100.0)
+        grid = PatternPart(name="Grid", is_construction=True)
+        grid.add_construction_line(Segment(Point(-200, 5), Point(200, 5)))
+        # y=5 is only 5mm from top corners — would be suppressed at default clearance,
+        # but corner_clearance=0 disables the guard (still skipped by corner-angle check
+        # if exactly at the corner vertex, but here it's on a straight edge interior)
+        created = part.add_grid_notches(grid, corner_clearance=0.0, min_spacing=1.0)
+        triangles = [e for e in created if isinstance(e.geometry, Triangle)]
+        self.assertGreater(len(triangles), 0)
+
+    def test_default_corner_clearance_is_15mm(self):
+        """Default corner_clearance=15 suppresses notch at y=10 (10mm from corner)."""
+        part = _square_part(side=100.0)
+        grid = PatternPart(name="Grid", is_construction=True)
+        grid.add_construction_line(Segment(Point(-200, 10), Point(200, 10)))
+        created = part.add_grid_notches(grid, min_spacing=1.0)  # default clearance=15
+        triangles = [e for e in created if isinstance(e.geometry, Triangle)]
+        self.assertEqual(len(triangles), 0)
 
 
 # ---------------------------------------------------------------------------

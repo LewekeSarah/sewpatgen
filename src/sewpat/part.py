@@ -573,6 +573,7 @@ class PatternPart:
         grid_part: PatternPart,
         tolerance: float = 1.0,
         min_spacing: float = 8.0,
+        corner_clearance: float = 15.0,
         length: float = 0.8 * CM,
         width: float = 0.4 * CM,
         is_back: bool = False,
@@ -580,15 +581,19 @@ class PatternPart:
     ) -> list[PatternElement]:
         """Add notches where outline edges intersect construction lines.
 
-        Intersections near a sharp corner endpoint (angle > *corner_angle_threshold*°)
-        or free endpoints are skipped.  When two candidates are closer than
-        *min_spacing* mm, the one from a horizontal grid line takes priority and
-        the other is suppressed.  Duplicates within *tolerance* mm of an existing
+        Intersections at or near a sharp corner vertex (angle > *corner_angle_threshold*°
+        or free endpoint) are skipped — first exactly (within *tolerance* mm) by
+        ``_is_corner_endpoint``, then by proximity: any intersection within
+        *corner_clearance* mm of a sharp corner vertex is also suppressed.
+        Smooth chain joints are deliberately not treated as corners, so notches
+        that coincide with a measurement-line crossing at a chain vertex are kept.
+        When two candidates are closer than *min_spacing* mm, the one from a horizontal
+        grid line takes priority.  Duplicates within *tolerance* mm of an existing
         notch are also suppressed.
         """
         from .geometry import intersect as _intersect, Ray as _Ray
         import math as _math
-        import numpy as np
+        import numpy as _np
 
         outline_elems = [e for e in self.elements if e.is_outline and isinstance(e.geometry, (Segment, CubicBezier))]
         grid_geoms = [e.geometry for e in grid_part.elements if isinstance(e.geometry, (Segment, CubicBezier, _Ray))]
@@ -604,7 +609,11 @@ class PatternPart:
             ep_tangents.setdefault(ek, []).append(edge_tangent(oe.geometry, at_end=True))
 
         def _is_corner_endpoint(pt: Point) -> bool:
-            """True when *pt* is near a sharp corner or free endpoint."""
+            """True when *pt* is within *tolerance* of a sharp corner or free endpoint.
+
+            Smooth chain joints (angle < *corner_angle_threshold*) are NOT suppressed
+            here — the grid line may legitimately cross the chain at that vertex.
+            """
             for oe in outline_elems:
                 for ep in (geom_start(oe.geometry), geom_end(oe.geometry)):
                     if pt.distance_to(ep) >= tolerance:
@@ -612,17 +621,38 @@ class PatternPart:
                     key = (round(ep.x, 3), round(ep.y, 3))
                     tangents = ep_tangents.get(key, [])
                     if len(tangents) < 2:
-                        return True
+                        return True   # free endpoint
                     t0, t1 = tangents[0], tangents[1]
-                    cos_a = float(np.clip(np.dot(t0, t1), -1.0, 1.0))
+                    cos_a = float(_np.clip(_np.dot(t0, t1), -1.0, 1.0))
                     if _math.degrees(_math.acos(abs(cos_a))) > corner_angle_threshold:
-                        return True
+                        return True   # sharp corner
             return False
 
-        def _is_horizontal(g: "Segment | CubicBezier | _Ray") -> bool:
+        def _is_horizontal(g: Segment | CubicBezier | _Ray) -> bool:
             if isinstance(g, Segment):
                 return abs(geom_start(g).y - geom_end(g).y) < 1e-6
             return False
+
+        # All sharp corner vertices (angle > corner_angle_threshold) — used for the
+        # corner_clearance guard.  Smooth joints are deliberately excluded so that
+        # notches at measurement-line crossings that happen to coincide with a
+        # chain-join vertex are NOT suppressed.
+        corner_vertices: list[Point] = []
+        for oe in outline_elems:
+            for ep in (geom_start(oe.geometry), geom_end(oe.geometry)):
+                key = (round(ep.x, 3), round(ep.y, 3))
+                tangents = ep_tangents.get(key, [])
+                if len(tangents) < 2:
+                    corner_vertices.append(ep)   # free endpoint = corner
+                else:
+                    t0, t1 = tangents[0], tangents[1]
+                    cos_a = float(_np.clip(_np.dot(t0, t1), -1.0, 1.0))
+                    if _math.degrees(_math.acos(abs(cos_a))) > corner_angle_threshold:
+                        corner_vertices.append(ep)
+
+        def _is_near_corner(pt: Point) -> bool:
+            """True when *pt* is within *corner_clearance* mm of any sharp corner vertex."""
+            return any(pt.distance_to(v) <= corner_clearance for v in corner_vertices)
 
         # Seed deduplication from notch triangles already present in the part.
         seen: list[Point] = []
@@ -637,25 +667,47 @@ class PatternPart:
             return any(pt.distance_to(s) < min_spacing for s in seen)
 
         # Collect all candidates, tag horizontal (priority 0) vs vertical (priority 1).
-        # Sort horizontals first so nearby vertical intersections are suppressed by _is_dup.
-        candidates: list[tuple[int, "Segment | CubicBezier", Point]] = []
+        # Horizontals are sorted first so nearby vertical intersections on the same
+        # seam are suppressed by _is_dup when they fall within min_spacing.
+        candidates: list[tuple[int, Segment | CubicBezier, Point]] = []
         for oe in outline_elems:
             for gg in grid_geoms:
+                is_horiz = _is_horizontal(gg)
                 try:
                     pts = _intersect(oe.geometry, gg)
                 except (TypeError, Exception):
                     continue
-                priority = 0 if _is_horizontal(gg) else 1
+                priority = 0 if is_horiz else 1
                 for pt in pts:
-                    if not _is_corner_endpoint(pt):
+                    if not _is_corner_endpoint(pt) and not _is_near_corner(pt):
                         candidates.append((priority, oe.geometry, pt))
 
         candidates.sort(key=lambda c: c[0])
 
-        for _, seam_geom, pt in candidates:
-            if _is_dup(pt):
+        # Per-element placed points: after placing a notch on an element, record
+        # its intersection point so that lower-priority (vertical) candidates on
+        # the SAME element are suppressed when they fall within min_spacing.
+        elem_placed: dict[int, list[Point]] = {}  # id(geom) -> placed points
+        # Elements that have received at least one horizontal notch.  Any vertical
+        # candidate on such an element is suppressed — horizontals always win per element.
+        elem_has_horizontal: set[int] = set()
+
+        def _is_dup_on_elem(geom: Segment | CubicBezier, pt: Point) -> bool:
+            for placed_pt in elem_placed.get(id(geom), []):
+                if pt.distance_to(placed_pt) < min_spacing:
+                    return True
+            return False
+
+        for priority, seam_geom, pt in candidates:
+            is_vertical = priority == 1
+            if is_vertical and id(seam_geom) in elem_has_horizontal:
+                continue
+            if _is_dup(pt) or _is_dup_on_elem(seam_geom, pt):
                 continue
             seen.append(pt)
+            elem_placed.setdefault(id(seam_geom), []).append(pt)
+            if not is_vertical:
+                elem_has_horizontal.add(id(seam_geom))
             before = len(self.elements)
             self.add_notches(pt, seam_edge=seam_geom, length=length, width=width, is_back=is_back)
             created.extend(self.elements[before:])
