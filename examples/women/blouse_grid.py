@@ -116,7 +116,7 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     # -----------------------------------------------------------------------
     # GRUNDGERÜST — construction detail lines built on top of the grid
     # -----------------------------------------------------------------------
-    part = PatternPart(name="Grundgerüst", is_construction=True)
+    part = PatternPart(name="Grundgerüst")
     pattern.add_part(part)
 
     # STEP 2.2 — Modelllänge (vertical spine along hintere Mitte)
@@ -161,20 +161,24 @@ if __name__ == "__main__":
     model_config = make_model_config()
     pattern = make_blouse(measurements, model_config)
 
+    pattern_parts = ["Grundgerüst"]
+    grid_parts = ["Konstruktionsgitter Grundgerüst"]
+
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
         pattern,
         width_mm=DinA0.width,
         height_mm=DinA0.height,
         filename=str(Path(__file__).parent / "blouse_grid.svg"),
-        show_construction_grid=True,
+        parts=grid_parts + pattern_parts,
     )
 
-    # Clean version — construction grid hidden
+    # Clean version — construction grid not included
     export_pattern_svg_mm(
         pattern,
         width_mm=DinA0.width,
         height_mm=DinA0.height,
         filename=str(Path(__file__).parent / "blouse_grid_clean.svg"),
-        show_construction_grid=False,
+        parts=pattern_parts,
     )
+#marker_single  top_waisted_dart.pdf ./

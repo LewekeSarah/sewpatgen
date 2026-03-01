@@ -135,6 +135,8 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     back_pt1 = intersect(bg_hm,  bg_sih)[0]   # Hintermitte  × Sitzhöhe
     back_pt4 = intersect(bg_vhb, bg_sih)[0]   # Vorderbreite × Sitzhöhe
 
+    # Grids are not added to the pattern — pass them explicitly to the renderer
+    # when you want to see them (see export calls below).
     pattern_boy_trousers.add_part(grid)
     pattern_boy_trousers.add_part(back_grid)
 
@@ -323,10 +325,11 @@ if __name__ == "__main__":
     model_config = make_model_config()
     pattern = boy_shorts(measurements, model_config)
 
-    # Without seam allowance
     parts = ["Vorderteil", "Rückteil"]
     if DEBUG:
-        parts += ["Konstruktionsgitter", "Konstruktionsgitter"]
+        parts += ["Konstruktionsgitter"] # , "Konstruktion"
+
+    # Without seam allowance
     export_pattern_svg_mm(
         pattern,
         filename=str(Path(__file__).parent / f"boys_shorts{"_grid" if DEBUG else ""}.svg"),
@@ -334,7 +337,6 @@ if __name__ == "__main__":
         width_mm=DinA1.height,
         parts=parts,
         show_seam_allowance=False,
-        show_construction_grid=DEBUG,
     )
 
     # With seam allowance
@@ -345,6 +347,5 @@ if __name__ == "__main__":
         width_mm=DinA1.height,
         parts=parts,
         show_seam_allowance=True,
-        show_construction_grid=DEBUG,
     )
 
