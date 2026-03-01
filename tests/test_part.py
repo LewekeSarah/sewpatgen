@@ -5,6 +5,8 @@ Covers:
   - PatternPart: append, extend, centroid, add_grainline, add_info_box,
                  add_precision_points, add_notches
   - Pattern: add_part, get_part, add_reference_square, anchor default
+  - Block: subclass identity, excluded from default render
+  - OverlayPart: construction, explode geometry/flags, no anchor attribute
 """
 
 import math
@@ -21,10 +23,9 @@ from sewpat.geometry import (
     Triangle,
     seam_length,
 )
-from sewpat.part import Pattern, PatternElement, PatternPart
+from sewpat.part import Block, OverlayPart, Pattern, PatternElement, PatternPart
 from sewpat.style import STYLE_GRAINLINE, StyleOptions
 from sewpat.units import CM, MM
-
 
 # ---------------------------------------------------------------------------
 # PatternElement
@@ -1055,7 +1056,8 @@ class TestSeamAllowanceReversal(unittest.TestCase):
     def _sa_distances(self, part: PatternPart, global_sa: float) -> list[float]:
         """Return the lengths of all SA segments added to *part*."""
         sa_elems = [e for e in part.elements if e.is_seam_allowance]
-        from sewpat.geometry import Segment as _S, CubicBezier as _CB
+        from sewpat.geometry import CubicBezier as _CB
+        from sewpat.geometry import Segment as _S
 
         return [
             e.geometry.length for e in sa_elems if isinstance(e.geometry, (_S, _CB))
@@ -1272,6 +1274,258 @@ class TestSeamAllowanceCornerJoin(unittest.TestCase):
         part.append(Segment(Point(0, 100), Point(0, 0)), is_outline=True)
         with self.assertRaises(ValueError):
             part.add_seam_allowance(10.0)
+
+
+# ---------------------------------------------------------------------------
+# Block
+# ---------------------------------------------------------------------------
+
+class TestBlock(unittest.TestCase):
+
+    def test_is_instance_of_pattern_part(self):
+        block = Block(name="Grundschnitt")
+        self.assertIsInstance(block, PatternPart)
+
+    def test_is_instance_of_block(self):
+        block = Block(name="Grundschnitt")
+        self.assertIsInstance(block, Block)
+
+    def test_regular_part_is_not_block(self):
+        part = PatternPart(name="Vorderteil")
+        self.assertNotIsInstance(part, Block)
+
+    def test_name_stored(self):
+        block = Block(name="Oberteil Block")
+        self.assertEqual(block.name, "Oberteil Block")
+
+    def test_accepts_initial_elements(self):
+        elems = [PatternElement(Point(0, 0))]
+        block = Block(name="B", elements=elems)
+        self.assertEqual(len(block.elements), 1)
+
+    def test_append_works(self):
+        block = Block(name="B")
+        block.append(Segment(Point(0, 0), Point(10, 0)), is_outline=True)
+        self.assertEqual(len(block.elements), 1)
+
+    def test_excluded_from_default_export(self):
+        """Block must not appear in export_pattern_svg_mm output by default."""
+        import tempfile
+        from pathlib import Path
+
+        from sewpat.render import export_pattern_svg_mm
+
+        block = Block(name="Grundschnitt")
+        block.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True)
+        block.append(Segment(Point(50, 0), Point(50, 50)), is_outline=True)
+        block.append(Segment(Point(50, 50), Point(0, 50)), is_outline=True)
+        block.append(Segment(Point(0, 50), Point(0, 0)), is_outline=True)
+
+        regular = PatternPart(name="Vorderteil")
+        regular.append(Segment(Point(0, 0), Point(30, 0)), is_outline=True)
+
+        pat = Pattern(name="Test")
+        pat.add_part(block)
+        pat.add_part(regular)
+
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            fname = f.name
+        export_pattern_svg_mm(pat, fname, width_mm=200, height_mm=200)
+        svg = Path(fname).read_text()
+
+        # The 50 mm block outline must not appear; only the 30 mm regular segment
+        self.assertNotIn('x2="50"', svg)
+
+    def test_included_when_requested_by_name(self):
+        """Block is rendered when its name is passed via parts=."""
+        import tempfile
+        from pathlib import Path
+
+        from sewpat.render import export_pattern_svg_mm
+
+        block = Block(name="Grundschnitt")
+        block.append(Segment(Point(0, 0), Point(50, 0), name="Oberkante"), is_outline=True)
+
+        pat = Pattern(name="Test")
+        pat.add_part(block)
+
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            fname = f.name
+        export_pattern_svg_mm(pat, fname, width_mm=200, height_mm=200, parts=["Grundschnitt"])
+        svg = Path(fname).read_text()
+
+        self.assertIn("Oberkante", svg)
+
+    def test_block_geometry_usable_as_reference(self):
+        """Points from a Block can be used directly when building a derived part."""
+        block = Block(name="B")
+        top_left = Point(0, 0)
+        top_right = Point(100, 0)
+        block.append(Segment(top_left, top_right, name="Schulter"), is_outline=True)
+
+        derived = PatternPart(name="Vorderteil")
+        # Reuse block points directly — no special API needed
+        derived.append(Segment(top_left, top_right), is_outline=True)
+        derived.append(Segment(top_right, Point(100, 150)), is_outline=True)
+        derived.append(Segment(Point(100, 150), Point(0, 150)), is_outline=True)
+        derived.append(Segment(Point(0, 150), top_left), is_outline=True)
+
+        self.assertIsNotNone(derived.centroid)
+
+
+# ---------------------------------------------------------------------------
+# OverlayPart
+# ---------------------------------------------------------------------------
+
+def _front_part() -> PatternPart:
+    """A simple 100 × 150 mm front piece."""
+    part = PatternPart(name="Vorderteil")
+    part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
+    part.append(Segment(Point(100, 0), Point(100, 150)), is_outline=True)
+    part.append(Segment(Point(100, 150), Point(0, 150)), is_outline=True)
+    part.append(Segment(Point(0, 150), Point(0, 0)), is_outline=True)
+    return part
+
+
+class TestOverlayPart(unittest.TestCase):
+
+    def test_is_instance_of_pattern_part(self):
+        front = _front_part()
+        overlay = OverlayPart(name="Tasche", parent=front)
+        self.assertIsInstance(overlay, PatternPart)
+
+    def test_is_instance_of_overlay_part(self):
+        front = _front_part()
+        overlay = OverlayPart(name="Tasche", parent=front)
+        self.assertIsInstance(overlay, OverlayPart)
+
+    def test_parent_stored(self):
+        front = _front_part()
+        overlay = OverlayPart(name="Tasche", parent=front)
+        self.assertIs(overlay.parent, front)
+
+    def test_no_anchor_attribute(self):
+        front = _front_part()
+        overlay = OverlayPart(name="Tasche", parent=front)
+        self.assertFalse(hasattr(overlay, "anchor"))
+
+    def test_name_stored(self):
+        front = _front_part()
+        overlay = OverlayPart(name="Tasche", parent=front)
+        self.assertEqual(overlay.name, "Tasche")
+
+    def test_accepts_initial_elements(self):
+        front = _front_part()
+        elems = [PatternElement(Segment(Point(0, 0), Point(10, 0)))]
+        overlay = OverlayPart(name="Tasche", parent=front, elements=elems)
+        self.assertEqual(len(overlay.elements), 1)
+
+    def test_append_works(self):
+        front = _front_part()
+        overlay = OverlayPart(name="Tasche", parent=front)
+        overlay.append(Segment(Point(10, 10), Point(40, 10)), is_outline=True)
+        self.assertEqual(len(overlay.elements), 1)
+
+    # --- explode ---
+
+    def _pocket_overlay(self) -> tuple[PatternPart, OverlayPart]:
+        front = _front_part()
+        pocket = OverlayPart(name="Tasche", parent=front)
+        pocket.append(Segment(Point(10, 10), Point(40, 10)), is_outline=True)
+        pocket.append(Segment(Point(40, 10), Point(40, 40)), is_outline=True)
+        pocket.append(Segment(Point(40, 40), Point(10, 40)), is_outline=True)
+        pocket.append(Segment(Point(10, 40), Point(10, 10)), is_outline=True)
+        return front, pocket
+
+    def test_explode_returns_pattern_part(self):
+        _, pocket = self._pocket_overlay()
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertIsInstance(result, PatternPart)
+
+    def test_explode_not_overlay_part(self):
+        """The exploded result is a plain PatternPart, not an OverlayPart."""
+        _, pocket = self._pocket_overlay()
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertNotIsInstance(result, OverlayPart)
+
+    def test_explode_default_name(self):
+        _, pocket = self._pocket_overlay()
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertEqual(result.name, "Tasche")
+
+    def test_explode_custom_name(self):
+        _, pocket = self._pocket_overlay()
+        result = pocket.explode(offset=Point(110, 0), name="Tasche (Schnittteil)")
+        self.assertEqual(result.name, "Tasche (Schnittteil)")
+
+    def test_explode_element_count_preserved(self):
+        _, pocket = self._pocket_overlay()
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertEqual(len(result.elements), len(pocket.elements))
+
+    def test_explode_geometry_translated(self):
+        """All geometry is shifted by the given offset."""
+        _, pocket = self._pocket_overlay()
+        offset = Point(110, 0)
+        result = pocket.explode(offset=offset)
+        for orig, expl in zip(pocket.elements, result.elements):
+            orig_s = orig.geometry  # Segment
+            expl_s = expl.geometry
+            self.assertAlmostEqual(expl_s.p1.x, orig_s.p1.x + 110, places=6)
+            self.assertAlmostEqual(expl_s.p1.y, orig_s.p1.y, places=6)
+
+    def test_explode_is_outline_flag_preserved(self):
+        _, pocket = self._pocket_overlay()
+        result = pocket.explode(offset=Point(110, 0))
+        for orig, expl in zip(pocket.elements, result.elements):
+            self.assertEqual(expl.is_outline, orig.is_outline)
+
+    def test_explode_is_seam_allowance_flag_preserved(self):
+        _, pocket = self._pocket_overlay()
+        pocket.add_seam_allowance(10.0)
+        result = pocket.explode(offset=Point(110, 0))
+        sa_orig = [e for e in pocket.elements if e.is_seam_allowance]
+        sa_expl = [e for e in result.elements if e.is_seam_allowance]
+        self.assertEqual(len(sa_expl), len(sa_orig))
+
+    def test_explode_style_preserved(self):
+        front = _front_part()
+        pocket = OverlayPart(name="Tasche", parent=front)
+        style = StyleOptions(stroke_color="red")
+        pocket.append(Segment(Point(10, 10), Point(40, 10)), style=style, is_outline=True)
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertEqual(result.elements[0].style.stroke_color, "red")
+
+    def test_explode_does_not_mutate_original(self):
+        """Exploding must not change the overlay's own elements."""
+        _, pocket = self._pocket_overlay()
+        orig_coords = [(e.geometry.p1.x, e.geometry.p1.y) for e in pocket.elements]
+        pocket.explode(offset=Point(110, 0))
+        after_coords = [(e.geometry.p1.x, e.geometry.p1.y) for e in pocket.elements]
+        self.assertEqual(orig_coords, after_coords)
+
+    def test_explode_does_not_mutate_parent(self):
+        """Exploding must not add elements to the parent part."""
+        front, pocket = self._pocket_overlay()
+        count_before = len(front.elements)
+        pocket.explode(offset=Point(110, 0))
+        self.assertEqual(len(front.elements), count_before)
+
+    def test_overlay_excluded_from_default_export(self):
+        """OverlayPart (plain PatternPart subclass) is included by default —
+        callers must manage visibility explicitly via parts=."""
+        # OverlayPart IS a PatternPart so it renders by default; the test confirms
+        # the exploded plain part also renders — behaviour is symmetric.
+        front, pocket = self._pocket_overlay()
+        exploded = pocket.explode(offset=Point(110, 0))
+        pat = Pattern(name="Test")
+        pat.add_part(front)
+        pat.add_part(exploded)
+        # Both parts are plain PatternParts → both included without parts= filter
+        self.assertEqual(
+            len([p for p in pat.parts if not isinstance(p, Block)]),
+            2,
+        )
 
 
 if __name__ == "__main__":

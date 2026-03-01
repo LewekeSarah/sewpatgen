@@ -1,28 +1,37 @@
-import math
 import shapely.geometry as _sg
 
-from .style import StyleOptions, STYLE_GRAINLINE, STYLE_SEAM_ALLOWANCE, STYLE_CONSTRUCTION_GRID
 from .geometry import (
-    Rect,
-    Point,
-    Segment,
     Circle,
-    Triangle,
-    InfoBox,
     CubicBezier,
-    edge_tangent,
-    geom_start,
-    geom_end,
-    geom_to_shapely,
-    with_endpoints,
-    build_chain,
+    InfoBox,
+    Point,
+    Ray,
+    Rect,
+    Segment,
+    Triangle,
     buffer_chain,
+    build_chain,
+    edge_tangent,
+    geom_end,
+    geom_start,
+    geom_to_shapely,
     miter_corner,
-    round_corner,
     outline_polygon,
     project_onto_edge,
+    round_corner,
+    with_endpoints,
+)
+from .geometry import (
     offset_adaptive as _offset_adaptive,
+)
+from .geometry import (
     seam_length as _geom_seam_length,
+)
+from .style import (
+    STYLE_CONSTRUCTION_GRID,
+    STYLE_GRAINLINE,
+    STYLE_SEAM_ALLOWANCE,
+    StyleOptions,
 )
 from .units import CM, MM
 
@@ -96,7 +105,7 @@ class PatternPart:
             elem.is_construction = self.is_construction
         self.elements.extend(elements)
 
-    def _outline_polygon(self):
+    def _outline_polygon(self) -> _sg.Polygon | None:
         """Build a Shapely Polygon from the ``is_outline`` elements of this part."""
         geoms = [
             e.geometry
@@ -401,7 +410,7 @@ class PatternPart:
 
         # ── Pure-segment path: Shapely buffer ────────────────────────────────
         has_per_elem_sa = any(
-            getattr(e.style, "seam_allowance", 0.0) > 0
+            getattr(e.style, "seam_allowance", None) is not None
             for e in outline_elements
             if isinstance(e.geometry, (Segment, CubicBezier))
         )
@@ -436,11 +445,14 @@ class PatternPart:
                 [(round(s.x, 6), round(s.y, 6)), (round(e.x, 6), round(e.y, 6))]
             )
 
+        # seam_allowance=None  → not in dict → use global distance
+        # seam_allowance=0.0   → in dict as 0.0 → no offset (fold line)
+        # seam_allowance=x > 0 → in dict as x   → custom distance
         elem_sa: dict[frozenset, float] = {
-            _ep_key(e.geometry): getattr(e.style, "seam_allowance", 0.0)
+            _ep_key(e.geometry): getattr(e.style, "seam_allowance")
             for e in outline_elements
             if isinstance(e.geometry, (Segment, CubicBezier))
-            and getattr(e.style, "seam_allowance", 0.0) > 0
+            and getattr(e.style, "seam_allowance", None) is not None
         }
 
         _valid_cj = {"miter", "round", "bevel"}
@@ -458,10 +470,13 @@ class PatternPart:
                 )
             elem_cj[_ep_key(e.geometry)] = val
 
-        offset_groups: list[list[Segment | CubicBezier]] = [
-            _offset_adaptive(g, elem_sa.get(_ep_key(g), distance), center)
-            for g in chain_mixed
-        ]
+        offset_groups: list[list[Segment | CubicBezier]] = []
+        for g in chain_mixed:
+            d = elem_sa.get(_ep_key(g), distance)
+            if d == 0.0:
+                offset_groups.append([g])  # fold line — keep in place
+            else:
+                offset_groups.append(_offset_adaptive(g, d, center))
 
         n = len(offset_groups)
         arc_inserts: list[tuple[int, CubicBezier]] = []
@@ -522,7 +537,6 @@ class PatternPart:
         style: StyleOptions | None = None,
     ) -> PatternElement:
         """Append a construction-grid line (never ``is_outline``; defaults to grid style)."""
-        from .geometry import Ray as _Ray
         return self.append(
             geometry,
             style=style if style is not None else STYLE_CONSTRUCTION_GRID,
@@ -546,12 +560,14 @@ class PatternPart:
         within *corner_clearance* mm).  Horizontal grid lines take priority over
         vertical ones when two candidates are within *min_spacing* mm of each other.
         """
-        from .geometry import intersect as _intersect, Ray as _Ray
         import math as _math
+
         import numpy as _np
 
+        from .geometry import intersect as _intersect
+
         outline_elems = [e for e in self.elements if e.is_outline and isinstance(e.geometry, (Segment, CubicBezier))]
-        grid_geoms = [e.geometry for e in grid_part.elements if isinstance(e.geometry, (Segment, CubicBezier, _Ray))]
+        grid_geoms = [e.geometry for e in grid_part.elements if isinstance(e.geometry, (Segment, CubicBezier, Ray))]
 
         # Build map of forward tangents at each outline endpoint for corner detection.
         ep_tangents: dict[tuple, list] = {}
@@ -583,7 +599,7 @@ class PatternPart:
                         return True   # sharp corner
             return False
 
-        def _is_horizontal(g: Segment | CubicBezier | _Ray) -> bool:
+        def _is_horizontal(g: Segment | CubicBezier | Ray) -> bool:
             if isinstance(g, Segment):
                 return abs(geom_start(g).y - geom_end(g).y) < 1e-6
             return False
@@ -669,6 +685,101 @@ class PatternPart:
         return created
 
 
+class ConstructionGridPart(PatternPart):
+    """A :class:`PatternPart` that represents a construction grid.
+
+    Grid elements are kept separate from the main pattern pieces when rendering
+    by default — they are only included when requested explicitly by name via
+    the ``parts=`` argument of the export functions.
+
+    Prefer building instances via :class:`ConstructionGrid` rather than
+    creating them directly.
+    """
+
+    def __init__(self, name: str = "Konstruktionsgitter", elements: list[PatternElement] | None = None) -> None:
+        super().__init__(name=name, elements=elements)
+
+
+class Block(PatternPart):
+    """A base-block pattern piece derived from balanced measurements.
+
+    A block captures the fundamental shape of a garment *without* personal
+    fitting adjustments or style details.  It serves as a reusable starting
+    point for new patterns and can be shown/hidden via the ``show_blocks``
+    flag in the SVG export helpers.
+
+    The part is identified by ``isinstance(part, Block)``.
+    """
+
+    def __init__(self, name: str, elements: list[PatternElement] | None = None) -> None:
+        super().__init__(name=name, elements=elements)
+
+
+class OverlayPart(PatternPart):
+    """A pattern piece drafted directly on top of a parent part (same coordinate space).
+
+    The overlay is constructed normally — its geometry lives in the same
+    coordinate system as *parent*, so it can share reference points and edges
+    directly.  When drafting is done, call :meth:`explode` to produce an
+    independent, repositioned :class:`PatternPart` that can be cut separately.
+
+    Args:
+        name: Name of the overlay piece.
+        parent: The pattern part this overlay is drafted on.
+
+    Example::
+
+        pocket = OverlayPart("Tasche", parent=front)
+        pocket.append(Segment(pocket_top_left, pocket_top_right), is_outline=True)
+        # … add more geometry …
+        exploded = pocket.explode(offset=Point(10*CM, 0))
+        pattern.add_part(pocket)     # visible on the front piece during drafting
+        pattern.add_part(exploded)   # separate cut piece
+    """
+
+    def __init__(
+        self,
+        name: str,
+        parent: PatternPart,
+        elements: list[PatternElement] | None = None,
+    ) -> None:
+        super().__init__(name=name, elements=elements)
+        self.parent = parent
+
+    def explode(self, offset: Point, name: str | None = None) -> PatternPart:
+        """Detach this overlay into a standalone :class:`PatternPart`.
+
+        Every element's geometry is translated by *offset* so the new part
+        sits next to the parent on the page rather than on top of it.
+
+        Args:
+            offset: Translation applied to all geometry in the exploded part.
+                Typically ``Point(parent_width + gap, 0)`` to place it to the
+                right of the parent.
+            name: Name for the exploded part.  Defaults to ``self.name``.
+
+        Returns:
+            A new plain :class:`PatternPart` with translated geometry.
+        """
+        dx, dy = offset.x, offset.y
+
+        # Build the exploded part by translating every element's geometry.
+        exploded = PatternPart(name=name if name is not None else self.name)
+        for elem in self.elements:
+            new_geom = elem.geometry.translate(dx, dy)
+            new_elem = PatternElement(
+                geometry=new_geom,
+                style=elem.style,
+                name=elem.name,
+                is_outline=elem.is_outline,
+                is_seam_allowance=elem.is_seam_allowance,
+            )
+            new_elem.is_seam_notch = elem.is_seam_notch
+            exploded.elements.append(new_elem)
+
+        return exploded
+
+
 class ConstructionGrid:
     """Builds an orthogonal construction grid as a :class:`PatternPart`.
 
@@ -708,9 +819,9 @@ class ConstructionGrid:
         self.part_name = part_name
         self.style = style if style is not None else STYLE_CONSTRUCTION_GRID
 
-    def build(self) -> PatternPart:
-        """Build and return the construction-grid :class:`PatternPart`."""
-        part = PatternPart(name=self.part_name, is_construction=True)
+    def build(self) -> ConstructionGridPart:
+        """Build and return the construction-grid as a :class:`ConstructionGridPart`."""
+        part = ConstructionGridPart(name=self.part_name)
         ax, ay = self.anchor.x, self.anchor.y
         for name, x_off in self.verticals:
             x = ax + x_off
@@ -726,7 +837,7 @@ class Pattern:
 
     Attributes:
         name: Pattern name.
-        parts: Ordered list of PatternPart objects.
+        parts: Ordered list of all :class:`PatternPart` objects.
         anchor: Top-left origin on the page. Defaults to (1.5 cm, 1.5 cm).
         reference_square: Optional scale-verification square added via
             :meth:`add_reference_square`.
@@ -756,13 +867,19 @@ class Pattern:
             origin: Preferred top-left corner.
             edge_length: Side length. Defaults to 3 cm.
             style: Defaults to a plain stroke style.
-            part: Part for boundary clamping; auto-detected for single-part patterns.
+            part: Part for boundary clamping; auto-detected for single non-grid
+                non-block parts.
         """
         from .style import DEFAULT_STROKE_WIDTH
 
         target_part: PatternPart | None = part
-        if target_part is None and len(self.parts) == 1:
-            target_part = self.parts[0]
+        if target_part is None:
+            regular = [
+                p for p in self.parts
+                if not isinstance(p, (ConstructionGridPart, Block))
+            ]
+            if len(regular) == 1:
+                target_part = regular[0]
 
         final_origin = origin
         if target_part is not None:

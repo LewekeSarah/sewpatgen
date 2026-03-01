@@ -6,9 +6,10 @@ in the sewpat library: Point, Segment, Ray, and Circle.
 """
 
 import math
+
 import numpy as np
 
-from sewpat.geometry import Point, Segment, Ray, Circle, intersect
+from sewpat.geometry import Circle, Point, Ray, Segment, intersect
 
 
 def print_section(title):

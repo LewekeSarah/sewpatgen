@@ -1,20 +1,20 @@
 from dataclasses import dataclass
 
+from sewpat.person import BalanceAdjustments, Gender, Person, PersonAnalyser
 from sewpat.units import CM
-from sewpat.person import Gender, Person, BalanceAdjustments, PersonAnalyser
 
 
 @dataclass
 class Allowance:
-    RüB: float = None
-    ArD: float = None
-    BrB: float = None
-    AlT: float = None
-    TaU: float = None
-    HüU: float = None
-    BrU: float = None
-    SiH: float = None
-    SrH: float = None
+    RüB: float | None = None
+    ArD: float | None = None
+    BrB: float | None = None
+    AlT: float | None = None
+    TaU: float | None = None
+    HüU: float | None = None
+    BrU: float | None = None
+    SiH: float | None = None
+    SrH: float | None = None
 
     def __post_init__(self):
         if (self.RüB is not None) and (self.ArD is not None) and (self.BrB is not None):
@@ -28,11 +28,11 @@ class TrouserMeasurements:
     SiH: float
     TaW: float
     HüW: float
-    HüT: float = None
-    SrH: float = None
-    sTaH: float = None
-    KnH: float = None  # Kniehöhe
-    vHoB: float = None  # Vorderhosenbreite
+    HüT: float | None = None
+    SrH: float | None = None
+    sTaH: float | None = None
+    KnH: float | None = None  # Kniehöhe
+    vHoB: float | None = None  # Vorderhosenbreite
     gender: Gender = Gender.female
 
     def __post_init__(self):
@@ -76,9 +76,9 @@ class BlouseMeasurements:
 @dataclass
 class ModelConfig:
     MoL: float
-    BeckenAdjustment: float = None
-    ZuvHoB: float = None
-    SaW: float = None  # Saumweite
+    BeckenAdjustment: float | None = None
+    ZuvHoB: float | None = None
+    SaW: float | None = None  # Saumweite
     seam_allowance: float = 1 * CM  # Nahtzugabe
 
 

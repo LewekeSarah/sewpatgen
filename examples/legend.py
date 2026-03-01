@@ -1,16 +1,17 @@
+from pathlib import Path
+
 from sewpat import Pattern, PatternPart, Point
 from sewpat.geometry import Rect, Segment
-from sewpat.units import MM, CM
-from pathlib import Path
+from sewpat.pages import DinA4
+from sewpat.render import StyleOptions, export_pattern_svg_mm
 from sewpat.style import (
+    STYLE_CENTER_LINE,
+    STYLE_CUT,
     STYLE_FOLD,
     STYLE_HEM,
-    STYLE_CUT,
     STYLE_STITCH,
-    STYLE_CENTER_LINE,
 )
-from sewpat.pages import DinA4
-from sewpat.render import export_pattern_svg_mm, StyleOptions
+from sewpat.units import CM, MM
 
 
 def make_legend() -> Pattern:

@@ -19,23 +19,23 @@ class Gender(Enum):
 
 @dataclass
 class Person:
-    BrU: float = None  # Brustumfang
-    TaU: float = None  # Taillenumfang
-    HüU: float = None  # Hüftumfang
-    HüT: float = None  # Hüfttiefe
-    BrT: float = None  # Brusttiefe
-    HlB: float = None  # Halslochbreite
-    BrPA: float = None  # Brustpunktabstand
-    SuB: float = None  # Schulterbreite
-    RüL: float = None  # Rückenlänge
-    VL: float = None  # Vorderlänge
-    SiH: float = None  # Sitzhöhe
-    SrH: float = None  # Schritthöhe
-    RüB: float = None  # Rückenbreite
-    AlT: float = None  # Armlochtiefe
-    ArD: float = None  # Armdurchmesser
-    BrB: float = None  # Brustbreite
-    KöH: float = None  # Körperhöhe
+    BrU: float | None = None  # Brustumfang
+    TaU: float | None = None  # Taillenumfang
+    HüU: float | None = None  # Hüftumfang
+    HüT: float | None = None  # Hüfttiefe
+    BrT: float | None = None  # Brusttiefe
+    HlB: float | None = None  # Halslochbreite
+    BrPA: float | None = None  # Brustpunktabstand
+    SuB: float | None = None  # Schulterbreite
+    RüL: float | None = None  # Rückenlänge
+    VL: float | None = None  # Vorderlänge
+    SiH: float | None = None  # Sitzhöhe
+    SrH: float | None = None  # Schritthöhe
+    RüB: float | None = None  # Rückenbreite
+    AlT: float | None = None  # Armlochtiefe
+    ArD: float | None = None  # Armdurchmesser
+    BrB: float | None = None  # Brustbreite
+    KöH: float | None = None  # Körperhöhe
     gender: Gender = Gender.female  # Geschlecht
 
 
@@ -46,9 +46,9 @@ class BalanceAdjustments:
 
 
 class PersonAnalyser:
-    def __init__(self, person: Person, balance_adjustments: BalanceAdjustments = None):
+    def __init__(self, person: Person, balance_adjustments: BalanceAdjustments | None = None):
         self.person = person
-        self.person_balanced: Person = None
+        self.person_balanced: Person | None = None
         self.balance = balance_adjustments
         self.optimal_balance = self.get_optimal_balance()
         self.calculate_measurements()

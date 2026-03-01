@@ -7,15 +7,18 @@ from sewpat.geometry import (
     Point,
     Segment,
     intersect,
-    segment_to_intersection,
 )
-from sewpat.units import CM
-from sewpat.measurments import make_blouse_measurements
+from sewpat.measurements import (
+    Allowance,
+    BlouseMeasurements,
+    ModelConfig,
+    make_blouse_measurements,
+)
 from sewpat.pages import DinA0
-from sewpat.part import PatternPart, Pattern, ConstructionGrid
+from sewpat.part import ConstructionGrid, Pattern, PatternPart
+from sewpat.person import BalanceAdjustments, Person
 from sewpat.render import export_pattern_svg_mm
-from sewpat.measurments import Allowance, BlouseMeasurements, ModelConfig
-from sewpat.person import Person, BalanceAdjustments
+from sewpat.units import CM
 
 
 def make_person() -> Person:
@@ -116,7 +119,7 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     # -----------------------------------------------------------------------
     # GRUNDGERÜST — construction detail lines built on top of the grid
     # -----------------------------------------------------------------------
-    part = PatternPart(name="Grundgerüst", is_construction=True)
+    part = PatternPart(name="Grundgerüst")
     pattern.add_part(part)
 
     # STEP 2.2 — Modelllänge (vertical spine along hintere Mitte)
@@ -161,20 +164,24 @@ if __name__ == "__main__":
     model_config = make_model_config()
     pattern = make_blouse(measurements, model_config)
 
+    pattern_parts = ["Grundgerüst"]
+    grid_parts = ["Konstruktionsgitter Grundgerüst"]
+
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
         pattern,
         width_mm=DinA0.width,
         height_mm=DinA0.height,
         filename=str(Path(__file__).parent / "blouse_grid.svg"),
-        show_construction_grid=True,
+        parts=grid_parts + pattern_parts,
     )
 
-    # Clean version — construction grid hidden
+    # Clean version — construction grid not included
     export_pattern_svg_mm(
         pattern,
         width_mm=DinA0.width,
         height_mm=DinA0.height,
         filename=str(Path(__file__).parent / "blouse_grid_clean.svg"),
-        show_construction_grid=False,
+        parts=pattern_parts,
     )
+#marker_single  top_waisted_dart.pdf ./

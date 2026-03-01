@@ -1,11 +1,15 @@
 """Tests for CubicBezier.offset_error() and the Hausdorff quality check in offset()."""
 
 import math
+
 import pytest
+
 from sewpat.geometry import (
-    Point,
     CubicBezier,
+    Point,
     Segment,
+)
+from sewpat.geometry import (
     offset_adaptive as _module_offset_adaptive,
 )
 
@@ -149,7 +153,6 @@ def test_offset_adaptive_tight_returns_multiple_segments():
 
 def test_offset_adaptive_each_segment_within_eps():
     """Every sub-segment returned by offset_adaptive must satisfy the eps budget."""
-    import shapely.geometry as _sg
 
     curve = _tight()
     eps = 0.1
@@ -161,7 +164,6 @@ def test_offset_adaptive_each_segment_within_eps():
     result = curve.split(0.5)  # pre-split for the tight S
     segments = curve.offset_adaptive(d, eps=eps)
     for seg in segments:
-        from sewpat.geometry import _true_offset_ls, _bezier_shapely
 
         # We cannot compute _true_offset_ls for a sub-segment of the original
         # curve directly, but we CAN check that each segment's self-reported
@@ -193,7 +195,8 @@ def test_offset_adaptive_segments_are_connected():
 def test_offset_adaptive_better_than_single_offset_on_tight_curve():
     """offset_adaptive must achieve lower max Hausdorff error than single offset."""
     import shapely.geometry as _sg
-    from sewpat.geometry import _true_offset_ls, _bezier_shapely
+
+    from sewpat.geometry import _bezier_shapely, _true_offset_ls
 
     distance = 10.0
     curve = _tight()

@@ -1,31 +1,32 @@
+from pathlib import Path
+
 from sewpat import (
-    Segment,
-    PatternPart,
-    Pattern,
-    ConstructionGrid,
     STYLE_HEM,
-    STYLE_WAISTBAND,
     STYLE_STITCH,
+    STYLE_WAISTBAND,
+    ConstructionGrid,
+    Pattern,
+    PatternPart,
+    Segment,
 )
 from sewpat.geometry import (
-    Point,
-    intersect,
-    Ray,
     Circle,
     CubicBezier,
+    Point,
+    Ray,
+    intersect,
 )
-from sewpat.units import CM
-from sewpat.measurments import (
-    ModelConfig,
+from sewpat.measurements import (
     Allowance,
-    make_measurements_trouser,
+    ModelConfig,
     TrouserMeasurements,
+    make_measurements_trouser,
 )
 from sewpat.pages import DinA1
 from sewpat.person import Gender, Person
 from sewpat.render import export_pattern_svg_mm
 from sewpat.style import StyleOptions
-from pathlib import Path
+from sewpat.units import CM
 
 
 def make_person() -> Person:
@@ -135,6 +136,8 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     back_pt1 = intersect(bg_hm,  bg_sih)[0]   # Hintermitte  × Sitzhöhe
     back_pt4 = intersect(bg_vhb, bg_sih)[0]   # Vorderbreite × Sitzhöhe
 
+    # Grids are not added to the pattern — pass them explicitly to the renderer
+    # when you want to see them (see export calls below).
     pattern_boy_trousers.add_part(grid)
     pattern_boy_trousers.add_part(back_grid)
 
@@ -323,10 +326,11 @@ if __name__ == "__main__":
     model_config = make_model_config()
     pattern = boy_shorts(measurements, model_config)
 
-    # Without seam allowance
     parts = ["Vorderteil", "Rückteil"]
     if DEBUG:
-        parts += ["Konstruktionsgitter", "Konstruktionsgitter"]
+        parts += ["Konstruktionsgitter"] # , "Konstruktion"
+
+    # Without seam allowance
     export_pattern_svg_mm(
         pattern,
         filename=str(Path(__file__).parent / f"boys_shorts{"_grid" if DEBUG else ""}.svg"),
@@ -334,7 +338,6 @@ if __name__ == "__main__":
         width_mm=DinA1.height,
         parts=parts,
         show_seam_allowance=False,
-        show_construction_grid=DEBUG,
     )
 
     # With seam allowance
@@ -345,6 +348,5 @@ if __name__ == "__main__":
         width_mm=DinA1.height,
         parts=parts,
         show_seam_allowance=True,
-        show_construction_grid=DEBUG,
     )
 
