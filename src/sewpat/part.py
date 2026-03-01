@@ -1,6 +1,3 @@
-    def build(self) -> PatternPart:
-        """Build and return the construction-grid :class:`PatternPart`."""
-        part = PatternPart(name=self.part_name, is_construction=True)
 import math
 import shapely.geometry as _sg
 
