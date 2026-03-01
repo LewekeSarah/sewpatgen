@@ -67,7 +67,7 @@ def make_model_config() -> ModelConfig:
     )
 
 
-def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
+def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     pattern_boy_trousers = Pattern(
         name="Flat Boy Trousers", anchor=Point(5 * CM, 7 * CM)
     )
@@ -93,16 +93,13 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     ).build()
 
     # Named grid lines — looked up once and reused throughout construction
-    def _grid_line(part: PatternPart, name: str):
-        return next(e.geometry for e in part.elements if e.geometry.name == name)
-
-    g_hm  = _grid_line(grid, "Hintermitte")       # vertical x = pt0.x
-    g_vhb = _grid_line(grid, "Vorderhosenbreite")  # vertical x = pt0.x + vHoB
-    g_tai = _grid_line(grid, "Taillenlinie")        # horizontal y = pt0.y
-    g_sih = _grid_line(grid, "Sitzhöhe")            # horizontal y = pt0.y + SiH
-    g_kni = _grid_line(grid, "Knielinie")           # horizontal y = pt0.y + SiH + KnH
-    g_sau = _grid_line(grid, "Saumlinie")           # horizontal y = pt0.y + SiH + SrH
-    g_mol = _grid_line(grid, "Modellänge")          # horizontal y = pt0.y + MoL
+    g_hm  = grid.get_element("Hintermitte").geometry
+    g_vhb = grid.get_element("Vorderhosenbreite").geometry
+    g_tai = grid.get_element("Taillenlinie").geometry
+    g_sih = grid.get_element("Sitzhöhe").geometry
+    g_kni = grid.get_element("Knielinie").geometry
+    g_sau = grid.get_element("Saumlinie").geometry
+    g_mol = grid.get_element("Modellänge").geometry
 
     # Base construction points derived directly from grid intersections
     pt0 = intersect(g_hm,  g_tai)[0]   # Hintermitte  × Taillenlinie  (= anchor)
@@ -129,11 +126,11 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
         ],
     ).build()
 
-    bg_hm  = _grid_line(back_grid, "Hintermitte")
-    bg_vhb = _grid_line(back_grid, "Vorderhosenbreite")
-    bg_sih = _grid_line(back_grid, "Sitzhöhe")
-    bg_kni = _grid_line(back_grid, "Knielinie")
-    bg_mol = _grid_line(back_grid, "Modellänge")
+    bg_hm  = back_grid.get_element("Hintermitte").geometry
+    bg_vhb = back_grid.get_element("Vorderhosenbreite").geometry
+    bg_sih = back_grid.get_element("Sitzhöhe").geometry
+    bg_kni = back_grid.get_element("Knielinie").geometry
+    bg_mol = back_grid.get_element("Modellänge").geometry
 
     back_pt1 = intersect(bg_hm,  bg_sih)[0]   # Hintermitte  × Sitzhöhe
     back_pt4 = intersect(bg_vhb, bg_sih)[0]   # Vorderbreite × Sitzhöhe
@@ -211,12 +208,12 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     # Leg-grid midpoints for back
     back_pt9  = Point(back_pt0.x + 0.5 * meas.vHoB, back_pt1.y)
     back_pt10 = Point(back_pt0.x + 0.5 * meas.vHoB, intersect(bg_hm, bg_kni)[0].y)
-    back_pt11 = Point(back_pt0.x + 0.5 * meas.vHoB, intersect(bg_hm, _grid_line(back_grid, "Saumlinie"))[0].y)
+    back_pt11 = Point(back_pt0.x + 0.5 * meas.vHoB, intersect(bg_hm, bg_mol)[0].y)
     back_pt12 = Point(back_pt11.x - (model.SaW / 2 + 0.5 * CM), back_pt11.y)
     back_pt13 = Point(back_pt11.x + (model.SaW / 2 + 0.5 * CM), back_pt11.y)
 
     # Hosenbund
-    back_pt6 = intersect(bg_vhb, _grid_line(back_grid, "Taillenlinie"))[0]
+    back_pt6 = intersect(bg_vhb, back_grid.get_element("Taillenlinie").geometry)[0]
     pt16 = back_pt6.translate(-3.5 * CM, 0)
     pt17 = pt16.translate(0, -3 * CM)
     pt18 = back_pt0.translate(-2 * CM, 0)
@@ -319,40 +316,35 @@ def boy_trousers(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
 
 
 if __name__ == "__main__":
+    DEBUG = True
     person = make_person()
     allowance = make_allowance()
     measurements = make_measurements_trouser(person, allowance)
     model_config = make_model_config()
-    pattern = boy_trousers(measurements, model_config)
+    pattern = boy_shorts(measurements, model_config)
 
     # Without seam allowance
+    parts = ["Vorderteil", "Rückteil"]
+    if DEBUG:
+        parts += ["Konstruktionsgitter", "Konstruktionsgitter"]
     export_pattern_svg_mm(
         pattern,
-        filename=str(Path(__file__).parent / "boy_shorts.svg"),
+        filename=str(Path(__file__).parent / f"boys_shorts{"_grid" if DEBUG else ""}.svg"),
         height_mm=DinA1.width,
         width_mm=DinA1.height,
-        parts=["Vorderteil", "Rückteil"],
+        parts=parts,
         show_seam_allowance=False,
+        show_construction_grid=DEBUG,
     )
 
     # With seam allowance
     export_pattern_svg_mm(
         pattern,
-        filename=str(Path(__file__).parent / "boy_shorts_with_sa.svg"),
+        filename=str(Path(__file__).parent / f"boys_shorts_sa{"_grid" if DEBUG else ""}.svg"),
         height_mm=DinA1.width,
         width_mm=DinA1.height,
-        parts=["Vorderteil", "Rückteil"],
+        parts=parts,
         show_seam_allowance=True,
-    )
-
-    # With construction grid (no SA)
-    export_pattern_svg_mm(
-        pattern,
-        filename=str(Path(__file__).parent / "children_shorts_grid.svg"),
-        height_mm=DinA1.width,
-        width_mm=DinA1.height,
-        parts=["Vorderteil", "Rückteil", "Konstruktionsgitter", "Konstruktionsgitter"],
-        show_seam_allowance=False,
-        show_construction_grid=True,
+        show_construction_grid=DEBUG,
     )
 

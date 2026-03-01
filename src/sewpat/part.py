@@ -134,6 +134,20 @@ class PatternPart:
         minx, miny, maxx, maxy = poly.bounds
         return Point(minx, miny), Point(maxx, maxy)
 
+    def get_element(self, name: str) -> PatternElement:
+        """Return the first :class:`PatternElement` whose effective name matches *name*.
+
+        The effective name is determined by :meth:`PatternElement.get_name`, i.e.
+        the element's own ``name`` attribute takes priority over ``geometry.name``.
+
+        Raises:
+            KeyError: If no element with that name exists in this part.
+        """
+        for e in self.elements:
+            if e.get_name() == name:
+                return e
+        raise KeyError(f"No element named {name!r} in part {self.name!r}")
+
     def seam_length(
         self,
         geoms_or_names: list[Segment | CubicBezier | PatternElement | str],

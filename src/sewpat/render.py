@@ -558,7 +558,7 @@ def export_pattern_svg_mm(
     show_bezier_control_points: bool = False,
     parts: list[str] | None = None,
     show_seam_allowance: bool = True,
-    show_construction_grid: bool = True,
+    show_construction_grid: bool = False,
 ) -> None:
     """Export a Pattern (all or selected parts) as a single SVG file.
 
