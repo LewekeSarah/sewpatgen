@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
-from sewpat import Pattern, PatternPart, Point, Segment, STYLE_HEM, STYLE_STITCH
-from sewpat.geometry import Rect
+from sewpat import Pattern, PatternPart, Point, Segment, STYLE_HEM, STYLE_WAISTBAND, STYLE_STITCH
+from sewpat.geometry import Rect, intersect
+from sewpat.part import ConstructionGrid
 from sewpat.units import CM
 from sewpat.style import StyleOptions
 from sewpat.pages import DinA4
@@ -24,20 +24,44 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     pattern = Pattern(name="Drawstring Pouch", anchor=Point(1.2 * CM, 1.2 * CM))
 
     # -----------------------------------------------------------------------
+    # Construction grid
+    # -----------------------------------------------------------------------
+    grid = ConstructionGrid(
+        anchor=pattern.anchor,
+        horizontals=[
+            ("Oberkante",          0),
+            ("Tunnelzug oben",     model.drawstring_margin),
+            ("Tunnelzug unten",    model.drawstring_margin + model.drawstring_height),
+            ("Unterkante",         model.height),
+        ],
+        verticals=[
+            ("linke Kante",        0),
+            ("rechte Kante",       model.width),
+        ],
+        part_name="Konstruktionsgitter Beutel",
+    )
+    grid_part = grid.build()
+    pattern.add_part(grid_part)
+
+    # Named grid lines
+    g_top    = grid_part.get_element("Oberkante").geometry
+    g_ds_top = grid_part.get_element("Tunnelzug oben").geometry
+    g_ds_bot = grid_part.get_element("Tunnelzug unten").geometry
+    g_bot    = grid_part.get_element("Unterkante").geometry
+    g_left   = grid_part.get_element("linke Kante").geometry
+    g_right  = grid_part.get_element("rechte Kante").geometry
+
+    # Key points derived from grid intersections
+    top_left     = intersect(g_top,  g_left)[0]
+    top_right    = intersect(g_top,  g_right)[0]
+    bottom_left  = intersect(g_bot,  g_left)[0]
+    bottom_right = intersect(g_bot,  g_right)[0]
+
+    # -----------------------------------------------------------------------
     # Part 1: Main body
     # -----------------------------------------------------------------------
     body = PatternPart(name="body")
     pattern.add_part(body)
-
-    # SVG coordinates: x increases right, y increases down
-
-    ## STEP 1: Anchor: top left
-    top_left = pattern.anchor
-
-    ## STEP 2: Basic Rectangle
-    bottom_left = top_left.translate(0, model.height)
-    top_right = top_left.translate(model.width, 0)
-    bottom_right = bottom_left.translate(model.width, 0)
 
     left_edge = body.append(
         Segment(bottom_left, top_left),
@@ -60,15 +84,20 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
         is_outline=True,
     )
 
+    # Virtual edge segments for mark-intersection arithmetic (not rendered)
+    flip_left = bottom_right.translate(-(model.width - model.flip_opening) / 2, 0)
+    flip_right = flip_left.translate(-model.flip_opening, 0)
+    body.append(Segment(flip_left, flip_right), style=STYLE_WAISTBAND)
+
     body.add_precision_points(bottom_left, bottom_right)
 
-    ## STEP 0: Reference square — placed after outline is built so auto-placement works
+    ## Reference square — placed after outline is built so auto-placement works
     pattern.add_reference_square(
         origin=Point(top_left.x + 0.2 * model.width, top_left.y + 0.5 * model.height),
         part=body,
     )
 
-    ## STEP 3: Grainline
+    ## Grainline
     grain_padding = 2 * CM
     grain_x = top_left.x + model.width / 4 * 3
     body.add_grainline(
@@ -76,7 +105,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
         end=Point(grain_x, bottom_left.y - grain_padding),
     )
 
-    ## STEP 4: Seam Allowance
+    ## Seam Allowance
     body.add_seam_allowance(model.seam_allowance)
 
     body.add_info_box(
@@ -89,20 +118,8 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
         ]
     )
 
-    # Virtual edge segments for mark-intersection arithmetic (not rendered)
-    flip_left = bottom_right.translate(-(model.width - model.flip_opening) / 2, 0)
-    flip_right = flip_left.translate(-model.flip_opening, 0)
-    body.append(Segment(flip_left, flip_right), style=STYLE_HEM)
-
-    # Add marks
-    ds1_top_left = top_left.translate(0, model.drawstring_margin)
-    ds1_top_right = top_right.translate(0, model.drawstring_margin)
-    ds1_bottom_left = top_left.translate(
-        0, model.drawstring_margin + model.drawstring_height
-    )
-    ds1_bottom_right = top_right.translate(
-        0, model.drawstring_margin + model.drawstring_height
-    )
+    ## Notches — automatically placed where outline edges cross grid lines
+    body.add_grid_notches(grid_part, corner_clearance = 0.0,)
 
     # -----------------------------------------------------------------------
     # Part 2: Drawstring channel
@@ -112,7 +129,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
 
     drawstring.append(
         Rect(
-            origin=ds1_top_left,
+            origin=intersect(g_ds_top, g_left)[0],
             width=model.width,
             height=model.drawstring_height,
             name="drawstring / Tunnelzug",
@@ -120,12 +137,6 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
         style=StyleOptions(dash_array=[5.0, 2.0]),
     )
 
-    drawstring.add_notches(
-        ds1_bottom_left, ds1_top_left, seam_edge=cast(Segment, left_edge.geometry)
-    )
-    drawstring.add_notches(
-        ds1_bottom_right, ds1_top_right, seam_edge=cast(Segment, right_edge.geometry)
-    )
     return pattern
 
 

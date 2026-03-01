@@ -192,3 +192,12 @@ STYLE_DEBUG_RED = StyleOptions(
     stroke_width=1.5,
     opacity=0.7,
 )
+
+# Construction Grid Line — light grey dashed line for the construction grid layer.
+STYLE_CONSTRUCTION_GRID = StyleOptions(
+    stroke_color="lightgrey",
+    stroke_width=0.8,
+    opacity=0.8,
+    dash_array=[3.0, 2.0],
+)
+

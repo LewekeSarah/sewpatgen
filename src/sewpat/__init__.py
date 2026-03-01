@@ -20,12 +20,13 @@ from .geometry import (
     Rect,
     Triangle,
     CubicBezier,
+    edge_tangent,
     intersect,
     segment_to_intersection,
     seam_length,
 )
 from .units import MM, CM, INCH
-from .part import PatternPart, PatternElement, Pattern
+from .part import PatternPart, PatternElement, Pattern, ConstructionGrid
 from .style import (
     StyleOptions,
     Marker,
@@ -39,6 +40,7 @@ from .style import (
     STYLE_CENTER_LINE,
     STYLE_WAISTBAND,
     STYLE_SEAM_ALLOWANCE,
+    STYLE_CONSTRUCTION_GRID,
     STYLE_DEBUG_RED,
 )
 
