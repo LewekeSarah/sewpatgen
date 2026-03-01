@@ -410,7 +410,7 @@ class PatternPart:
 
         # ── Pure-segment path: Shapely buffer ────────────────────────────────
         has_per_elem_sa = any(
-            getattr(e.style, "seam_allowance", 0.0) > 0
+            getattr(e.style, "seam_allowance", None) is not None
             for e in outline_elements
             if isinstance(e.geometry, (Segment, CubicBezier))
         )
@@ -445,11 +445,14 @@ class PatternPart:
                 [(round(s.x, 6), round(s.y, 6)), (round(e.x, 6), round(e.y, 6))]
             )
 
+        # seam_allowance=None  → not in dict → use global distance
+        # seam_allowance=0.0   → in dict as 0.0 → no offset (fold line)
+        # seam_allowance=x > 0 → in dict as x   → custom distance
         elem_sa: dict[frozenset, float] = {
-            _ep_key(e.geometry): getattr(e.style, "seam_allowance", 0.0)
+            _ep_key(e.geometry): getattr(e.style, "seam_allowance")
             for e in outline_elements
             if isinstance(e.geometry, (Segment, CubicBezier))
-            and getattr(e.style, "seam_allowance", 0.0) > 0
+            and getattr(e.style, "seam_allowance", None) is not None
         }
 
         _valid_cj = {"miter", "round", "bevel"}
@@ -467,10 +470,13 @@ class PatternPart:
                 )
             elem_cj[_ep_key(e.geometry)] = val
 
-        offset_groups: list[list[Segment | CubicBezier]] = [
-            _offset_adaptive(g, elem_sa.get(_ep_key(g), distance), center)
-            for g in chain_mixed
-        ]
+        offset_groups: list[list[Segment | CubicBezier]] = []
+        for g in chain_mixed:
+            d = elem_sa.get(_ep_key(g), distance)
+            if d == 0.0:
+                offset_groups.append([g])  # fold line — keep in place
+            else:
+                offset_groups.append(_offset_adaptive(g, d, center))
 
         n = len(offset_groups)
         arc_inserts: list[tuple[int, CubicBezier]] = []

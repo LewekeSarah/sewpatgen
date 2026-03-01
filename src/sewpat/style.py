@@ -54,13 +54,14 @@ class StyleOptions:
         font_size_mm: float = DEFAULT_FONT_SIZE_MM,
         font_weight: str = "normal",
         font_style: str = "normal",
-        seam_allowance: float = 0.0,
+        seam_allowance: float | None = None,
         corner_join: str | None = None,
     ) -> None:
         """
         Args:
-            seam_allowance: Per-element SA override in mm; ``0.0`` = use the
-                global distance passed to ``add_seam_allowance()``.
+            seam_allowance: Per-element SA override in mm.  ``None`` (default)
+                = use the global distance passed to ``add_seam_allowance()``.
+                ``0.0`` = explicitly no seam allowance on this edge (e.g. fold line).
             corner_join: Per-element corner-join override (``"miter"``,
                 ``"round"``, ``"bevel"``); ``None`` = use the part-wide default.
             All other arguments map directly to the identically named SVG attributes.
