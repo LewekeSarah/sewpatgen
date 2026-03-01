@@ -151,7 +151,8 @@ class Segment:
 
     def point_at_t(self, t: float) -> Point:
         """Return the point at parameter *t* ∈ [0, 1] (0 = p1, 1 = p2)."""
-        assert (0 <= t) and (t <= 1), f"{t = } expected in [0, 1]"
+        if not (0 <= t <= 1):
+            raise ValueError(f"{t = } expected in [0, 1]")
         return Point(*((1.0 - t) * self.p1.coords + t * self.p2.coords))
 
     def point_perpendicular(
@@ -174,7 +175,8 @@ class Segment:
         if arc_length is not None:
             base = self.p1.coords + arc_length * self.unit_direction
         elif t is not None:
-            assert 0.0 <= t <= 1.0, f"t = {t} must be in [0, 1]"
+            if not (0.0 <= t <= 1.0):
+                raise ValueError(f"t = {t} must be in [0, 1]")
             base = (1.0 - t) * self.p1.coords + t * self.p2.coords
         else:
             base = 0.5 * (self.p1.coords + self.p2.coords)

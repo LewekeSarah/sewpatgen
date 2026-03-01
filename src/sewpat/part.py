@@ -96,7 +96,7 @@ class PatternPart:
             elem.is_construction = self.is_construction
         self.elements.extend(elements)
 
-    def _outline_polygon(self):
+    def _outline_polygon(self) -> _sg.Polygon | None:
         """Build a Shapely Polygon from the ``is_outline`` elements of this part."""
         geoms = [
             e.geometry

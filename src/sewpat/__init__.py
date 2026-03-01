@@ -27,6 +27,15 @@ from .geometry import (
 )
 from .units import MM, CM, INCH
 from .part import PatternPart, PatternElement, Pattern, ConstructionGrid, ConstructionGridPart, Block, OverlayPart
+from .pages import DinA4, DinA2, DinA1, DinA0
+from .measurements import (
+    Allowance,
+    BlouseMeasurements,
+    TrouserMeasurements,
+    ModelConfig,
+    make_blouse_measurements,
+    make_measurements_trouser,
+)
 from .style import (
     StyleOptions,
     Marker,
@@ -70,6 +79,18 @@ __all__ = [
     "ConstructionGridPart",
     "Block",
     "OverlayPart",
+    # Pages
+    "DinA4",
+    "DinA2",
+    "DinA1",
+    "DinA0",
+    # Measurements
+    "Allowance",
+    "BlouseMeasurements",
+    "TrouserMeasurements",
+    "ModelConfig",
+    "make_blouse_measurements",
+    "make_measurements_trouser",
     # Style
     "StyleOptions",
     "Marker",

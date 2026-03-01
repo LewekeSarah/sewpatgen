@@ -15,7 +15,7 @@ from sewpat.geometry import (
     CubicBezier,
 )
 from sewpat.units import CM
-from sewpat.measurments import (
+from sewpat.measurements import (
     ModelConfig,
     Allowance,
     make_measurements_trouser,
