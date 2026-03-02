@@ -282,7 +282,7 @@ class TestAddDartInner:
     def test_rhombus_element_count(self) -> None:
         part = _square_part()
         result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=False)
-        assert len(result.rhombus_elements) == 4
+        assert len(result.stitch_elements) == 4
         assert result.fold_element is None
         assert result.cut_elements == []
 
@@ -290,7 +290,7 @@ class TestAddDartInner:
         """leg_a → tip → leg_b → mirror_tip → leg_a — shape is a closed diamond."""
         part = _square_part()
         result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=False)
-        segs = [e.geometry for e in result.rhombus_elements]
+        segs = [e.geometry for e in result.stitch_elements]
         first_start = segs[0].p1
         last_end = segs[-1].p2
         assert first_start.distance_to(last_end) == pytest.approx(0.0, abs=1e-6)
@@ -303,7 +303,7 @@ class TestAddDartInner:
         """
         part = _square_part()
         result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=False)
-        segs = [e.geometry for e in result.rhombus_elements]
+        segs = [e.geometry for e in result.stitch_elements]
         # Segment order: leg_a→tip, tip→leg_b, leg_b→mirror_tip, mirror_tip→leg_a
         mirror_tip = segs[2].p2  # end of leg_b→mirror_tip segment
         assert mirror_tip.x == pytest.approx(50.0, abs=1e-6)

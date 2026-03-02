@@ -584,13 +584,13 @@ class PatternPart:
         tip_elems: list[PatternElement] = []
         notch_elems: list[PatternElement] = []
         cut_elems: list[PatternElement] = []
-        rhombus_elems: list[PatternElement] = []
+
+        # build_stitch_elements handles both triangle (2 legs) and rhombus (4 sides)
+        stitch_elems = factory.build_stitch_elements()
+        self.extend(stitch_elems)
 
         if geom.is_triangle:
             # ── Outer dart ────────────────────────────────────────────────────
-            stitch_elems = factory.build_stitch_elements()
-            self.extend(stitch_elems)
-
             fold_elem = factory.build_fold_element()
             self.extend([fold_elem])
 
@@ -603,10 +603,6 @@ class PatternPart:
             before = len(self.elements)
             self.add_notches(geom.roof, seam_edge=mouth_edge, **_nkw, symbol="Rectangle")
             notch_elems.extend(self.elements[before:])
-        else:
-            # ── Inner / reverse dart: rhombus ─────────────────────────────────
-            rhombus_elems = factory.build_rhombus_elements()
-            self.extend(rhombus_elems)
 
         # Tip precision mark
         if precision_tip:
@@ -628,7 +624,6 @@ class PatternPart:
             tip_elements=tip_elems,
             notch_elements=notch_elems,
             cut_elements=cut_elems,
-            rhombus_elements=rhombus_elems,
         )
 
     def add_construction_line(

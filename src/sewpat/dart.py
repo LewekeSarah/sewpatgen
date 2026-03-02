@@ -45,14 +45,15 @@ class DartResult:
 
     Attributes:
         dart: The dart geometry.
-        stitch_elements: Stitching-leg segments (``is_outline=False``).
-        fold_element: The fold/crease line segment (``None`` for inner darts).
+        stitch_elements: Stitching segments — for triangle darts these are the
+            two legs (leg_a → tip, leg_b → tip); for rhombus darts these are
+            the four sides of the diamond.
+        fold_element: The fold/crease line segment (``None`` for rhombus darts).
         tip_elements: Precision-mark circles at the tip (may be empty).
         notch_elements: Notch triangles at the dart legs (may be empty).
-        cut_elements: Corrected outline segments for outer darts — the
-            Abnäherdach roof polyline ``leg_a → roof_a → roof_b → leg_b``
-            (empty for inner darts).
-        rhombus_elements: Rhombus outline segments for inner/reverse darts (empty for outer).
+        cut_elements: Corrected outline segments for triangle darts — the
+            Abnäherdach roof polyline ``leg_a → roof → leg_b``
+            (empty for rhombus darts).
     """
 
     def __init__(
@@ -63,7 +64,6 @@ class DartResult:
         tip_elements: list[PatternElement],
         notch_elements: list[PatternElement],
         cut_elements: list[PatternElement],
-        rhombus_elements: list[PatternElement],
     ) -> None:
         self.dart = dart
         self.stitch_elements = stitch_elements
@@ -71,7 +71,6 @@ class DartResult:
         self.tip_elements = tip_elements
         self.notch_elements = notch_elements
         self.cut_elements = cut_elements
-        self.rhombus_elements = rhombus_elements
 
     @property
     def all_elements(self) -> list[PatternElement]:
@@ -82,7 +81,6 @@ class DartResult:
         result.extend(self.tip_elements)
         result.extend(self.notch_elements)
         result.extend(self.cut_elements)
-        result.extend(self.rhombus_elements)
         return result
 
     def __repr__(self) -> str:
@@ -253,12 +251,35 @@ class DartElements:
     # ------------------------------------------------------------------
 
     def build_stitch_elements(self) -> list[PatternElement]:
-        """Return the two stitching-leg PatternElements (outer dart)."""
+        """Return the stitching PatternElements for this dart.
+
+        For triangle (outer seam) darts: two legs — ``leg_a → tip`` and
+        ``leg_b → tip``.
+
+        For rhombus (inner panel) darts: four sides of the diamond —
+        ``leg_a → tip → leg_b → mirror_tip → leg_a``.
+
+        Both dart types return their elements under the same attribute on
+        :class:`DartResult` because they are all stitching lines from the
+        sewer's point of view.
+        """
         dart = self.dart
-        return [
-            PatternElement(dart.stitch_line_a, style=self.stitch_style),
-            PatternElement(dart.stitch_line_b, style=self.stitch_style),
-        ]
+        if dart.is_triangle:
+            return [
+                PatternElement(dart.stitch_line_a, style=self.stitch_style),
+                PatternElement(dart.stitch_line_b, style=self.stitch_style),
+            ]
+        else:
+            points = [
+                (dart.leg_a, dart.tip),
+                (dart.tip, dart.leg_b),
+                (dart.leg_b, dart.mirror_tip),
+                (dart.mirror_tip, dart.leg_a),
+            ]
+            return [
+                PatternElement(Segment(p1, p2), style=self.stitch_style)
+                for p1, p2 in points
+            ]
 
     def build_fold_element(self) -> PatternElement:
         """Return the fold/crease-line PatternElement (outer dart)."""
@@ -301,23 +322,6 @@ class DartElements:
         )
         return segments
 
-    def build_rhombus_elements(self) -> list[PatternElement]:
-        """Return the four rhombus-outline PatternElements (inner/reverse dart).
-
-        The rhombus has four corners: leg_a, tip, leg_b, and mirror_tip —
-        the reflection of tip across the leg_a→leg_b mouth line.
-        """
-        dart = self.dart
-        points = [
-            (dart.leg_a, dart.tip),
-            (dart.tip, dart.leg_b),
-            (dart.leg_b, dart.mirror_tip),
-            (dart.mirror_tip, dart.leg_a),
-        ]
-        return [
-            PatternElement(Segment(p1, p2), style=self.stitch_style)
-            for p1, p2 in points
-        ]
 
     def build_tip_elements(self) -> list[PatternElement]:
         """Return the precision-mark circles and optional name label at the tip.
