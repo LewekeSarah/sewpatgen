@@ -7,6 +7,8 @@ import numpy as np
 import shapely.geometry as _sg
 from svgpathtools import CubicBezier as _SvgCubicBezier
 
+from sewpat.style import StyleOptions
+
 
 def _solve_quadratic(a: float, b: float, c: float) -> list[float]:
     """Solve ax² + bx + c = 0. Used by CubicBezier.bounding_box()."""
@@ -1445,3 +1447,437 @@ def offset_adaptive(
     if isinstance(geom, Segment):
         return [geom.offset(distance, center=center)]
     return geom.offset_adaptive(distance, center=center, eps=eps)
+
+
+# ---------------------------------------------------------------------------
+# Dart geometry
+# ---------------------------------------------------------------------------
+
+class Dart:
+    """An immutable dart (Abnäher) geometry primitive.
+
+    A dart is a wedge-shaped tuck sewn into a pattern piece to add
+    three-dimensional shaping (e.g. a bust dart or waist dart).  It is
+    uniquely defined by four key points:
+
+    * **leg_a** / **leg_b** — the two endpoints of the dart opening
+      (mouth) on the seam line.
+    * **center** — the midpoint of the mouth; the fold/crease line runs
+      from here to the tip.
+    * **tip** — the apex of the dart inside the pattern piece.
+
+    All secondary geometry (stitching legs, fold line, opening width,
+    depth) is derived as properties.
+
+    Fold direction convention (SVG y-down coordinates):
+        ``"inward"``  — dart is on an outer/seam edge; the wedge is folded
+                        toward the interior of the piece.  Rendered as two
+                        stitching lines + fold line + cut-line mouth segments.
+        ``"outward"`` — dart is on an inner/panel edge; the wedge protrudes
+                        outward.  Rendered as a closed rhombus (Raute).
+
+    The ``fold_direction`` fully determines the rendering mode; there is no
+    separate ``outer`` flag needed at render time.
+
+    Args:
+        leg_a: First dart leg endpoint on the seam.
+        leg_b: Second dart leg endpoint on the seam.
+        center: Midpoint of the dart mouth (on the seam).
+        tip: Apex of the dart.
+        fold_direction: ``"inward"`` (default) or ``"outward"``.
+        name: Optional label for the dart.
+        edge_style: Style of the seam edge this dart was constructed from
+                    (e.g. the style of the ``PatternElement`` passed to
+                    :meth:`from_edge`).  When set, the dart mouth cut
+                    segments will inherit this style automatically during
+                    rendering, so they are visually indistinguishable from
+                    the rest of the seam.  ``None`` means use a plain
+                    default style.
+    """
+
+    def __init__(
+        self,
+        leg_a: Point,
+        leg_b: Point,
+        center: Point,
+        tip: Point,
+        fold_direction: str = "inward",
+        name: str | None = None,
+        edge_style: "StyleOptions | None" = None,
+    ) -> None:
+        if fold_direction not in ("inward", "outward"):
+            raise ValueError(
+                f"fold_direction must be 'inward' or 'outward', got {fold_direction!r}"
+            )
+        self.leg_a = leg_a
+        self.leg_b = leg_b
+        self.center = center
+        self.tip = tip
+        self.fold_direction = fold_direction
+        self.name = name
+        self.edge_style: StyleOptions | None = edge_style
+
+    @property
+    def is_outer(self) -> bool:
+        """``True`` when this is a seam-edge (outer) dart (fold_direction == 'inward')."""
+        return self.fold_direction == "inward"
+
+    # ------------------------------------------------------------------
+    # Derived geometry
+    # ------------------------------------------------------------------
+
+    @property
+    def fold_line(self) -> Segment:
+        """The center crease/fold line from the mouth center to the tip."""
+        return Segment(self.center, self.tip)
+
+    @property
+    def stitch_line_a(self) -> Segment:
+        """Stitching line from leg_a to the tip."""
+        return Segment(self.leg_a, self.tip)
+
+    @property
+    def stitch_line_b(self) -> Segment:
+        """Stitching line from leg_b to the tip."""
+        return Segment(self.leg_b, self.tip)
+
+    @property
+    def width(self) -> float:
+        """Opening width (mouth) of the dart in mm (distance leg_a → leg_b)."""
+        return self.leg_a.distance_to(self.leg_b)
+
+    @property
+    def depth(self) -> float:
+        """Depth of the dart in mm (distance from mouth center to tip)."""
+        return self.center.distance_to(self.tip)
+
+    @property
+    def intake_angle(self) -> float:
+        """Full intake angle in radians (angle leg_a–tip–leg_b)."""
+        da = np.array(self.leg_a.coords) - np.array(self.tip.coords)
+        db = np.array(self.leg_b.coords) - np.array(self.tip.coords)
+        norm_a = float(np.linalg.norm(da))
+        norm_b = float(np.linalg.norm(db))
+        if norm_a < 1e-9 or norm_b < 1e-9:
+            return 0.0
+        cos_a = float(np.clip(np.dot(da / norm_a, db / norm_b), -1.0, 1.0))
+        return float(math.acos(cos_a))
+
+    # ------------------------------------------------------------------
+    # Transformation
+    # ------------------------------------------------------------------
+
+    def translate(self, dx: float, dy: float) -> "Dart":
+        """Return a copy translated by (dx, dy)."""
+        return Dart(
+            leg_a=self.leg_a.translate(dx, dy),
+            leg_b=self.leg_b.translate(dx, dy),
+            center=self.center.translate(dx, dy),
+            tip=self.tip.translate(dx, dy),
+            fold_direction=self.fold_direction,
+            name=self.name,
+            edge_style=self.edge_style,
+        )
+
+    def rotate(self, pivot: Point, angle_rad: float) -> "Dart":
+        """Return a copy rotated by *angle_rad* (CCW) around *pivot*.
+
+        This is the pivot-method dart transfer operation: rotating the dart
+        to a new edge position preserves the intake angle and depth.
+        """
+        return Dart(
+            leg_a=self.leg_a.rotate(pivot, angle_rad),
+            leg_b=self.leg_b.rotate(pivot, angle_rad),
+            center=self.center.rotate(pivot, angle_rad),
+            tip=self.tip.rotate(pivot, angle_rad),
+            fold_direction=self.fold_direction,
+            name=self.name,
+            edge_style=self.edge_style,
+        )
+
+    def split(self, ratio: float = 0.5) -> "tuple[Dart, Dart]":
+        """Split this dart into two darts, sharing the same tip and mouth center.
+
+        The intake angle is divided in proportion *ratio* : (1 − ratio).  The
+        two darts share the tip point and the mouth center; the split point on
+        the original mouth becomes the inner leg of each sub-dart.
+
+        Args:
+            ratio: Fraction of the intake angle in the first sub-dart.
+                   Must be in the open interval (0, 1). Defaults to 0.5.
+
+        Returns:
+            A ``(dart_a, dart_b)`` tuple where dart_a covers the *ratio*
+            portion and dart_b the remainder.
+        """
+        if not (0.0 < ratio < 1.0):
+            raise ValueError(f"ratio must be in (0, 1), got {ratio}")
+        half_angle = self.intake_angle * ratio
+        da = np.array(self.leg_a.coords) - np.array(self.tip.coords)
+        db = np.array(self.leg_b.coords) - np.array(self.tip.coords)
+        cross = float(da[0] * db[1] - da[1] * db[0])
+        sign = 1.0 if cross >= 0 else -1.0
+        split_leg = self.leg_a.rotate(self.tip, sign * half_angle)
+        dart_a = Dart(
+            leg_a=self.leg_a,
+            leg_b=split_leg,
+            center=Point(*(0.5 * (np.array(self.leg_a.coords) + np.array(split_leg.coords)))),
+            tip=self.tip,
+            fold_direction=self.fold_direction,
+            name=(f"{self.name} A" if self.name else None),
+            edge_style=self.edge_style,
+        )
+        dart_b = Dart(
+            leg_a=split_leg,
+            leg_b=self.leg_b,
+            center=Point(*(0.5 * (np.array(split_leg.coords) + np.array(self.leg_b.coords)))),
+            tip=self.tip,
+            fold_direction=self.fold_direction,
+            name=(f"{self.name} B" if self.name else None),
+            edge_style=self.edge_style,
+        )
+        return dart_a, dart_b
+
+    # ------------------------------------------------------------------
+    # Construction helpers
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_edge(
+        cls,
+        edge: "Segment | CubicBezier",
+        position_t: float,
+        width: float,
+        depth: float | None = None,
+        reference_point: "Point | None" = None,
+        tip_shortfall: float = 20.0,
+        fold_direction: str = "inward",
+        name: str | None = None,
+        edge_style: "StyleOptions | None" = None,
+    ) -> "Dart":
+        """Construct a dart placed on *edge* at parameter *position_t*.
+
+        The dart mouth is centred at ``edge.point_at_t(position_t)`` and spans
+        *width* mm symmetrically along the edge.  The tip is placed either at
+        *depth* mm inward from the mouth center, or at *tip_shortfall* mm
+        short of *reference_point* (e.g. the bust point).
+
+        Args:
+            edge: The seam edge to place the dart on.
+            position_t: Parameter ∈ [0, 1] on *edge* for the dart mouth center.
+            width: Total dart opening in mm (mouth width).
+            depth: Explicit depth in mm from mouth center to tip.  Mutually
+                   exclusive with *reference_point*.
+            reference_point: A landmark point (e.g. bust point) toward which
+                             the dart tip is directed.  The tip is placed at
+                             *tip_shortfall* mm short of this point.
+            tip_shortfall: How many mm short of *reference_point* to place the
+                           tip (default 20 mm = 2 cm).  Ignored when *depth* is
+                           given.
+            fold_direction: ``"inward"`` (default) or ``"outward"``.
+            name: Optional label for the dart.
+            edge_style: Style of the source *edge* (or its
+                        ``PatternElement.style``).  Stored on the dart and
+                        used automatically by :meth:`PatternPart.add_dart`
+                        so the dart mouth segments match the seam visually.
+
+        Returns:
+            A new :class:`Dart` instance.
+
+        Raises:
+            ValueError: If neither *depth* nor *reference_point* is supplied,
+                        or if both are supplied, or if *position_t* is out of
+                        range.
+        """
+        if depth is not None and reference_point is not None:
+            raise ValueError("Provide exactly one of 'depth' or 'reference_point'.")
+        if depth is None and reference_point is None:
+            raise ValueError("Provide exactly one of 'depth' or 'reference_point'.")
+        if not (0.0 <= position_t <= 1.0):
+            raise ValueError(f"position_t must be in [0, 1], got {position_t}")
+
+        # ── Mouth center on the edge ──────────────────────────────────────
+        if isinstance(edge, Segment):
+            center = edge.point_at_t(position_t)
+            along = edge.unit_direction
+            inward_normal = edge.unit_normal  # left of travel
+        else:
+            center = edge.point_at_t(position_t)
+            raw_t = edge.tangent_at_t(position_t)
+            norm = float(np.linalg.norm(raw_t))
+            along = raw_t / norm if norm > 1e-9 else raw_t
+            inward_normal = edge.normal_at_t(position_t)
+
+        half_w = width / 2.0
+        leg_a = center.translate(-half_w * float(along[0]), -half_w * float(along[1]))
+        leg_b = center.translate(+half_w * float(along[0]), +half_w * float(along[1]))
+
+        # ── Tip placement ─────────────────────────────────────────────────
+        if reference_point is not None:
+            rv = np.array(reference_point.coords) - np.array(center.coords)
+            rv_len = float(np.linalg.norm(rv))
+            if rv_len < 1e-9:
+                raise ValueError("reference_point coincides with the dart mouth center.")
+            rv_unit = rv / rv_len
+            reach = max(rv_len - tip_shortfall, 0.0)
+            tip = Point(
+                center.x + reach * float(rv_unit[0]),
+                center.y + reach * float(rv_unit[1]),
+            )
+        else:
+            assert depth is not None
+            tip = Point(
+                center.x + depth * float(inward_normal[0]),
+                center.y + depth * float(inward_normal[1]),
+            )
+
+        return cls(
+            leg_a=leg_a,
+            leg_b=leg_b,
+            center=center,
+            tip=tip,
+            fold_direction=fold_direction,
+            name=name,
+            edge_style=edge_style,
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"Dart(name={self.name!r}, leg_a={self.leg_a}, leg_b={self.leg_b}, "
+            f"center={self.center}, tip={self.tip}, fold_direction={self.fold_direction!r}, "
+            f"edge_style={self.edge_style!r})"
+        )
+
+
+class DartResult:
+    """Return value of :meth:`~sewpat.part.PatternPart.add_dart`.
+
+    Bundles the :class:`Dart` with every :class:`~sewpat.part.PatternElement`
+    that was added to the part during the call, grouped by role.
+
+    Attributes:
+        dart: The dart geometry.
+        stitch_elements: Stitching-leg segments (``is_outline=False``).
+        fold_element: The fold/crease line segment.
+        tip_elements: Precision-mark circles at the tip (may be empty).
+        notch_elements: Notch triangles at the dart legs (may be empty).
+        cut_elements: Modified cut-line segments for outer darts (empty for inner).
+        rhombus_elements: Rhombus outline segments for inner/reverse darts (empty for outer).
+    """
+
+    def __init__(
+        self,
+        dart: Dart,
+        stitch_elements: "list",
+        fold_element: "object | None",
+        tip_elements: "list",
+        notch_elements: "list",
+        cut_elements: "list",
+        rhombus_elements: "list",
+    ) -> None:
+        self.dart = dart
+        self.stitch_elements: list = stitch_elements
+        self.fold_element = fold_element
+        self.tip_elements: list = tip_elements
+        self.notch_elements: list = notch_elements
+        self.cut_elements: list = cut_elements
+        self.rhombus_elements: list = rhombus_elements
+
+    @property
+    def all_elements(self) -> list:
+        """All PatternElements created for this dart in draw order."""
+        result = list(self.stitch_elements)
+        if self.fold_element is not None:
+            result.append(self.fold_element)
+        result.extend(self.tip_elements)
+        result.extend(self.notch_elements)
+        result.extend(self.cut_elements)
+        result.extend(self.rhombus_elements)
+        return result
+
+    def __repr__(self) -> str:
+        return (
+            f"DartResult(dart={self.dart!r}, "
+            f"elements={len(self.all_elements)})"
+        )
+
+
+def transfer_dart(
+    dart: Dart,
+    new_edge: "Segment | CubicBezier",
+    new_position_t: float,
+    tip_shortfall: float = 0.0,
+) -> Dart:
+    """Transfer *dart* to a new edge using the pivot-method rotation.
+
+    The tip acts as the pivot point.  The intake angle is preserved exactly;
+    only the mouth is repositioned onto *new_edge* at *new_position_t*.
+
+    The new mouth center is placed at ``new_edge.point_at_t(new_position_t)``.
+    The two new leg points are obtained by rotating the existing legs around
+    the tip by the angle from the old fold-line direction to the new one.
+
+    Args:
+        dart: Source dart to transfer.
+        new_edge: Destination seam edge.
+        new_position_t: Parameter ∈ [0, 1] on *new_edge* for the new mouth center.
+        tip_shortfall: Optional extra shortfall to shorten the tip distance
+                       (0 = keep the same depth from new center to tip).
+
+    Returns:
+        A new :class:`Dart` with the same intake angle transferred to the new edge.
+    """
+    if not (0.0 <= new_position_t <= 1.0):
+        raise ValueError(f"new_position_t must be in [0, 1], got {new_position_t}")
+
+    # New mouth center on the destination edge.
+    if isinstance(new_edge, Segment):
+        new_center = new_edge.point_at_t(new_position_t)
+    else:
+        new_center = new_edge.point_at_t(new_position_t)
+
+    # The angle from the old fold-line direction to the new fold-line direction,
+    # both measured at the tip (pivot-method: tip stays fixed).
+    old_fd = np.array(dart.center.coords) - np.array(dart.tip.coords)
+    new_fd = np.array(new_center.coords) - np.array(dart.tip.coords)
+
+    old_fd_len = float(np.linalg.norm(old_fd))
+    new_fd_len = float(np.linalg.norm(new_fd))
+
+    rotation_angle = 0.0
+    if old_fd_len > 1e-9 and new_fd_len > 1e-9:
+        cos_a = float(np.clip(np.dot(old_fd / old_fd_len, new_fd / new_fd_len), -1.0, 1.0))
+        cross = float(old_fd[0] * new_fd[1] - old_fd[1] * new_fd[0])
+        rotation_angle = math.atan2(cross, cos_a)  # signed angle CCW
+
+    # Rotate the entire dart around the tip so the fold-line points toward new_center.
+    # This preserves the intake angle and the depth exactly (pure rigid rotation).
+    rotated = dart.rotate(dart.tip, rotation_angle)
+
+    # Replace the rotated mouth center with the exact projected new_center so
+    # it lands precisely on the new edge (eliminates floating-point drift).
+    new_center_exact = new_center
+
+    # Adjust tip shortfall if requested.
+    new_tip = rotated.tip
+    if tip_shortfall > 0.0:
+        fd = np.array(new_center_exact.coords) - np.array(new_tip.coords)
+        fd_len = float(np.linalg.norm(fd))
+        if fd_len > tip_shortfall:
+            fd_unit = fd / fd_len
+            new_tip = Point(
+                new_tip.x + tip_shortfall * float(fd_unit[0]),
+                new_tip.y + tip_shortfall * float(fd_unit[1]),
+            )
+
+    return Dart(
+        leg_a=rotated.leg_a,
+        leg_b=rotated.leg_b,
+        center=new_center_exact,
+        tip=new_tip,
+        fold_direction=dart.fold_direction,
+        name=dart.name,
+        edge_style=dart.edge_style,
+    )
+
+

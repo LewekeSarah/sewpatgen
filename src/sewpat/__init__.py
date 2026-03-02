@@ -14,6 +14,8 @@ Modules:
 from .geometry import (
     Circle,
     CubicBezier,
+    Dart,
+    DartResult,
     Line,
     Point,
     Ray,
@@ -24,6 +26,7 @@ from .geometry import (
     intersect,
     seam_length,
     segment_to_intersection,
+    transfer_dart,
 )
 from .measurements import (
     Allowance,
@@ -49,6 +52,8 @@ from .style import (
     STYLE_CENTER_LINE,
     STYLE_CONSTRUCTION_GRID,
     STYLE_CUT,
+    STYLE_DART_FOLD,
+    STYLE_DART_STITCH,
     STYLE_DEBUG_RED,
     STYLE_FOLD,
     STYLE_GRAINLINE,
@@ -71,11 +76,14 @@ __all__ = [
     "Rect",
     "Triangle",
     "CubicBezier",
+    "Dart",
+    "DartResult",
     # Geometry helpers
     "edge_tangent",
     "intersect",
     "segment_to_intersection",
     "seam_length",
+    "transfer_dart",
     # Units
     "MM",
     "CM",
@@ -115,4 +123,6 @@ __all__ = [
     "STYLE_SEAM_ALLOWANCE",
     "STYLE_CONSTRUCTION_GRID",
     "STYLE_DEBUG_RED",
+    "STYLE_DART_STITCH",
+    "STYLE_DART_FOLD",
 ]

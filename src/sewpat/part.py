@@ -1,8 +1,11 @@
+import copy
 import shapely.geometry as _sg
 
 from .geometry import (
     Circle,
     CubicBezier,
+    Dart,
+    DartResult,
     InfoBox,
     Point,
     Ray,
@@ -29,6 +32,8 @@ from .geometry import (
 )
 from .style import (
     STYLE_CONSTRUCTION_GRID,
+    STYLE_DART_FOLD,
+    STYLE_DART_STITCH,
     STYLE_GRAINLINE,
     STYLE_SEAM_ALLOWANCE,
     StyleOptions,
@@ -237,15 +242,19 @@ class PatternPart:
         start: Point,
         end: Point,
         name: str = "grainline / Fadenlauf",
+        style: StyleOptions | None = None,
     ) -> PatternElement:
         """Add a grainline segment, nudging outside endpoints inward along the grain axis.
 
         Each endpoint is nudged toward the opposite one, so the grainline stays
         perfectly straight even when an endpoint sits on the outline boundary.
+
+        Args:
+            style: Optional style override; defaults to :data:`STYLE_GRAINLINE`.
         """
         start = self._nudge_point_inside(start, end)
         end = self._nudge_point_inside(end, start)
-        return self.append(Segment(start, end, name=name), style=STYLE_GRAINLINE)
+        return self.append(Segment(start, end, name=name), style=style if style is not None else STYLE_GRAINLINE)
 
     def add_info_box(
         self, header: str | None = None, notes: list[str] | None = None
@@ -529,6 +538,165 @@ class PatternPart:
             added_mixed.append(elem)
         return added_mixed
 
+
+    def add_dart(
+        self,
+        dart: Dart,
+        *,
+        notches: bool = True,
+        precision_tip: bool = True,
+        stitch_style: StyleOptions | None = None,
+        fold_style: StyleOptions | None = None,
+        notch_kwargs: dict | None = None,
+    ) -> DartResult:
+        """Add all visual elements for *dart* to this part and return a :class:`DartResult`.
+
+        This method must be called **before** :meth:`add_seam_allowance` so that
+        dart legs placed on the outline can be given the correct
+        ``seam_allowance`` override.
+
+        The rendering mode is determined by ``dart.fold_direction``:
+
+        **Outer dart** (``fold_direction="inward"``):
+            The dart opens on a seam / cutting edge.  The rendered elements are:
+
+            * Two stitching lines (leg_a → tip, leg_b → tip) with dashed style.
+            * One fold/crease line (mouth center → tip) with long-dash style.
+            * Two cut-line segments replacing the original mouth region on the
+              outline: ``leg_a → center`` and ``center → leg_b``.  These
+              inherit ``dart.edge_style`` (set automatically by
+              :meth:`Dart.from_edge`) so they are visually identical to the
+              rest of the seam.  ``seam_allowance`` is overridden to ``0.0``
+              and ``corner_join`` to ``"miter"`` so the SA engine closes the
+              dart wedge cleanly.
+            * A small inward notch triangle at the mouth center (fold point).
+            * Notch triangles at leg_a and leg_b.
+            * Two concentric precision circles at the tip.
+
+        **Inner / reverse dart** (``fold_direction="outward"``):
+            The dart protrudes inward or appears on an inner panel seam.  The
+            rendered shape is a **rhombus (Raute)**: four stitching-line segments
+            ``leg_a → tip → leg_b → center → leg_a`` with dashed style.  The
+            fold line, cut elements, and mouth notch are omitted; tip precision
+            mark and leg notches are still added when requested.
+
+        Notch sizing uses the defaults of :meth:`add_notches`.  Pass
+        *notch_kwargs* to override any keyword accepted by :meth:`add_notches`::
+
+            part.add_dart(dart, notch_kwargs={"length": 1.0 * CM, "is_back": True})
+
+        Args:
+            dart: The :class:`Dart` geometry to render.  The rendering mode
+                  (outer vs. inner), source-edge style, and name label are all
+                  read from the dart itself.
+            notches: Whether to add notch triangles at leg_a, leg_b and (for
+                     outer darts) the mouth center.
+            precision_tip: Whether to add precision circles at the dart tip.
+            stitch_style: Style for stitching lines; defaults to
+                          :data:`STYLE_DART_STITCH`.
+            fold_style: Style for the fold/crease line; defaults to
+                        :data:`STYLE_DART_FOLD`.
+            notch_kwargs: Optional keyword-argument overrides forwarded to
+                          every :meth:`add_notches` call made by this method.
+
+        Returns:
+            A :class:`DartResult` with all created :class:`PatternElement`
+            objects grouped by role.
+        """
+        _stitch_style = stitch_style if stitch_style is not None else STYLE_DART_STITCH
+        _fold_style = fold_style if fold_style is not None else STYLE_DART_FOLD
+        _nkw: dict = notch_kwargs if notch_kwargs is not None else {}
+
+        stitch_elems: list[PatternElement] = []
+        fold_elem: PatternElement | None = None
+        tip_elems: list[PatternElement] = []
+        notch_elems: list[PatternElement] = []
+        cut_elems: list[PatternElement] = []
+        rhombus_elems: list[PatternElement] = []
+
+        if dart.is_outer:
+            # ── Outer dart rendering ──────────────────────────────────────────
+
+            # 1. Stitching lines (leg_a → tip and leg_b → tip)
+            ea = self.append(dart.stitch_line_a, style=_stitch_style)
+            eb = self.append(dart.stitch_line_b, style=_stitch_style)
+            stitch_elems = [ea, eb]
+
+            # 2. Fold / crease line (center → tip)
+            fold_elem = self.append(dart.fold_line, style=_fold_style)
+
+            # 3. Cut-line segments on the outline:
+            #    leg_a → center  and  center → leg_b.
+            #    Style is inherited from the source edge (edge_style), so the
+            #    mouth segments look identical to the rest of that seam.
+            #    seam_allowance is overridden to 0.0 so the SA engine skips the
+            #    dart wedge; corner_join="miter" joins the two SA sides cleanly.
+            dart_cut_style = copy.copy(dart.edge_style if dart.edge_style is not None else StyleOptions(seam_allowance=0))
+            dart_cut_style.corner_join = "miter"
+            seg_ac = self.append(
+                Segment(dart.leg_a, dart.center),
+                style=dart_cut_style,
+                is_outline=True,
+            )
+            seg_cb = self.append(
+                Segment(dart.center, dart.leg_b),
+                style=dart_cut_style,
+                is_outline=True,
+            )
+            cut_elems = [seg_ac, seg_cb]
+
+            # 4. Small inward notch at the mouth center (marks the fold point).
+            # seam_edge = the dart mouth line (leg_a → leg_b), so the notch
+            # is perpendicular to that edge, not to the fold line.
+            mouth_edge = Segment(dart.leg_a, dart.leg_b)
+            before_mouth = len(self.elements)
+            self.add_notches(dart.center, seam_edge=mouth_edge, **_nkw)
+            notch_elems.extend(self.elements[before_mouth:])
+
+        else:
+            # ── Inner / reverse dart: rhombus shape ──────────────────────────
+            #    leg_a → tip → leg_b → center → leg_a (closed diamond)
+            for p1, p2 in [
+                (dart.leg_a, dart.tip),
+                (dart.tip, dart.leg_b),
+                (dart.leg_b, dart.center),
+                (dart.center, dart.leg_a),
+            ]:
+                elem = self.append(Segment(p1, p2), style=_stitch_style)
+                rhombus_elems.append(elem)
+
+        # 5. Tip precision mark + name label
+        if precision_tip:
+            before_tip = len(self.elements)
+            self.add_precision_points(dart.tip)
+            # Single name label above the tip precision circles.
+            # Offset: precision circle r=2mm + font ~5mm + 2mm gap = 9mm up.
+            if dart.name:
+                label = InfoBox(
+                    position=Point(dart.tip.x, dart.tip.y - 9 * MM),
+                    header=dart.name,
+                )
+                self.append(label)
+            tip_elems = self.elements[before_tip:]
+
+        # 6. Leg notches — perpendicular to the dart mouth edge (leg_a → leg_b),
+        #    NOT perpendicular to the stitching lines.
+        if notches:
+            mouth_edge = Segment(dart.leg_a, dart.leg_b)
+            for pt in (dart.leg_a, dart.leg_b):
+                before_n = len(self.elements)
+                self.add_notches(pt, seam_edge=mouth_edge, **_nkw)
+                notch_elems.extend(self.elements[before_n:])
+
+        return DartResult(
+            dart=dart,
+            stitch_elements=stitch_elems,
+            fold_element=fold_elem,
+            tip_elements=tip_elems,
+            notch_elements=notch_elems,
+            cut_elements=cut_elems,
+            rhombus_elements=rhombus_elems,
+        )
 
     def add_construction_line(
         self,
