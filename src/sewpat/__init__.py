@@ -86,7 +86,6 @@ __all__ = [
     "intersect",
     "segment_to_intersection",
     "seam_length",
-    "transfer_dart",
     # Units
     "MM",
     "CM",
