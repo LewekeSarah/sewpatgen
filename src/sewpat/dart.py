@@ -49,7 +49,9 @@ class DartResult:
         fold_element: The fold/crease line segment (``None`` for inner darts).
         tip_elements: Precision-mark circles at the tip (may be empty).
         notch_elements: Notch triangles at the dart legs (may be empty).
-        cut_elements: Modified cut-line segments for outer darts (empty for inner).
+        cut_elements: Corrected outline segments for outer darts — the
+            Abnäherdach roof polyline ``leg_a → roof_a → roof_b → leg_b``
+            (empty for inner darts).
         rhombus_elements: Rhombus outline segments for inner/reverse darts (empty for outer).
     """
 
@@ -115,10 +117,6 @@ class DartElements:
             name="Taille",
         )
         result = part.add_dart(factory.dart, ...)
-
-    When a :class:`~sewpat.geometry.Dart` already exists (e.g. after
-    :func:`~sewpat.geometry.transfer_dart`), construct directly::
-
         factory = DartElements(dart, stitch_style=..., fold_style=...)
     """
 
@@ -135,6 +133,7 @@ class DartElements:
         self.fold_style = fold_style if fold_style is not None else STYLE_DART_FOLD
         self.edge_style = edge_style if edge_style is not None else STYLE_DART_STITCH
         self.precision_style: StyleOptions | None = precision_style
+
     # ------------------------------------------------------------------
     # Construction from a styled PatternElement edge
     # ------------------------------------------------------------------
@@ -158,7 +157,7 @@ class DartElements:
 
         The *edge* **must** be a :class:`~sewpat.element.PatternElement` wrapping
         a :class:`~sewpat.geometry.Segment` or :class:`~sewpat.geometry.CubicBezier`.
-        Its style is captured on :attr:`Dart.edge_style` so the cut-line mouth
+        Its style is captured on :attr:`edge_style` so the cut-line mouth
         segments produced by :meth:`build_cut_elements` are visually identical to
         the rest of that seam — no manual ``edge_style`` argument is ever needed.
 
@@ -184,8 +183,7 @@ class DartElements:
 
         Returns:
             A fully configured :class:`DartElements` instance whose
-            :attr:`dart` carries the computed geometry and the inherited
-            ``edge_style``.
+            :attr:`edge_style` is inherited from *edge*.
 
         Raises:
             TypeError: If *edge* is not a :class:`~sewpat.element.PatternElement`.
@@ -242,7 +240,13 @@ class DartElements:
             dart_type=dart_type,
             name=name,
         )
-        return cls(dart, stitch_style=stitch_style, fold_style=fold_style, edge_style=edge.style, precision_style=precision_style)
+        return cls(
+            dart,
+            stitch_style=stitch_style,
+            fold_style=fold_style,
+            edge_style=edge.style,
+            precision_style=precision_style,
+        )
 
     # ------------------------------------------------------------------
     # Low-level element builders (pure — no side effects on any part)
@@ -261,29 +265,41 @@ class DartElements:
         return PatternElement(self.dart.fold_line, style=self.fold_style)
 
     def build_cut_elements(self) -> list[PatternElement]:
-        """Return the two outline cut-segments replacing the dart mouth (outer dart).
+        """Return the Abnäherdach roof polyline as outline cut segments.
 
-        Both segments carry ``is_outline=True`` and get ``seam_allowance=0.0``
-        with ``corner_join="miter"`` so the SA engine closes the dart wedge
-        cleanly.  The style is inherited from :attr:`Dart.edge_style` (set by
-        :meth:`from_edge`), so the mouth segments are visually identical to the
-        rest of the seam without any manual style argument.
+        The dart mouth is replaced by the corrected V-shaped roof outline::
+
+            leg_a → roof_a → roof_b → leg_b
+
+        All three segments carry ``is_outline=True`` and inherit the seam
+        edge style (via :attr:`edge_style`) so they are visually identical to
+        the rest of the seam.  ``corner_join="miter"`` is applied so the SA
+        engine closes the dart wedge cleanly at the V-peak.
+
+        For an asymmetric dart ``roof_a`` and ``roof_b`` differ; for a
+        symmetric dart they coincide and the middle segment has zero length
+        (it is omitted automatically).
         """
         dart = self.dart
+
         dart_cut_style = copy.copy(self.edge_style)
         dart_cut_style.corner_join = "miter"
-        return [
+
+        segments = [
             PatternElement(
-                Segment(dart.leg_a, dart.center),
-                style=dart_cut_style,
-                is_outline=True,
-            ),
-            PatternElement(
-                Segment(dart.center, dart.leg_b),
+                Segment(dart.leg_a, dart.roof),
                 style=dart_cut_style,
                 is_outline=True,
             ),
         ]
+        segments.append(
+            PatternElement(
+                Segment(dart.leg_b, dart.roof),
+                style=dart_cut_style,
+                is_outline=True,
+            ),
+        )
+        return segments
 
     def build_rhombus_elements(self) -> list[PatternElement]:
         """Return the four rhombus-outline PatternElements (inner/reverse dart).
@@ -320,6 +336,4 @@ class DartElements:
             )
             elements.append(PatternElement(label))
         return elements
-
-
 

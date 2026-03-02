@@ -546,10 +546,9 @@ class PatternPart:
         **Triangle dart** (``dart_type="triangle"``):
             * Two stitching lines (leg_a → tip, leg_b → tip).
             * One fold/crease line (mouth center → tip).
-            * Two cut-line outline segments replacing the mouth region.
-              These inherit the style from ``dart.dart.edge_style`` (set
-              automatically by :meth:`DartElements.from_edge`) so they are
-              visually identical to the rest of the seam.
+            * The Abnäherdach roof outline (``leg_a → roof_a → roof_b → leg_b``)
+              as ``is_outline=True`` cut segments — these inherit the seam edge
+              style and replace the straight mouth edge on the pattern.
             * Notch at mouth center + notches at leg_a and leg_b.
             * Two concentric precision circles at the tip.
 
@@ -590,6 +589,7 @@ class PatternPart:
             fold_elem = factory.build_fold_element()
             self.extend([fold_elem])
 
+            # Roof-shaped outline replaces the straight mouth edge
             cut_elems = factory.build_cut_elements()
             self.extend(cut_elems)
 

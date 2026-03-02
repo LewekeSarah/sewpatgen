@@ -37,7 +37,6 @@ from sewpat import (
     PatternPart,
     Point,
     Segment,
-    transfer_dart,
 )
 from sewpat.geometry import CubicBezier, intersect
 from sewpat.pattern import ConstructionGrid
@@ -368,84 +367,6 @@ def example_04_dart_split() -> None:
     )
     print("✓  04_dart_split.svg")
 
-
-# ---------------------------------------------------------------------------
-# Example 5 — Dart transfer via pivot method
-# ---------------------------------------------------------------------------
-
-def example_05_dart_transfer() -> None:
-    """Transfer a side-seam dart to the shoulder seam using the pivot method."""
-    pattern, pts = _build_block("Beispiel 5 – Abnäher verschieben (Pivot)")
-    part = PatternPart("Vorderteil")
-    pattern.add_part(part)
-    segs = _add_outline(part, pts)
-
-    # ── Original dart on the side seam ───────────────────────────────────────
-    # Pass the side-seam PatternElement so edge_style is inherited automatically.
-    original_factory = DartElements.from_edge(
-        segs["side"],
-        position_t=0.38,
-        width=26 * MM,
-        reference_point=pts["bust_point"],
-        tip_shortfall=20 * MM,
-        dart_type=DartType.TRIANGLE,
-        name="Seitennaht (Original)",
-    )
-    original = original_factory.dart
-
-    # Show original dart lightly as reference
-    part.append(original.stitch_line_a, style=_REF_STYLE)
-    part.append(original.stitch_line_b, style=_REF_STYLE)
-    part.append(original.fold_line,     style=_REF_STYLE)
-
-    # ── Transferred dart on the shoulder seam ────────────────────────────────
-    # transfer_dart propagates edge_style from original automatically.
-    # We only need to update the name via a direct Dart() call.
-    transferred = transfer_dart(
-        original,
-        new_edge=segs["shoulder"].geometry,
-        new_position_t=0.55,
-    )
-    transferred = Dart(
-        leg_a=transferred.leg_a,
-        leg_b=transferred.leg_b,
-        center=transferred.center,
-        tip=transferred.tip,
-        dart_type=transferred.dart_type,
-        name="Schulternaht (Übertragen)",
-    )
-    result = part.add_dart(
-        DartElements(transferred, stitch_style=_DART_STITCH, fold_style=_DART_FOLD),
-        notches=True, precision_tip=True,
-    )
-
-    # Mark the bust point (pivot) on the part
-    part.add_precision_points(pts["bust_point"])
-
-    part.add_info_box(
-        header="Vorderteil",
-        notes=[
-            "Pivot-Methode:",
-            "Seitennaht → Schulternaht",
-            "(grau = Original als Referenz)",
-            "• = Bustpunkt (Pivot)",
-        ],
-    )
-    part.add_grainline(
-        ANCHOR.translate(10 * MM, 10 * MM),
-        ANCHOR.translate(10 * MM, PIECE_H - 10 * MM),
-        style=_GRAINLINE,
-    )
-
-    export_pattern_svg_mm(
-        pattern,
-        filename=str(OUT_DIR / "05_dart_transfer.svg"),
-        width_mm=_A4_W,
-        height_mm=_A4_H,
-    )
-    print("✓  05_dart_transfer.svg")
-
-
 # ---------------------------------------------------------------------------
 # README maintenance — embed SVGs as base64 data URIs
 # ---------------------------------------------------------------------------
@@ -511,7 +432,6 @@ if __name__ == "__main__":
     example_02_outer_reference_point()
     example_03_inner_dart_rhombus()
     example_04_dart_split()
-    example_05_dart_transfer()
     print(f"\nAll SVGs written to: {OUT_DIR.resolve()}")
     print()
     embed_svgs_in_readme()

@@ -30,7 +30,6 @@ from .geometry import (
     intersect,
     seam_length,
     segment_to_intersection,
-    transfer_dart,
 )
 from .measurements import (
     Allowance,

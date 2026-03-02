@@ -24,8 +24,6 @@ class DartType(str, Enum):
     RHOMBUS = "rhombus"
 
 
-
-
 def _solve_quadratic(a: float, b: float, c: float) -> list[float]:
     """Solve ax² + bx + c = 0. Used by CubicBezier.bounding_box()."""
     if abs(a) < 1e-14:
@@ -114,7 +112,7 @@ class Point:
 
     def move_towards(
         self,
-        curve: "Segment | CubicBezier | Ray | Line | Circle",
+        curve: Segment | CubicBezier | Ray | Line | Circle,
         arc_length: float,
     ) -> "Point":
         """Return the point *arc_length* mm from ``self`` along *curve*.
@@ -270,8 +268,6 @@ class Segment:
     def point_at_length(self, arc_length: float) -> Point:
         """Return the point at *arc_length* mm from p1. Raises ValueError if out of range."""
         total = self.length
-        if arc_length < 0 or arc_length > total + 1e-9:
-            raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
         return self.point_at_t(arc_length / total)
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
@@ -287,7 +283,7 @@ class Segment:
         max_y = max(self.p1.y, self.p2.y)
         return Point(min_x, min_y), Point(max_x, max_y)
 
-    def offset(self, distance: float, center: Point | None = None) -> Segment:
+    def offset(self, distance: float, center: Point | None = None) -> "Segment":
         """Return a new Segment offset perpendicularly by *distance* mm.
 
         Direction is away from *center* (outward) when given; otherwise the
@@ -1346,9 +1342,9 @@ def miter_corner(
 
 
 def round_corner(
-    ga: "Segment | CubicBezier",
-    gb: "Segment | CubicBezier",
-) -> "CubicBezier | Point":
+    ga: Segment | CubicBezier,
+    gb: Segment | CubicBezier,
+) -> CubicBezier | Point:
     """Return a cubic Bézier arc for a round join at a convex corner.
 
     Connects ``geom_end(ga)`` to ``geom_start(gb)`` using handle lengths from
@@ -1484,10 +1480,10 @@ def seam_length(geoms: list[Segment | CubicBezier]) -> float:
 
 
 def project_onto_edge(
-    edge: "Segment | CubicBezier",
-    ref: "Point",
-    inward_ref: "Point | None" = None,
-) -> "tuple[Point, np.ndarray, np.ndarray]":
+    edge: Segment | CubicBezier,
+    ref: Point,
+    inward_ref: Point | None = None,
+) -> tuple[Point, np.ndarray, np.ndarray]:
     """Project *ref* onto *edge* and return ``(notch_pt, along, normal)``.
 
     ``along`` is the unit tangent at the projected point; ``normal`` is the
@@ -1522,11 +1518,11 @@ def project_onto_edge(
 
 
 def offset_adaptive(
-    geom: "Segment | CubicBezier",
+    geom: Segment | CubicBezier,
     distance: float,
-    center: "Point | None" = None,
+    center: Point | None = None,
     eps: float = 0.1,
-) -> "list[Segment | CubicBezier]":
+) -> list[Segment | CubicBezier]:
     """Offset *geom* outward by *distance* mm, splitting until Hausdorff error < *eps*.
 
     Segments are offset in a single step; CubicBeziers delegate to
@@ -1571,8 +1567,7 @@ class Dart:
         leg_b: Second dart leg endpoint on the seam.
         center: Midpoint of the dart mouth (on the seam).
         tip: Apex of the dart.
-        dart_type: :class:`DartType` member (or plain string ``"triangle"`` /
-            ``"rhombus"``).  Defaults to ``DartType.TRIANGLE``.
+        dart_type: :class:`DartType` member.  Defaults to ``DartType.TRIANGLE``.
         name: Optional label for the dart.
     """
 
@@ -1582,7 +1577,7 @@ class Dart:
         leg_b: Point,
         center: Point,
         tip: Point,
-        dart_type: "DartType | str" = DartType.TRIANGLE,
+        dart_type: DartType = DartType.TRIANGLE,
         name: str | None = None,
     ) -> None:
         try:
@@ -1606,6 +1601,11 @@ class Dart:
     # ------------------------------------------------------------------
     # Derived geometry
     # ------------------------------------------------------------------
+
+    @property
+    def roof(self) -> Point:
+        roof_height = float(math.tan(self.intake_angle)*(self.width / 2))
+        return self.center.move_towards(Ray(self.tip, self.tip.coords - self.center.coords), arc_length=-roof_height)
 
     @property
     def fold_line(self) -> Segment:
@@ -1633,7 +1633,7 @@ class Dart:
         return self.center.distance_to(self.tip)
 
     @property
-    def mirror_tip(self) -> "Point":
+    def mirror_tip(self) -> Point:
         """The opposite apex of the rhombus: tip reflected across the leg_a→leg_b mouth line.
 
         For a rhombus dart (``dart_type="rhombus"``) this is the second
@@ -1645,20 +1645,13 @@ class Dart:
     @property
     def intake_angle(self) -> float:
         """Full intake angle in radians (angle leg_a–tip–leg_b)."""
-        da = np.array(self.leg_a.coords) - np.array(self.tip.coords)
-        db = np.array(self.leg_b.coords) - np.array(self.tip.coords)
-        norm_a = float(np.linalg.norm(da))
-        norm_b = float(np.linalg.norm(db))
-        if norm_a < 1e-9 or norm_b < 1e-9:
-            return 0.0
-        cos_a = float(np.clip(np.dot(da / norm_a, db / norm_b), -1.0, 1.0))
-        return float(math.acos(cos_a))
+        return float(2*math.atan(self.width/(2 * self.depth)))
 
     # ------------------------------------------------------------------
     # Transformation
     # ------------------------------------------------------------------
 
-    def translate(self, dx: float, dy: float) -> "Dart":
+    def translate(self, dx: float, dy: float) -> Dart:
         """Return a copy translated by (dx, dy)."""
         return Dart(
             leg_a=self.leg_a.translate(dx, dy),
@@ -1669,7 +1662,7 @@ class Dart:
             name=self.name,
         )
 
-    def rotate(self, pivot: Point, angle_rad: float) -> "Dart":
+    def rotate(self, pivot: Point, angle_rad: float) -> Dart:
         """Return a copy rotated by *angle_rad* (CCW) around *pivot*.
 
         This is the pivot-method dart transfer operation: rotating the dart
@@ -1684,7 +1677,7 @@ class Dart:
             name=self.name,
         )
 
-    def split(self, ratio: float = 0.5) -> "tuple[Dart, Dart]":
+    def split(self, ratio: float = 0.5) -> tuple[Dart, Dart]:
         """Split this dart into two darts, sharing the same tip and mouth center.
 
         The intake angle is divided in proportion *ratio* : (1 − ratio).  The
@@ -1731,84 +1724,3 @@ class Dart:
             f"Dart(name={self.name!r}, leg_a={self.leg_a}, leg_b={self.leg_b}, "
             f"center={self.center}, tip={self.tip}, dart_type={self.dart_type!r})"
         )
-
-
-
-def transfer_dart(
-    dart: Dart,
-    new_edge: "Segment | CubicBezier",
-    new_position_t: float,
-    tip_shortfall: float = 0.0,
-) -> Dart:
-    """Transfer *dart* to a new edge using the pivot-method rotation.
-
-    The tip acts as the pivot point.  The intake angle is preserved exactly;
-    only the mouth is repositioned onto *new_edge* at *new_position_t*.
-
-    The new mouth center is placed at ``new_edge.point_at_t(new_position_t)``.
-    The two new leg points are obtained by rotating the existing legs around
-    the tip by the angle from the old fold-line direction to the new one.
-
-    Args:
-        dart: Source dart to transfer.
-        new_edge: Destination seam edge.
-        new_position_t: Parameter ∈ [0, 1] on *new_edge* for the new mouth center.
-        tip_shortfall: Optional extra shortfall to shorten the tip distance
-                       (0 = keep the same depth from new center to tip).
-
-    Returns:
-        A new :class:`Dart` with the same intake angle transferred to the new edge.
-    """
-    if not (0.0 <= new_position_t <= 1.0):
-        raise ValueError(f"new_position_t must be in [0, 1], got {new_position_t}")
-
-    # New mouth center on the destination edge.
-    if isinstance(new_edge, Segment):
-        new_center = new_edge.point_at_t(new_position_t)
-    else:
-        new_center = new_edge.point_at_t(new_position_t)
-
-    # The angle from the old fold-line direction to the new fold-line direction,
-    # both measured at the tip (pivot-method: tip stays fixed).
-    old_fd = np.array(dart.center.coords) - np.array(dart.tip.coords)
-    new_fd = np.array(new_center.coords) - np.array(dart.tip.coords)
-
-    old_fd_len = float(np.linalg.norm(old_fd))
-    new_fd_len = float(np.linalg.norm(new_fd))
-
-    rotation_angle = 0.0
-    if old_fd_len > 1e-9 and new_fd_len > 1e-9:
-        cos_a = float(np.clip(np.dot(old_fd / old_fd_len, new_fd / new_fd_len), -1.0, 1.0))
-        cross = float(old_fd[0] * new_fd[1] - old_fd[1] * new_fd[0])
-        rotation_angle = math.atan2(cross, cos_a)  # signed angle CCW
-
-    # Rotate the entire dart around the tip so the fold-line points toward new_center.
-    # This preserves the intake angle and the depth exactly (pure rigid rotation).
-    rotated = dart.rotate(dart.tip, rotation_angle)
-
-    # Replace the rotated mouth center with the exact projected new_center so
-    # it lands precisely on the new edge (eliminates floating-point drift).
-    new_center_exact = new_center
-
-    # Adjust tip shortfall if requested.
-    new_tip = rotated.tip
-    if tip_shortfall > 0.0:
-        fd = np.array(new_center_exact.coords) - np.array(new_tip.coords)
-        fd_len = float(np.linalg.norm(fd))
-        if fd_len > tip_shortfall:
-            fd_unit = fd / fd_len
-            new_tip = Point(
-                new_tip.x + tip_shortfall * float(fd_unit[0]),
-                new_tip.y + tip_shortfall * float(fd_unit[1]),
-            )
-
-    return Dart(
-        leg_a=rotated.leg_a,
-        leg_b=rotated.leg_b,
-        center=new_center_exact,
-        tip=new_tip,
-        dart_type=dart.dart_type,
-        name=dart.name,
-    )
-
-

@@ -76,23 +76,18 @@ class PrecisionPoint:
         self.center = center
         self.outer_radius = outer_radius
         self.inner_radius = inner_radius
-        self.style = style if style is not None else StyleOptions(
-            stroke_color=STYLE_PRECISION_POINT.stroke_color,
-            stroke_width=STYLE_PRECISION_POINT.stroke_width,
-            fill_color="none",
-        )
+        self.style = style if style is not None else STYLE_PRECISION_POINT
 
-    def build_elements(self) -> list["PatternElement"]:
+    def build_elements(self) -> list[PatternElement]:
         """Return the two :class:`PatternElement` circles for this precision mark.
 
         Returns:
             A list of two ``PatternElement`` objects: outer circle first,
             inner circle second.
         """
-        circle_style = self.style
         return [
-            PatternElement(Circle(self.center, radius=self.outer_radius), style=circle_style),
-            PatternElement(Circle(self.center, radius=self.inner_radius), style=circle_style),
+            PatternElement(Circle(self.center, radius=self.outer_radius), style=self.style),
+            PatternElement(Circle(self.center, radius=self.inner_radius), style=self.style),
         ]
 
 
