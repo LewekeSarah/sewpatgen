@@ -541,9 +541,9 @@ class PatternPart:
         dart legs placed on the outline can be given the correct
         ``seam_allowance`` override.
 
-        The rendering mode is determined by ``dart.dart.fold_direction``:
+        The rendering mode is determined by ``dart.dart.dart_type``:
 
-        **Outer dart** (``fold_direction="inward"``):
+        **Triangle dart** (``dart_type="triangle"``):
             * Two stitching lines (leg_a → tip, leg_b → tip).
             * One fold/crease line (mouth center → tip).
             * Two cut-line outline segments replacing the mouth region.
@@ -553,9 +553,11 @@ class PatternPart:
             * Notch at mouth center + notches at leg_a and leg_b.
             * Two concentric precision circles at the tip.
 
-        **Inner / reverse dart** (``fold_direction="outward"``):
+        **Rhombus dart** (``dart_type="rhombus"``):
             Rendered as a rhombus: four stitching segments
-            ``leg_a → tip → leg_b → center → leg_a``.
+            ``leg_a → tip → leg_b → mirror_tip → leg_a``.
+            No notches are added (the mouth lies on an inner construction
+            line, not a cut edge).
 
         Args:
             dart: A :class:`~sewpat.dart.DartElements` factory — build it via
@@ -580,7 +582,7 @@ class PatternPart:
         cut_elems: list[PatternElement] = []
         rhombus_elems: list[PatternElement] = []
 
-        if geom.is_outer:
+        if geom.is_triangle:
             # ── Outer dart ────────────────────────────────────────────────────
             stitch_elems = factory.build_stitch_elements()
             self.extend(stitch_elems)
@@ -606,8 +608,8 @@ class PatternPart:
             tip_elems = factory.build_tip_elements()
             self.extend(tip_elems)
 
-        # Leg notches
-        if notches:
+        # Leg notches — outer darts only (rhombus darts have no seam at the mouth)
+        if notches and geom.is_triangle:
             mouth_edge = Segment(geom.leg_a, geom.leg_b)
             for pt in (geom.leg_a, geom.leg_b):
                 before = len(self.elements)

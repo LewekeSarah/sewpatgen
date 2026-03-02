@@ -2,10 +2,27 @@
 
 import math
 from dataclasses import dataclass
+from enum import Enum
 
 import numpy as np
 import shapely.geometry as _sg
 from svgpathtools import CubicBezier as _SvgCubicBezier
+
+
+class DartType(str, Enum):
+    """Shape variant of a :class:`Dart`.
+
+    ``str`` mixin allows comparing with plain strings for backward compatibility
+    (e.g. ``dart.dart_type == "triangle"`` still works).
+
+    Attributes:
+        TRIANGLE: Seam-edge dart — rendered as two stitch lines + fold line.
+        RHOMBUS:  Inner-panel dart — rendered as a closed four-point diamond.
+    """
+
+    TRIANGLE = "triangle"
+    RHOMBUS = "rhombus"
+
 
 
 
@@ -226,6 +243,24 @@ class Segment:
         d = self.p2.coords - p1
         t = float(np.dot(point.coords - p1, d) / np.dot(d, d))
         return Point(*(p1 + t * d))
+
+    def reflect_point(self, point: Point) -> Point:
+        """Return the mirror image of *point* reflected across this segment's line.
+
+        This is the standard point reflection: the result lies on the opposite
+        side of the line at the same perpendicular distance.  Computed as
+        ``2 * foot - point``, where *foot* is the orthogonal projection of
+        *point* onto the line.
+
+        Args:
+            point: The point to reflect.
+
+        Returns:
+            Point: The reflected point.
+        """
+        foot = self.project_point(point)
+        mirror = 2.0 * foot.coords - point.coords
+        return Point(float(mirror[0]), float(mirror[1]))
 
     def contains_point(self, point: Point, tolerance: float = 1e-9) -> bool:
         """Return True if *point* lies on the segment within *tolerance* mm (uses Shapely GEOS)."""
@@ -1522,22 +1557,22 @@ class Dart:
     All secondary geometry (stitching legs, fold line, opening width,
     depth) is derived as properties.
 
-    Fold direction convention (SVG y-down coordinates):
-        ``"inward"``  — dart is on an outer/seam edge; the wedge is folded
-                        toward the interior of the piece.  Rendered as two
-                        stitching lines + fold line + cut-line mouth segments.
-        ``"outward"`` — dart is on an inner/panel edge; the wedge protrudes
-                        outward.  Rendered as a closed rhombus (Raute).
+    Dart type convention:
+        ``DartType.TRIANGLE`` — dart is on a seam edge; rendered as two stitching
+                         lines + fold line + cut-line mouth segments.
+        ``DartType.RHOMBUS``  — dart sits on an inner/panel edge; rendered as a
+                         closed four-point diamond (Raute).
 
-    The ``fold_direction`` fully determines the rendering mode; there is no
-    separate ``outer`` flag needed at render time.
+    The ``dart_type`` fully determines the rendering mode; there is no
+    separate flag needed at render time.
 
     Args:
         leg_a: First dart leg endpoint on the seam.
         leg_b: Second dart leg endpoint on the seam.
         center: Midpoint of the dart mouth (on the seam).
         tip: Apex of the dart.
-        fold_direction: ``"inward"`` (default) or ``"outward"``.
+        dart_type: :class:`DartType` member (or plain string ``"triangle"`` /
+            ``"rhombus"``).  Defaults to ``DartType.TRIANGLE``.
         name: Optional label for the dart.
     """
 
@@ -1547,24 +1582,26 @@ class Dart:
         leg_b: Point,
         center: Point,
         tip: Point,
-        fold_direction: str = "inward",
+        dart_type: "DartType | str" = DartType.TRIANGLE,
         name: str | None = None,
     ) -> None:
-        if fold_direction not in ("inward", "outward"):
+        try:
+            dart_type = DartType(dart_type)
+        except ValueError:
             raise ValueError(
-                f"fold_direction must be 'inward' or 'outward', got {fold_direction!r}"
+                f"dart_type must be 'triangle' or 'rhombus', got {dart_type!r}"
             )
         self.leg_a = leg_a
         self.leg_b = leg_b
         self.center = center
         self.tip = tip
-        self.fold_direction = fold_direction
+        self.dart_type: DartType = dart_type
         self.name = name
 
     @property
-    def is_outer(self) -> bool:
-        """``True`` when this is a seam-edge (outer) dart (fold_direction == 'inward')."""
-        return self.fold_direction == "inward"
+    def is_triangle(self) -> bool:
+        """``True`` when this is a seam-edge triangle dart (``dart_type == DartType.TRIANGLE``)."""
+        return self.dart_type is DartType.TRIANGLE
 
     # ------------------------------------------------------------------
     # Derived geometry
@@ -1596,6 +1633,16 @@ class Dart:
         return self.center.distance_to(self.tip)
 
     @property
+    def mirror_tip(self) -> "Point":
+        """The opposite apex of the rhombus: tip reflected across the leg_a→leg_b mouth line.
+
+        For a rhombus dart (``dart_type="rhombus"``) this is the second
+        stitching apex on the far side of the seam.  For a triangle dart it is
+        geometrically valid but has no standard sewing use.
+        """
+        return Segment(self.leg_a, self.leg_b).reflect_point(self.tip)
+
+    @property
     def intake_angle(self) -> float:
         """Full intake angle in radians (angle leg_a–tip–leg_b)."""
         da = np.array(self.leg_a.coords) - np.array(self.tip.coords)
@@ -1618,7 +1665,7 @@ class Dart:
             leg_b=self.leg_b.translate(dx, dy),
             center=self.center.translate(dx, dy),
             tip=self.tip.translate(dx, dy),
-            fold_direction=self.fold_direction,
+            dart_type=self.dart_type,
             name=self.name,
         )
 
@@ -1633,7 +1680,7 @@ class Dart:
             leg_b=self.leg_b.rotate(pivot, angle_rad),
             center=self.center.rotate(pivot, angle_rad),
             tip=self.tip.rotate(pivot, angle_rad),
-            fold_direction=self.fold_direction,
+            dart_type=self.dart_type,
             name=self.name,
         )
 
@@ -1665,7 +1712,7 @@ class Dart:
             leg_b=split_leg,
             center=Point(*(0.5 * (np.array(self.leg_a.coords) + np.array(split_leg.coords)))),
             tip=self.tip,
-            fold_direction=self.fold_direction,
+            dart_type=self.dart_type,
             name=(f"{self.name} A" if self.name else None),
         )
         dart_b = Dart(
@@ -1673,7 +1720,7 @@ class Dart:
             leg_b=self.leg_b,
             center=Point(*(0.5 * (np.array(split_leg.coords) + np.array(self.leg_b.coords)))),
             tip=self.tip,
-            fold_direction=self.fold_direction,
+            dart_type=self.dart_type,
             name=(f"{self.name} B" if self.name else None),
         )
         return dart_a, dart_b
@@ -1682,7 +1729,7 @@ class Dart:
     def __repr__(self) -> str:
         return (
             f"Dart(name={self.name!r}, leg_a={self.leg_a}, leg_b={self.leg_b}, "
-            f"center={self.center}, tip={self.tip}, fold_direction={self.fold_direction!r})"
+            f"center={self.center}, tip={self.tip}, dart_type={self.dart_type!r})"
         )
 
 
@@ -1760,7 +1807,7 @@ def transfer_dart(
         leg_b=rotated.leg_b,
         center=new_center_exact,
         tip=new_tip,
-        fold_direction=dart.fold_direction,
+        dart_type=dart.dart_type,
         name=dart.name,
     )
 

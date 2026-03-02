@@ -31,6 +31,7 @@ from sewpat import (
     STYLE_SEAM_ALLOWANCE,
     Dart,
     DartElements,
+    DartType,
     Pattern,
     PatternElement,
     PatternPart,
@@ -168,7 +169,7 @@ def example_01_outer_explicit_depth() -> None:
         position_t=0.25,
         width=22 * MM,
         depth=90 * MM,
-        fold_direction="inward",
+        dart_type=DartType.TRIANGLE,
         name="Stitch Line",
         stitch_style=_DART_STITCH,
         fold_style=_DART_FOLD,
@@ -181,7 +182,7 @@ def example_01_outer_explicit_depth() -> None:
         position_t=0.25,
         width=22 * MM,
         depth=90 * MM,
-        fold_direction="inward",
+        dart_type=DartType.TRIANGLE,
         name="Fold Line",
     )
     result2 = part.add_dart(dart_left, notches=True, precision_tip=True)
@@ -226,7 +227,7 @@ def example_02_outer_reference_point() -> None:
         width=28 * MM,
         reference_point=pts["bust_point"],
         tip_shortfall=25 * MM,   # stop 2.5 cm short of bust point
-        fold_direction="inward",
+        dart_type=DartType.TRIANGLE,
         name="Bustnaht",
         stitch_style=_DART_STITCH,
         fold_style=_DART_FOLD,
@@ -283,22 +284,13 @@ def example_03_inner_dart_rhombus() -> None:
         position_t=0.5,
         width=24 * MM,
         depth=55 * MM,
-        fold_direction="outward",
-        name="Eingriff",
+        dart_type=DartType.RHOMBUS,
+        name="Rhombus Dart",
         stitch_style=_DART_STITCH,
         fold_style=_DART_FOLD,
     )
     result = part.add_dart(factory, notches=True, precision_tip=True)
 
-    part.add_info_box(
-        header="Vorderteil",
-        notes=[
-            "Innennaht-Abnäher",
-            "Rendering: Raute",
-            "Tiefe: 55 mm",
-            "Breite: 24 mm",
-        ],
-    )
     part.add_grainline(
         ANCHOR.translate(10 * MM, 10 * MM),
         ANCHOR.translate(10 * MM, PIECE_H - 10 * MM),
@@ -332,7 +324,7 @@ def example_04_dart_split() -> None:
         position_t=0.55,
         width=36 * MM,
         depth=65 * MM,
-        fold_direction="inward",
+        dart_type=DartType.TRIANGLE,
         name="Original",
     )
     original = original_factory.dart
@@ -396,7 +388,7 @@ def example_05_dart_transfer() -> None:
         width=26 * MM,
         reference_point=pts["bust_point"],
         tip_shortfall=20 * MM,
-        fold_direction="inward",
+        dart_type=DartType.TRIANGLE,
         name="Seitennaht (Original)",
     )
     original = original_factory.dart
@@ -419,7 +411,7 @@ def example_05_dart_transfer() -> None:
         leg_b=transferred.leg_b,
         center=transferred.center,
         tip=transferred.tip,
-        fold_direction=transferred.fold_direction,
+        dart_type=transferred.dart_type,
         name="Schulternaht (Übertragen)",
     )
     result = part.add_dart(

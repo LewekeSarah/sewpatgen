@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from sewpat import CM, MM, Dart, DartElements, DartResult, Point, Segment, transfer_dart
+from sewpat import CM, MM, Dart, DartElements, DartResult, DartType, Point, Segment, transfer_dart
 from sewpat.geometry import CubicBezier
 from sewpat.element import PatternElement
 from sewpat.pattern import PatternPart
@@ -92,9 +92,9 @@ class TestDartGeometry:
         assert rotated.intake_angle == pytest.approx(d.intake_angle, rel=1e-6)
         assert rotated.depth == pytest.approx(d.depth, rel=1e-6)
 
-    def test_invalid_fold_direction(self) -> None:
-        with pytest.raises(ValueError, match="fold_direction"):
-            Dart(Point(0, 0), Point(1, 0), Point(0.5, 0), Point(0.5, 5), fold_direction="sideways")
+    def test_invalid_dart_type(self) -> None:
+        with pytest.raises(ValueError, match="dart_type"):
+            Dart(Point(0, 0), Point(1, 0), Point(0.5, 0), Point(0.5, 5), dart_type="sideways")
 
 
 class TestDartSplit:
@@ -233,7 +233,7 @@ class TestAddDartOuter:
         edge = PatternElement(Segment(Point(40, 0), Point(60, 0)), style=STYLE_CUT)
         factory = DartElements.from_edge(
             edge, position_t=0.5, width=20.0, depth=80.0,
-            fold_direction="inward", name="Bustnaht",
+            dart_type="triangle", name="Bustnaht",
         )
         result = part.add_dart(factory, notches=False, precision_tip=False)
         for ce in result.cut_elements:
@@ -271,11 +271,11 @@ class TestAddDartOuter:
 
 class TestAddDartInner:
     def _inner_dart(self) -> Dart:
-        """A simple dart with fold_direction='outward' (inner/rhombus)."""
+        """A simple dart with dart_type=DartType.RHOMBUS (inner/rhombus)."""
         return Dart(
             leg_a=Point(40, 0), leg_b=Point(60, 0),
             center=Point(50, 0), tip=Point(50, 80),
-            fold_direction="outward", name="Bustnaht",
+            dart_type=DartType.RHOMBUS, name="Bustnaht",
         )
 
     def test_rhombus_element_count(self) -> None:
@@ -286,7 +286,7 @@ class TestAddDartInner:
         assert result.cut_elements == []
 
     def test_rhombus_is_closed(self) -> None:
-        """leg_a → tip → leg_b → center → leg_a — start of first = end of last."""
+        """leg_a → tip → leg_b → mirror_tip → leg_a — shape is a closed diamond."""
         part = _square_part()
         result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=False)
         segs = [e.geometry for e in result.rhombus_elements]
@@ -294,11 +294,38 @@ class TestAddDartInner:
         last_end = segs[-1].p2
         assert first_start.distance_to(last_end) == pytest.approx(0.0, abs=1e-6)
 
+    def test_rhombus_mirror_apex(self) -> None:
+        """The fourth corner must be the mirror of tip across leg_a→leg_b.
+
+        For the dart Dart(leg_a=(40,0), leg_b=(60,0), center=(50,0), tip=(50,80))
+        the mouth is the horizontal line y=0, so the mirror tip should be at (50,-80).
+        """
+        part = _square_part()
+        result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=False)
+        segs = [e.geometry for e in result.rhombus_elements]
+        # Segment order: leg_a→tip, tip→leg_b, leg_b→mirror_tip, mirror_tip→leg_a
+        mirror_tip = segs[2].p2  # end of leg_b→mirror_tip segment
+        assert mirror_tip.x == pytest.approx(50.0, abs=1e-6)
+        assert mirror_tip.y == pytest.approx(-80.0, abs=1e-6)
+
+    def test_no_notches_for_rhombus(self) -> None:
+        """notches=True must be silently ignored for inner/rhombus darts."""
+        part = _square_part()
+        result = part.add_dart(DartElements(self._inner_dart()), notches=True, precision_tip=False)
+        assert result.notch_elements == []
+
     def test_all_elements(self) -> None:
+        """4 rhombus segs + 2×2 precision circles + 1 label = 9 elements."""
         part = _square_part()
         result = part.add_dart(DartElements(self._inner_dart()), notches=True, precision_tip=True)
-        assert len(result.all_elements) >= 6
-        assert len(result.all_elements) >= 6
+        assert len(result.all_elements) == 9
+
+    def test_tip_elements_include_mirror(self) -> None:
+        """precision_tip=True must mark both apices for a rhombus dart."""
+        part = _square_part()
+        result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=True)
+        # 2 circles for dart.tip + 2 circles for mirror_tip + 1 label = 5
+        assert len(result.tip_elements) == 5
 
 
 # ---------------------------------------------------------------------------

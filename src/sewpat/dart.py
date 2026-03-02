@@ -18,6 +18,7 @@ from .element import PatternElement, PrecisionPoint
 from .geometry import (
     CubicBezier,
     Dart,
+    DartType,
     InfoBox,
     Point,
     Segment,
@@ -147,7 +148,7 @@ class DartElements:
         depth: float | None = None,
         reference_point: Point | None = None,
         tip_shortfall: float = 20.0,
-        fold_direction: str = "inward",
+        dart_type: "DartType | str" = DartType.TRIANGLE,
         name: str | None = None,
         stitch_style: StyleOptions | None = None,
         fold_style: StyleOptions | None = None,
@@ -171,7 +172,9 @@ class DartElements:
                              The tip is placed *tip_shortfall* mm short of it.
             tip_shortfall: Shortfall in mm from *reference_point* (default 20 mm).
                            Ignored when *depth* is given.
-            fold_direction: ``"inward"`` (default) or ``"outward"``.
+            dart_type: :class:`~sewpat.geometry.DartType` member (or plain string
+                ``"triangle"`` / ``"rhombus"``).  Defaults to
+                ``DartType.TRIANGLE``.
             name: Optional label for the dart.
             stitch_style: Overrides the default dart-stitch style.
             fold_style: Overrides the default dart-fold style.
@@ -236,7 +239,7 @@ class DartElements:
             leg_b=leg_b,
             center=center,
             tip=tip,
-            fold_direction=fold_direction,
+            dart_type=dart_type,
             name=name,
         )
         return cls(dart, stitch_style=stitch_style, fold_style=fold_style, edge_style=edge.style, precision_style=precision_style)
@@ -283,13 +286,17 @@ class DartElements:
         ]
 
     def build_rhombus_elements(self) -> list[PatternElement]:
-        """Return the four rhombus-outline PatternElements (inner/reverse dart)."""
+        """Return the four rhombus-outline PatternElements (inner/reverse dart).
+
+        The rhombus has four corners: leg_a, tip, leg_b, and mirror_tip —
+        the reflection of tip across the leg_a→leg_b mouth line.
+        """
         dart = self.dart
         points = [
             (dart.leg_a, dart.tip),
             (dart.tip, dart.leg_b),
-            (dart.leg_b, dart.center),
-            (dart.center, dart.leg_a),
+            (dart.leg_b, dart.mirror_tip),
+            (dart.mirror_tip, dart.leg_a),
         ]
         return [
             PatternElement(Segment(p1, p2), style=self.stitch_style)
@@ -297,10 +304,15 @@ class DartElements:
         ]
 
     def build_tip_elements(self) -> list[PatternElement]:
-        """Return the precision-mark circles and optional name label at the tip."""
+        """Return the precision-mark circles and optional name label at the tip.
+
+        For inner (rhombus) darts a second precision point is added at
+        ``mirror_tip`` — the opposite apex on the far side of the mouth.
+        """
         dart = self.dart
-        pp = PrecisionPoint(dart.tip, style=self.precision_style)
-        elements: list[PatternElement] = pp.build_elements()
+        elements: list[PatternElement] = PrecisionPoint(dart.tip, style=self.precision_style).build_elements()
+        if not dart.is_triangle:
+            elements += PrecisionPoint(dart.mirror_tip, style=self.precision_style).build_elements()
         if dart.name:
             label = InfoBox(
                 position=Point(dart.tip.x, dart.tip.y - 14 * MM),

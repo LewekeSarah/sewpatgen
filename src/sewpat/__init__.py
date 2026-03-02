@@ -19,6 +19,7 @@ from .geometry import (
     Circle,
     CubicBezier,
     Dart,
+    DartType,
     Line,
     Point,
     Ray,
@@ -80,6 +81,7 @@ __all__ = [
     "Triangle",
     "CubicBezier",
     "Dart",
+    "DartType",
     # Geometry helpers
     "edge_tangent",
     "intersect",
