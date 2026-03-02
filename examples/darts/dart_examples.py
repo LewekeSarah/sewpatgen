@@ -170,7 +170,7 @@ def example_01_outer_explicit_depth() -> None:
         stitch_style=_DART_STITCH,
         fold_style=_DART_FOLD,
     )
-    result = part.add_dart(factory.dart, notches=True, precision_tip=True)
+    result = part.add_dart(factory, notches=True, precision_tip=True)
 
     # Info box
     part.add_info_box(
@@ -222,7 +222,7 @@ def example_02_outer_reference_point() -> None:
         stitch_style=_DART_STITCH,
         fold_style=_DART_FOLD,
     )
-    result = part.add_dart(factory.dart, notches=True, precision_tip=True)
+    result = part.add_dart(factory, notches=True, precision_tip=True)
 
     # Label the bust point on the part too
     part.add_precision_points(pts["bust_point"])
@@ -278,7 +278,7 @@ def example_03_inner_dart_rhombus() -> None:
         stitch_style=_DART_STITCH,
         fold_style=_DART_FOLD,
     )
-    result = part.add_dart(factory.dart, notches=True, precision_tip=True)
+    result = part.add_dart(factory, notches=True, precision_tip=True)
 
     part.add_info_box(
         header="Vorderteil",
@@ -335,10 +335,14 @@ def example_04_dart_split() -> None:
     # Split into two equal sub-darts (ratio=0.5) — edge_style is propagated
     dart_a, dart_b = original.split(ratio=0.5)
 
-    result_a = part.add_dart(dart_a, notches=True, precision_tip=True,
-                              stitch_style=_DART_STITCH, fold_style=_DART_FOLD)
-    result_b = part.add_dart(dart_b, notches=True, precision_tip=True,
-                              stitch_style=_DART_STITCH, fold_style=_DART_FOLD)
+    result_a = part.add_dart(
+        DartElements(dart_a, stitch_style=_DART_STITCH, fold_style=_DART_FOLD),
+        notches=True, precision_tip=True,
+    )
+    result_b = part.add_dart(
+        DartElements(dart_b, stitch_style=_DART_STITCH, fold_style=_DART_FOLD),
+        notches=True, precision_tip=True,
+    )
 
     part.add_info_box(
         header="Vorderteil",
@@ -408,8 +412,10 @@ def example_05_dart_transfer() -> None:
         fold_direction=transferred.fold_direction,
         name="Schulternaht (Übertragen)",
     )
-    result = part.add_dart(transferred, notches=True, precision_tip=True,
-                           stitch_style=_DART_STITCH, fold_style=_DART_FOLD)
+    result = part.add_dart(
+        DartElements(transferred, stitch_style=_DART_STITCH, fold_style=_DART_FOLD),
+        notches=True, precision_tip=True,
+    )
 
     # Mark the bust point (pivot) on the part
     part.add_precision_points(pts["bust_point"])

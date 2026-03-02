@@ -512,12 +512,10 @@ class PatternPart:
 
     def add_dart(
         self,
-        dart: Dart,
+        dart: DartElements,
         *,
         notches: bool = True,
         precision_tip: bool = True,
-        stitch_style: StyleOptions | None = None,
-        fold_style: StyleOptions | None = None,
         notch_kwargs: dict | None = None,
     ) -> DartResult:
         """Add all visual elements for *dart* to this part and return a :class:`DartResult`.
@@ -526,15 +524,15 @@ class PatternPart:
         dart legs placed on the outline can be given the correct
         ``seam_allowance`` override.
 
-        The rendering mode is determined by ``dart.fold_direction``:
+        The rendering mode is determined by ``dart.dart.fold_direction``:
 
         **Outer dart** (``fold_direction="inward"``):
             * Two stitching lines (leg_a → tip, leg_b → tip).
             * One fold/crease line (mouth center → tip).
             * Two cut-line outline segments replacing the mouth region.
-              These inherit the style from ``dart.edge_style`` (set automatically
-              by :meth:`DartElements.from_edge`) so they are visually identical
-              to the rest of the seam.
+              These inherit the style from ``dart.dart.edge_style`` (set
+              automatically by :meth:`DartElements.from_edge`) so they are
+              visually identical to the rest of the seam.
             * Notch at mouth center + notches at leg_a and leg_b.
             * Two concentric precision circles at the tip.
 
@@ -543,20 +541,20 @@ class PatternPart:
             ``leg_a → tip → leg_b → center → leg_a``.
 
         Args:
-            dart: The :class:`~sewpat.geometry.Dart` geometry to render.
-                  Use :meth:`DartElements.from_edge` to construct a dart whose
-                  ``edge_style`` is inherited from the source seam element.
+            dart: A :class:`~sewpat.dart.DartElements` factory — build it via
+                  :meth:`DartElements.from_edge` so the ``edge_style`` is
+                  inherited automatically from the source seam element, or
+                  construct :class:`DartElements` directly for existing darts.
             notches: Whether to add notch triangles.
             precision_tip: Whether to add precision circles at the tip.
-            stitch_style: Defaults to :data:`~sewpat.style.STYLE_DART_STITCH`.
-            fold_style: Defaults to :data:`~sewpat.style.STYLE_DART_FOLD`.
             notch_kwargs: Keyword-argument overrides forwarded to :meth:`add_notches`.
 
         Returns:
             A :class:`~sewpat.dart.DartResult` with all created elements grouped by role.
         """
         _nkw: dict = notch_kwargs if notch_kwargs is not None else {}
-        factory = DartElements(dart, stitch_style=stitch_style, fold_style=fold_style)
+        factory = dart
+        geom = factory.dart
 
         stitch_elems: list[PatternElement] = []
         fold_elem: PatternElement | None = None
@@ -565,7 +563,7 @@ class PatternPart:
         cut_elems: list[PatternElement] = []
         rhombus_elems: list[PatternElement] = []
 
-        if dart.is_outer:
+        if geom.is_outer:
             # ── Outer dart ────────────────────────────────────────────────────
             stitch_elems = factory.build_stitch_elements()
             self.extend(stitch_elems)
@@ -577,9 +575,9 @@ class PatternPart:
             self.extend(cut_elems)
 
             # Mouth-center notch (perpendicular to the dart mouth edge)
-            mouth_edge = Segment(dart.leg_a, dart.leg_b)
+            mouth_edge = Segment(geom.leg_a, geom.leg_b)
             before = len(self.elements)
-            self.add_notches(dart.center, seam_edge=mouth_edge, **_nkw)
+            self.add_notches(geom.center, seam_edge=mouth_edge, **_nkw)
             notch_elems.extend(self.elements[before:])
         else:
             # ── Inner / reverse dart: rhombus ─────────────────────────────────
@@ -593,14 +591,14 @@ class PatternPart:
 
         # Leg notches
         if notches:
-            mouth_edge = Segment(dart.leg_a, dart.leg_b)
-            for pt in (dart.leg_a, dart.leg_b):
+            mouth_edge = Segment(geom.leg_a, geom.leg_b)
+            for pt in (geom.leg_a, geom.leg_b):
                 before = len(self.elements)
                 self.add_notches(pt, seam_edge=mouth_edge, **_nkw)
                 notch_elems.extend(self.elements[before:])
 
         return DartResult(
-            dart=dart,
+            dart=geom,
             stitch_elements=stitch_elems,
             fold_element=fold_elem,
             tip_elements=tip_elems,

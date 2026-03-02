@@ -275,7 +275,13 @@ class DartElements:
         rest of the seam without any manual style argument.
         """
         dart = self.dart
-        dart_cut_style = self.edge_style
+        base_style: StyleOptions = (
+            self.edge_style  # type: ignore[assignment]
+            if isinstance(self.edge_style, StyleOptions)
+            else StyleOptions(seam_allowance=0)
+        )
+        dart_cut_style = copy.copy(base_style)
+        dart_cut_style.seam_allowance = 0.0
         dart_cut_style.corner_join = "miter"
         return [
             PatternElement(

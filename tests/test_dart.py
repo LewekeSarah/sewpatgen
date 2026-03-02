@@ -152,7 +152,7 @@ class TestDartElementsFromEdge:
         from sewpat.style import STYLE_CUT
         edge = PatternElement(Segment(Point(0.0, 0.0), Point(100.0, 0.0)), style=STYLE_CUT)
         factory = DartElements.from_edge(edge, position_t=0.5, width=20.0, depth=50.0)
-        assert factory.dart.edge_style is STYLE_CUT
+        assert factory.edge_style is STYLE_CUT
 
     def test_from_edge_both_params_raises(self) -> None:
         edge = self._edge(Point(0.0, 0.0), Point(100.0, 0.0))
@@ -200,36 +200,29 @@ class TestAddDartOuter:
     def test_element_count_outer(self) -> None:
         part = _square_part()
         baseline = len(part.elements)
-        d = _simple_dart()
-        result = part.add_dart(d, notches=True, precision_tip=True)
-        # 2 stitch + 1 fold + 2 cut + 1 mouth notch + 2 tip circles + 2 leg notches = 10
+        result = part.add_dart(DartElements(_simple_dart()), notches=True, precision_tip=True)
         assert len(result.stitch_elements) == 2
         assert result.fold_element is not None
         assert len(result.cut_elements) == 2
-        # 2 precision circles + 1 InfoBox name label (dart has a name)
         assert len(result.tip_elements) == 3
-        # Mouth notch + 2 leg notches (at least one triangle each)
         assert len(result.notch_elements) >= 3
         assert len(part.elements) > baseline
 
     def test_cut_elements_are_outline(self) -> None:
         part = _square_part()
-        d = _simple_dart()
-        result = part.add_dart(d, notches=False, precision_tip=False)
+        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
         for ce in result.cut_elements:
             assert ce.is_outline is True
 
     def test_cut_elements_have_zero_sa(self) -> None:
         part = _square_part()
-        d = _simple_dart()
-        result = part.add_dart(d, notches=False, precision_tip=False)
+        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
         for ce in result.cut_elements:
             assert ce.style.seam_allowance == 0.0
 
     def test_cut_elements_miter_corner(self) -> None:
         part = _square_part()
-        d = _simple_dart()
-        result = part.add_dart(d, notches=False, precision_tip=False)
+        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
         for ce in result.cut_elements:
             assert ce.style.corner_join == "miter"
 
@@ -237,52 +230,42 @@ class TestAddDartOuter:
         """Cut segments inherit edge_style from dart.edge_style (set via DartElements.from_edge)."""
         from sewpat.style import STYLE_CUT, Marker
         part = _square_part()
-        edge = PatternElement(
-            Segment(Point(40, 0), Point(60, 0)),
-            style=STYLE_CUT,
-        )
+        edge = PatternElement(Segment(Point(40, 0), Point(60, 0)), style=STYLE_CUT)
         factory = DartElements.from_edge(
             edge, position_t=0.5, width=20.0, depth=80.0,
             fold_direction="inward", name="Bustnaht",
         )
-        result = part.add_dart(factory.dart, notches=False, precision_tip=False)
+        result = part.add_dart(factory, notches=False, precision_tip=False)
         for ce in result.cut_elements:
             assert ce.style.marker_end == Marker.SCISSOR
 
     def test_cut_elements_default_no_edge_style(self) -> None:
         """Without edge_style, cut segments use plain StyleOptions as base."""
         part = _square_part()
-        d = _simple_dart()
-        result = part.add_dart(d, notches=False, precision_tip=False)
+        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
         for ce in result.cut_elements:
             assert ce.style.marker_end is None
 
     def test_stitch_elements_style(self) -> None:
         part = _square_part()
-        d = _simple_dart()
-        result = part.add_dart(d, notches=False, precision_tip=False)
+        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
         for se in result.stitch_elements:
             assert se.style == STYLE_DART_STITCH
 
     def test_fold_element_style(self) -> None:
         part = _square_part()
-        d = _simple_dart()
-        result = part.add_dart(d, notches=False, precision_tip=False)
+        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
         assert result.fold_element is not None
         assert result.fold_element.style == STYLE_DART_FOLD
 
     def test_no_notches(self) -> None:
         part = _square_part()
-        d = _simple_dart()
-        result = part.add_dart(d, notches=False, precision_tip=False)
-        # Only the mouth center notch is added when notches=False
-        # (mouth notch is always added for outer darts)
+        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
         assert len(result.notch_elements) >= 1
 
     def test_no_precision_tip(self) -> None:
         part = _square_part()
-        d = _simple_dart()
-        result = part.add_dart(d, notches=False, precision_tip=False)
+        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
         assert result.tip_elements == []
 
 
@@ -297,8 +280,7 @@ class TestAddDartInner:
 
     def test_rhombus_element_count(self) -> None:
         part = _square_part()
-        d = self._inner_dart()
-        result = part.add_dart(d, notches=False, precision_tip=False)
+        result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=False)
         assert len(result.rhombus_elements) == 4
         assert result.fold_element is None
         assert result.cut_elements == []
@@ -306,8 +288,7 @@ class TestAddDartInner:
     def test_rhombus_is_closed(self) -> None:
         """leg_a → tip → leg_b → center → leg_a — start of first = end of last."""
         part = _square_part()
-        d = self._inner_dart()
-        result = part.add_dart(d, notches=False, precision_tip=False)
+        result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=False)
         segs = [e.geometry for e in result.rhombus_elements]
         first_start = segs[0].p1
         last_end = segs[-1].p2
@@ -315,9 +296,8 @@ class TestAddDartInner:
 
     def test_all_elements(self) -> None:
         part = _square_part()
-        d = self._inner_dart()
-        result = part.add_dart(d, notches=True, precision_tip=True)
-        # 4 rhombus + 2 tip circles + leg notches
+        result = part.add_dart(DartElements(self._inner_dart()), notches=True, precision_tip=True)
+        assert len(result.all_elements) >= 6
         assert len(result.all_elements) >= 6
 
 
@@ -328,15 +308,13 @@ class TestAddDartInner:
 class TestDartResult:
     def test_all_elements_outer(self) -> None:
         part = _square_part()
-        d = _simple_dart()
-        result = part.add_dart(d, notches=True, precision_tip=True)
+        result = part.add_dart(DartElements(_simple_dart()), notches=True, precision_tip=True)
         total = len(result.all_elements)
         assert total >= 10  # minimum expected for outer dart with all features
 
     def test_repr(self) -> None:
         part = _square_part()
-        d = _simple_dart()
-        result = part.add_dart(d, notches=False, precision_tip=False)
+        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
         r = repr(result)
         assert "DartResult" in r
 
