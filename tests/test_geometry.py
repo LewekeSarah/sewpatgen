@@ -1304,5 +1304,73 @@ class TestRoundCorner(unittest.TestCase):
         self.assertAlmostEqual(arc.p2.x, arc.p3.x, places=6)  # tangent along -y
 
 
+class TestDartRoof(unittest.TestCase):
+    """Tests for Dart.dart_roof (Abnäherdach)."""
+
+    def _make_symmetric_dart(self, width=40.0, depth=80.0):
+        """Helper: symmetric dart centered at origin on the x-axis."""
+        from sewpat.geometry import Dart, Point
+        center = Point(0.0, 0.0)
+        leg_a = Point(-width / 2, 0.0)
+        leg_b = Point(+width / 2, 0.0)
+        tip = Point(0.0, -depth)           # tip below the seam line
+        return Dart(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip)
+
+    def test_dart_roof_returns_dart_roof_instance(self):
+        dart = self._make_symmetric_dart()
+        roof = dart.roof
+        self.assertIsInstance(roof, Point)
+
+    def test_roof_points_above_original_legs(self):
+        """Roof points must protrude *away* from the tip (outward past the seam).
+
+        For a dart where the tip is below the seam (y < 0), the Abnäherdach
+        crown protrudes above the seam (y > 0) so that after sewing the edge
+        lies flush.
+        """
+        dart = self._make_symmetric_dart(width=40.0, depth=80.0)
+        roof = dart.roof
+        # tip is at y=-80; seam is at y=0; roof points should be at y > 0
+        self.assertGreater(roof.y, dart.center.y)
+
+    def test_roof_height_formula(self):
+        """Verify the right-triangle formula: h = half_width * cos(α) / sin(α).
+
+        For a symmetric dart: α = angle between stitch leg and seam edge.
+        stitch = tip - leg_a = (half_w, depth), so:
+          cos(α) = half_w / |stitch|,  sin(α) = depth / |stitch|
+          h = (half_w * cos(α)) / sin(α) = half_w² / depth
+        """
+        import math
+        width, depth = 40.0, 80.0
+        dart = self._make_symmetric_dart(width=width, depth=depth)
+        roof_height = np.linalg.norm(dart.roof.coords - dart.center.coords)
+
+        self.assertAlmostEqual(float(math.tan(dart.intake_angle)*(dart.width / 2)), roof_height, places=5)
+
+    def test_zero_width_dart_no_roof_displacement(self):
+        """A dart with zero-length seam has no roof displacement."""
+        from sewpat.geometry import Dart, Point
+        tip = Point(0.0, -50.0)
+        center = Point(0.0, 0.0)
+        dart = Dart(leg_a=center, leg_b=center, center=center, tip=tip)
+        roof = dart.roof
+        self.assertAlmostEqual(roof.x, dart.center.x, places=6)
+        self.assertAlmostEqual(roof.y, dart.center.y, places=6)
+
+    def test_roof_rise_increases_with_wider_dart(self):
+        """A wider dart (larger intake angle) should produce a larger roof rise.
+
+        The roof rise is how far the V-peak protrudes beyond the seam line,
+        away from the tip.  A wider intake angle creates a larger V.
+        """
+        dart_narrow = self._make_symmetric_dart(width=20.0, depth=80.0)
+        dart_wide = self._make_symmetric_dart(width=60.0, depth=80.0)
+        # For this setup tip is at y=-80, seam at y=0; roof is at y > 0
+        rise_narrow = np.linalg.norm(dart_narrow.roof.coords - dart_narrow.center.coords)
+        rise_wide = np.linalg.norm(dart_wide.roof.coords - dart_wide.center.coords)
+        self.assertGreater(rise_wide, rise_narrow)
+
+
 if __name__ == "__main__":
     unittest.main()

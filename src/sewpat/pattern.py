@@ -280,6 +280,7 @@ class PatternPart:
         seam_edge: Segment | CubicBezier | None = None,
         length: float = 0.8 * CM,
         width: float = 0.4 * CM,
+        symbol: str = "Triangle",
         is_back: bool = False,
     ) -> None:
         """Add filled-triangle notch marks at *points*, always pointing inward.
@@ -308,7 +309,7 @@ class PatternPart:
             sp = _sg.Point(ref.x, ref.y)
             return min(sa_geoms, key=lambda g: sp.distance(geom_to_shapely(g)))
 
-        def _place_triangles(notch_pt: Point, along, normal, is_sa: bool) -> list:
+        def _place_symbol(notch_pt: Point, along, normal, symbol, is_sa: bool) -> list:
             ax, ay = float(along[0]), float(along[1])
             nx, ny = float(normal[0]), float(normal[1])
             offsets = (
@@ -317,9 +318,13 @@ class PatternPart:
             created = []
             for offset in offsets:
                 centre = notch_pt.translate(offset * ax, offset * ay)
-                bl = centre.translate(-half_w * ax, -half_w * ay)
-                br = centre.translate(half_w * ax, half_w * ay)
                 tip = centre.translate(nx * length, ny * length)
+                if symbol == "Triangle":
+                    bl = centre.translate(-half_w * ax, -half_w * ay)
+                    br = centre.translate(half_w * ax, half_w * ay)
+                else:
+                    bl = centre.translate(-half_w / 5 * ax, -half_w / 5 * ay)
+                    br = centre.translate(half_w / 5 * ax, half_w / 5 * ay)
                 elem = self.append(Triangle(bl, br, tip))
                 elem.is_seam_allowance = is_sa
                 created.append(elem)
@@ -330,7 +335,7 @@ class PatternPart:
                 notch_pt, along, normal = project_onto_edge(seam_edge, pt, inward_ref)
             else:
                 notch_pt, along, normal = pt, (1.0, 0.0), (0.0, -1.0)
-            seam_elems = _place_triangles(notch_pt, along, normal, is_sa=False)
+            seam_elems = _place_symbol(notch_pt, along, normal, symbol, is_sa=False)
 
             if sa_geoms:
                 sa_edge = _closest_sa_edge(notch_pt)
@@ -338,7 +343,7 @@ class PatternPart:
                     sa_notch_pt, sa_along, sa_normal = project_onto_edge(
                         sa_edge, notch_pt, inward_ref
                     )
-                    _place_triangles(sa_notch_pt, sa_along, sa_normal, is_sa=True)
+                    _place_symbol(sa_notch_pt, sa_along, sa_normal, symbol, is_sa=True)
                     for e in seam_elems:
                         e.is_seam_notch = True
 
@@ -594,9 +599,9 @@ class PatternPart:
             self.extend(cut_elems)
 
             # Mouth-center notch (perpendicular to the dart mouth edge)
-            mouth_edge = Segment(geom.leg_a, geom.leg_b)
+            mouth_edge = Segment(geom.leg_a, geom.leg_b).translate(geom.roof.x - geom.center.x, geom.roof.y - geom.center.y)
             before = len(self.elements)
-            self.add_notches(geom.center, seam_edge=mouth_edge, **_nkw)
+            self.add_notches(geom.roof, seam_edge=mouth_edge, **_nkw, symbol="Rectangle")
             notch_elems.extend(self.elements[before:])
         else:
             # ── Inner / reverse dart: rhombus ─────────────────────────────────
@@ -613,7 +618,7 @@ class PatternPart:
             mouth_edge = Segment(geom.leg_a, geom.leg_b)
             for pt in (geom.leg_a, geom.leg_b):
                 before = len(self.elements)
-                self.add_notches(pt, seam_edge=mouth_edge, **_nkw)
+                self.add_notches(pt, seam_edge=mouth_edge, **_nkw, symbol="Rectangle", is_back=False)
                 notch_elems.extend(self.elements[before:])
 
         return DartResult(
