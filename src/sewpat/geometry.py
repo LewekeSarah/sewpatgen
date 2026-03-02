@@ -46,6 +46,11 @@ def _intersect_lines(
     return np.array([result.x, result.y])
 
 
+def _bezier_closest_t(svg_bezier: _SvgCubicBezier, pt_c: complex) -> float:
+    """Return *t* ∈ [0, 1] of the point on *svg_bezier* closest to *pt_c*."""
+    return svg_bezier.radialrange(pt_c)[0][1]
+
+
 @dataclass(frozen=True)
 class Point:
     """A 2D point (frozen dataclass). Coordinates stored as a NumPy array."""
@@ -89,6 +94,28 @@ class Point:
         cos_a, sin_a = math.cos(angle_rad), math.sin(angle_rad)
         rot = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
         return Point(*(rot @ (self.coords - center.coords) + center.coords))
+
+    def move_towards(
+        self,
+        curve: "Segment | CubicBezier | Ray | Line | Circle",
+        arc_length: float,
+    ) -> "Point":
+        """Return the point *arc_length* mm from ``self`` along *curve*.
+
+        ``self`` must lie on *curve*.  Positive *arc_length* follows the
+        curve's natural direction; negative moves against it.  Delegates to
+        ``curve.point_along_from(self, arc_length)``.
+
+        Raises:
+            TypeError: If *curve* is not a supported type.
+            ValueError: If the result falls outside a finite curve's bounds.
+        """
+        if not hasattr(curve, "point_along_from"):
+            raise TypeError(
+                f"move_towards does not support curve type {type(curve).__name__!r}. "
+                "Expected Segment, CubicBezier, Ray, Line, or Circle."
+            )
+        return curve.point_along_from(self, arc_length)
 
 
 class Segment:
@@ -212,6 +239,11 @@ class Segment:
             raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
         return self.point_at_t(arc_length / total)
 
+    def point_along_from(self, point: Point, arc_length: float) -> Point:
+        """Return the point *arc_length* mm further along this segment from *point* (p1→p2 direction)."""
+        pos = float(np.dot(point.coords - self.p1.coords, self.unit_direction))
+        return self.point_at_length(pos + arc_length)
+
     def bounding_box(self) -> tuple[Point, Point]:
         """Return the axis-aligned bounding box as ``(min_point, max_point)``."""
         min_x = min(self.p1.x, self.p2.x)
@@ -329,6 +361,11 @@ class Ray:
         base = self.origin.coords + arc_length * self.direction
         return Point(*(base + self.unit_normal * distance))
 
+    def point_along_from(self, point: Point, arc_length: float) -> Point:
+        """Return the point *arc_length* mm further along this ray from *point* (away from origin)."""
+        pos = float(np.dot(point.coords - self.origin.coords, self.unit_direction))
+        return self.point_at_distance(pos + arc_length)
+
     def translate(self, dx: float, dy: float) -> "Ray":
         """Return a copy translated by (dx, dy)."""
         return Ray(self.origin.translate(dx, dy), self.direction, name=self.name)
@@ -421,6 +458,11 @@ class Line:
         """
         base = self.point.coords + arc_length * self.direction
         return Point(*(base + self.unit_normal * distance))
+
+    def point_along_from(self, point: Point, arc_length: float) -> Point:
+        """Return the point *arc_length* mm further along this line from *point* (positive = line direction)."""
+        pos = float(np.dot(point.coords - self.point.coords, self.unit_direction))
+        return self.point_at_distance(pos + arc_length)
 
     def translate(self, dx: float, dy: float) -> "Line":
         """Return a copy translated by (dx, dy)."""
@@ -609,6 +651,11 @@ class Circle:
         """Return a copy translated by (dx, dy)."""
         return Circle(self.center.translate(dx, dy), self.radius, name=self.name)
 
+    def point_along_from(self, point: Point, arc_length: float) -> Point:
+        """Return the point *arc_length* mm further along this circle from *point* (CCW positive)."""
+        angle0 = math.atan2(point.y - self.center.y, point.x - self.center.x)
+        return self.point_at_angle(angle0 + arc_length / self.radius)
+
     def _intersect_with_circle(self, other: "Circle") -> list[Point]:
         """Find intersection points with another circle (exact analytical solution)."""
         d = float(np.linalg.norm(self.center.coords - other.center.coords))
@@ -777,6 +824,13 @@ class CubicBezier:
             raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
         t = self._svg().ilength(arc_length)
         return self.point_at_t(t)
+
+    def point_along_from(self, point: Point, arc_length: float) -> Point:
+        """Return the point *arc_length* mm further along this curve from *point* (p0→p3 direction)."""
+        svg = self._svg()
+        t0 = _bezier_closest_t(svg, complex(point.x, point.y))
+        pos = float(svg.length(t1=t0))
+        return self.point_at_length(pos + arc_length)
 
     def split(self, t: float) -> tuple["CubicBezier", "CubicBezier"]:
         """Split at *t* into (left, right) using de Casteljau (delegated to svgpathtools)."""

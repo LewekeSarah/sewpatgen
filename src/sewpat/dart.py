@@ -14,9 +14,7 @@ pattern piece:
 
 import copy
 
-import numpy as np
-
-from .element import PatternElement, PrecisionPoint, PrecisionPoint
+from .element import PatternElement, PrecisionPoint
 from .geometry import (
     CubicBezier,
     Dart,
@@ -210,33 +208,22 @@ class DartElements:
             raise ValueError(f"position_t must be in [0, 1], got {position_t}")
 
         # ── Mouth center ──────────────────────────────────────────────────
-        if isinstance(geom, Segment):
-            center = geom.point_at_t(position_t)
-            along = geom.unit_direction
-            inward_normal = geom.unit_normal
-        else:
-            center = geom.point_at_t(position_t)
-            raw_t = geom.tangent_at_t(position_t)
-            norm = float(np.linalg.norm(raw_t))
-            along = raw_t / norm if norm > 1e-9 else raw_t
+        center = geom.point_at_t(position_t)
+        if isinstance(geom, CubicBezier):
             inward_normal = geom.normal_at_t(position_t)
+        else:
+            inward_normal = geom.unit_normal
 
         half_w = width / 2.0
-        leg_a = center.translate(-half_w * float(along[0]), -half_w * float(along[1]))
-        leg_b = center.translate(+half_w * float(along[0]), +half_w * float(along[1]))
+        leg_a = center.move_towards(geom, -half_w)
+        leg_b = center.move_towards(geom, +half_w)
 
         # ── Tip placement ─────────────────────────────────────────────────
         if reference_point is not None:
-            rv = np.array(reference_point.coords) - np.array(center.coords)
-            rv_len = float(np.linalg.norm(rv))
-            if rv_len < 1e-9:
-                raise ValueError("reference_point coincides with the dart mouth center.")
-            rv_unit = rv / rv_len
-            reach = max(rv_len - tip_shortfall, 0.0)
-            tip = Point(
-                center.x + reach * float(rv_unit[0]),
-                center.y + reach * float(rv_unit[1]),
-            )
+            # Move from reference_point toward center by tip_shortfall along
+            # the straight fold line — keeps the tip on that line.
+            fold_line = Segment(reference_point, center)
+            tip = reference_point.move_towards(fold_line, tip_shortfall)
         else:
             assert depth is not None
             tip = Point(

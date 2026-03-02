@@ -75,6 +75,7 @@ _DART_STITCH = _scaled(STYLE_DART_STITCH)
 _DART_FOLD   = _scaled(STYLE_DART_FOLD)
 _DART_PP     = _scaled(STYLE_SEAM_ALLOWANCE)
 _GRAINLINE   = _scaled(STYLE_GRAINLINE)
+_AUX         = _scaled(STYLE_CONSTRUCTION_GRID)
 _REF_STYLE   = StyleOptions(stroke_color="#bbbbbb", stroke_width=0.15, dash_array=[3.0, 3.0])
 
 # ---------------------------------------------------------------------------
@@ -84,7 +85,7 @@ PIECE_W = 120 * MM   # half-front width
 PIECE_H = 180 * MM   # front length (shoulder → hem)
 WAIST_Y = 110 * MM   # distance from top to waist line
 BUST_Y  =  65 * MM   # distance from top to bust line
-BUST_X  =  75 * MM   # bust point x from left edge (CF)
+BUST_X  =  45 * MM   # bust point x from left edge (CF)
 
 ANCHOR = Point(15 * MM, 15 * MM)
 
@@ -232,7 +233,7 @@ def example_02_outer_reference_point() -> None:
         precision_style=_DART_PP
     )
     result = part.add_dart(factory, notches=True, precision_tip=True)
-
+    result = part.append(Segment(factory.dart.center, pts["bust_point"]), style=_AUX)
     # Label the bust point on the part too
     part.add_precision_points(pts["bust_point"])
 

@@ -84,6 +84,145 @@ class TestPoint(unittest.TestCase):
         self.assertAlmostEqual(rotated.y, 2, places=10)
 
 
+class TestPointMoveTowards(unittest.TestCase):
+    """Tests for Point.move_towards() across all supported curve types."""
+
+    # ------------------------------------------------------------------
+    # Segment
+    # ------------------------------------------------------------------
+
+    def test_segment_forward(self):
+        """Moving forward along a horizontal segment gives the correct x position."""
+        seg = Segment(Point(0, 0), Point(100, 0))
+        p = Point(30, 0)
+        result = p.move_towards(seg, 20)
+        self.assertAlmostEqual(result.x, 50.0, places=6)
+        self.assertAlmostEqual(result.y, 0.0, places=6)
+
+    def test_segment_backward(self):
+        """A negative arc_length moves backward along the segment."""
+        seg = Segment(Point(0, 0), Point(100, 0))
+        p = Point(50, 0)
+        result = p.move_towards(seg, -10)
+        self.assertAlmostEqual(result.x, 40.0, places=6)
+
+    def test_segment_diagonal(self):
+        """Works correctly on a diagonal segment."""
+        seg = Segment(Point(0, 0), Point(30, 40))  # length = 50
+        p = seg.point_at_t(0.5)  # at arc-length 25
+        result = p.move_towards(seg, 10)
+        self.assertAlmostEqual(result.distance_to(p), 10.0, places=5)
+
+    def test_segment_out_of_range_raises(self):
+        """Moving beyond the segment end raises ValueError."""
+        seg = Segment(Point(0, 0), Point(10, 0))
+        p = Point(8, 0)
+        with self.assertRaises(ValueError):
+            p.move_towards(seg, 5)  # would land at 13, beyond length 10
+
+    # ------------------------------------------------------------------
+    # CubicBezier
+    # ------------------------------------------------------------------
+
+    def test_bezier_forward(self):
+        """Moving forward along a straight Bezier (degenerate line) is accurate."""
+        # Straight Bezier from (0,0) to (100,0) — arc-length == chord length
+        bez = CubicBezier(Point(0, 0), Point(33, 0), Point(66, 0), Point(100, 0))
+        p = bez.point_at_t(0.3)  # ≈ 30 mm along
+        result = p.move_towards(bez, 20)
+        # Should land near x=50; allow 0.5 mm tolerance for round-trip arc-length accumulation
+        self.assertAlmostEqual(result.x, 50.0, places=0)
+        self.assertAlmostEqual(result.y, 0.0, places=3)
+
+    def test_bezier_displacement_magnitude(self):
+        """Displacement along a curved Bezier equals the requested arc length."""
+        bez = CubicBezier(Point(0, 0), Point(10, 40), Point(30, 40), Point(40, 0))
+        p = bez.point_at_t(0.2)
+        result = p.move_towards(bez, 5.0)
+        # The result should be strictly further along the curve
+        self.assertGreater(result.distance_to(p), 0.0)
+
+    # ------------------------------------------------------------------
+    # Ray
+    # ------------------------------------------------------------------
+
+    def test_ray_forward(self):
+        """Moving along a ray advances by the exact distance."""
+        ray = Ray(Point(0, 0), (1, 0))
+        p = Point(30, 0)
+        result = p.move_towards(ray, 15)
+        self.assertAlmostEqual(result.x, 45.0, places=6)
+        self.assertAlmostEqual(result.y, 0.0, places=6)
+
+    def test_ray_backward(self):
+        """Negative arc_length moves backward along the ray."""
+        ray = Ray(Point(0, 0), (0, 1))
+        p = Point(0, 50)
+        result = p.move_towards(ray, -20)
+        self.assertAlmostEqual(result.y, 30.0, places=6)
+
+    # ------------------------------------------------------------------
+    # Line
+    # ------------------------------------------------------------------
+
+    def test_line_forward(self):
+        """Moving along an infinite line works in both directions."""
+        from sewpat.geometry import Line
+        line = Line(Point(0, 0), (1, 0))
+        p = Point(10, 0)
+        result = p.move_towards(line, 25)
+        self.assertAlmostEqual(result.x, 35.0, places=6)
+
+    def test_line_backward(self):
+        """Negative arc_length on a Line moves in the opposite direction."""
+        from sewpat.geometry import Line
+        line = Line(Point(0, 0), (1, 0))
+        p = Point(10, 0)
+        result = p.move_towards(line, -10)
+        self.assertAlmostEqual(result.x, 0.0, places=6)
+
+    # ------------------------------------------------------------------
+    # Circle
+    # ------------------------------------------------------------------
+
+    def test_circle_ccw(self):
+        """Moving CCW along a circle by π*r (half circumference) reaches the antipode."""
+        c = Circle(Point(0, 0), 10)
+        p = c.point_at_angle(0)  # (10, 0)
+        half_circ = math.pi * 10
+        result = p.move_towards(c, half_circ)
+        self.assertAlmostEqual(result.x, -10.0, places=5)
+        self.assertAlmostEqual(result.y, 0.0, places=5)
+
+    def test_circle_full_revolution(self):
+        """Moving a full circumference returns to the starting point."""
+        c = Circle(Point(0, 0), 10)
+        p = c.point_at_angle(math.pi / 4)
+        full = 2 * math.pi * 10
+        result = p.move_towards(c, full)
+        self.assertAlmostEqual(result.x, p.x, places=5)
+        self.assertAlmostEqual(result.y, p.y, places=5)
+
+    def test_circle_cw_negative(self):
+        """Negative arc_length moves clockwise."""
+        c = Circle(Point(0, 0), 10)
+        p = c.point_at_angle(math.pi / 2)  # (0, 10)
+        quarter = math.pi / 2 * 10
+        result = p.move_towards(c, -quarter)
+        self.assertAlmostEqual(result.x, 10.0, places=5)
+        self.assertAlmostEqual(result.y, 0.0, places=5)
+
+    # ------------------------------------------------------------------
+    # TypeError for unsupported types
+    # ------------------------------------------------------------------
+
+    def test_unsupported_type_raises(self):
+        """Passing an unsupported type raises TypeError."""
+        p = Point(0, 0)
+        with self.assertRaises(TypeError):
+            p.move_towards("not a curve", 10)  # type: ignore[arg-type]
+
+
 class TestSegment(unittest.TestCase):
     """Test cases for the Segment class.
 
