@@ -12,9 +12,8 @@ This module owns:
 import shapely.geometry as _sg
 
 from .dart import DartElements, DartResult
-from .element import PatternElement
+from .element import PatternElement, PrecisionPoint
 from .geometry import (
-    Circle,
     CubicBezier,
     Dart,
     InfoBox,
@@ -44,6 +43,7 @@ from .geometry import (
 from .style import (
     STYLE_CONSTRUCTION_GRID,
     STYLE_GRAINLINE,
+    STYLE_PRECISION_POINT,
     STYLE_SEAM_ALLOWANCE,
     StyleOptions,
 )
@@ -251,11 +251,28 @@ class PatternPart:
             )
         )
 
-    def add_precision_points(self, *centers: Point) -> None:
-        """Add a two-circle precision mark at each given point."""
+    def add_precision_points(
+        self,
+        *centers: Point,
+        style: StyleOptions | None = None,
+    ) -> None:
+        """Add a two-circle precision mark at each given point.
+
+        Each mark is a :class:`~sewpat.element.PrecisionPoint` with default
+        radii (2 mm outer, 0.2 mm inner).  To use custom radii, construct a
+        :class:`~sewpat.element.PrecisionPoint` directly and pass its elements
+        to :meth:`append` or :meth:`extend`.
+
+        Args:
+            *centers: Points at which to place precision marks.
+            style: Visual style for the circles.  Defaults to
+                :data:`~sewpat.style.STYLE_PRECISION_POINT`.
+        """
+        if style is None:
+            style = STYLE_PRECISION_POINT
         for center in centers:
-            self.append(Circle(center, radius=2 * MM))
-            self.append(Circle(center, radius=0.2 * MM))
+            pp = PrecisionPoint(center, style=style)
+            self.extend(pp.build_elements())
 
     def add_notches(
         self,

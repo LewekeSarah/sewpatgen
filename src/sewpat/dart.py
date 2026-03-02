@@ -16,9 +16,8 @@ import copy
 
 import numpy as np
 
-from .element import PatternElement
+from .element import PatternElement, PrecisionPoint, PrecisionPoint
 from .geometry import (
-    Circle,
     CubicBezier,
     Dart,
     InfoBox,
@@ -130,11 +129,13 @@ class DartElements:
         stitch_style: StyleOptions | None = None,
         fold_style: StyleOptions | None = None,
         edge_style: StyleOptions | None = None,
+        precision_style: StyleOptions | None = None,
     ) -> None:
         self.dart = dart
         self.stitch_style = stitch_style if stitch_style is not None else STYLE_DART_STITCH
         self.fold_style = fold_style if fold_style is not None else STYLE_DART_FOLD
         self.edge_style = edge_style if edge_style is not None else STYLE_DART_STITCH
+        self.precision_style: StyleOptions | None = precision_style
     # ------------------------------------------------------------------
     # Construction from a styled PatternElement edge
     # ------------------------------------------------------------------
@@ -152,6 +153,7 @@ class DartElements:
         name: str | None = None,
         stitch_style: StyleOptions | None = None,
         fold_style: StyleOptions | None = None,
+        precision_style: StyleOptions | None = None,
     ) -> "DartElements":
         """Build a :class:`DartElements` factory from a styled seam-edge element.
 
@@ -175,6 +177,9 @@ class DartElements:
             name: Optional label for the dart.
             stitch_style: Overrides the default dart-stitch style.
             fold_style: Overrides the default dart-fold style.
+            precision_style: Style for the two concentric precision circles at the
+                tip.  The center is always taken from the dart tip geometry.
+                Defaults to :data:`~sewpat.style.STYLE_PRECISION_POINT`.
 
         Returns:
             A fully configured :class:`DartElements` instance whose
@@ -247,7 +252,7 @@ class DartElements:
             fold_direction=fold_direction,
             name=name,
         )
-        return cls(dart, stitch_style=stitch_style, fold_style=fold_style, edge_style=edge.style)
+        return cls(dart, stitch_style=stitch_style, fold_style=fold_style, edge_style=edge.style, precision_style=precision_style)
 
     # ------------------------------------------------------------------
     # Low-level element builders (pure — no side effects on any part)
@@ -275,13 +280,7 @@ class DartElements:
         rest of the seam without any manual style argument.
         """
         dart = self.dart
-        base_style: StyleOptions = (
-            self.edge_style  # type: ignore[assignment]
-            if isinstance(self.edge_style, StyleOptions)
-            else StyleOptions(seam_allowance=0)
-        )
-        dart_cut_style = copy.copy(base_style)
-        dart_cut_style.seam_allowance = 0.0
+        dart_cut_style = copy.copy(self.edge_style)
         dart_cut_style.corner_join = "miter"
         return [
             PatternElement(
@@ -313,13 +312,11 @@ class DartElements:
     def build_tip_elements(self) -> list[PatternElement]:
         """Return the precision-mark circles and optional name label at the tip."""
         dart = self.dart
-        elements: list[PatternElement] = [
-            PatternElement(Circle(dart.tip, radius=2 * MM)),
-            PatternElement(Circle(dart.tip, radius=0.2 * MM)),
-        ]
+        pp = PrecisionPoint(dart.tip, style=self.precision_style)
+        elements: list[PatternElement] = pp.build_elements()
         if dart.name:
             label = InfoBox(
-                position=Point(dart.tip.x, dart.tip.y - 9 * MM),
+                position=Point(dart.tip.x, dart.tip.y - 14 * MM),
                 header=dart.name,
             )
             elements.append(PatternElement(label))

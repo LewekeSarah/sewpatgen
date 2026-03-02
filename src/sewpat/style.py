@@ -219,3 +219,7 @@ STYLE_DART_FOLD = StyleOptions(
     dash_array=[10.0, 2.0, 2.0, 2.0],
 )
 
+STYLE_PRECISION_POINT = StyleOptions(
+    stroke_color="grey",
+    stroke_width=DEFAULT_STROKE_WIDTH_GRAIN,
+)

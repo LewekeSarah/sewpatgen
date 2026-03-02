@@ -609,7 +609,7 @@ class Circle:
         """Return a copy translated by (dx, dy)."""
         return Circle(self.center.translate(dx, dy), self.radius, name=self.name)
 
-    def _intersect_with_circle(self, other: Circle) -> list[Point]:
+    def _intersect_with_circle(self, other: "Circle") -> list[Point]:
         """Find intersection points with another circle (exact analytical solution)."""
         d = float(np.linalg.norm(self.center.coords - other.center.coords))
         r1, r2 = self.radius, other.radius

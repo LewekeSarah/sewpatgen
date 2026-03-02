@@ -9,7 +9,8 @@ from .geometry import (
     Segment,
     Triangle,
 )
-from .style import StyleOptions
+from .style import STYLE_PRECISION_POINT, StyleOptions
+from .units import MM
 
 
 class PatternElement:
@@ -47,4 +48,51 @@ class PatternElement:
         if self.name is not None:
             return self.name
         return getattr(self.geometry, "name", None)
+
+
+class PrecisionPoint:
+    """A two-circle precision mark placed at a single centre point.
+
+    Encapsulates the two concentric circles (outer and inner) used on sewing
+    patterns to mark precise placement points such as dart tips or notch
+    pivots.  Both circles share the same style — either the explicitly supplied
+    *style* or :data:`~sewpat.style.STYLE_PRECISION_POINT` as the default.
+
+    Args:
+        center: The point at which to place the precision mark.
+        outer_radius: Radius of the outer circle in mm. Defaults to 2 mm.
+        inner_radius: Radius of the inner circle in mm. Defaults to 0.2 mm.
+        style: Visual style for both circles. Defaults to
+            :data:`~sewpat.style.STYLE_PRECISION_POINT`.
+    """
+
+    def __init__(
+        self,
+        center: Point,
+        outer_radius: float = 2.0 * MM,
+        inner_radius: float = 0.2 * MM,
+        style: StyleOptions | None = None,
+    ) -> None:
+        self.center = center
+        self.outer_radius = outer_radius
+        self.inner_radius = inner_radius
+        self.style = style if style is not None else StyleOptions(
+            stroke_color=STYLE_PRECISION_POINT.stroke_color,
+            stroke_width=STYLE_PRECISION_POINT.stroke_width,
+            fill_color="none",
+        )
+
+    def build_elements(self) -> list["PatternElement"]:
+        """Return the two :class:`PatternElement` circles for this precision mark.
+
+        Returns:
+            A list of two ``PatternElement`` objects: outer circle first,
+            inner circle second.
+        """
+        circle_style = self.style
+        return [
+            PatternElement(Circle(self.center, radius=self.outer_radius), style=circle_style),
+            PatternElement(Circle(self.center, radius=self.inner_radius), style=circle_style),
+        ]
+
 

@@ -54,12 +54,17 @@ _DEFAULT_STYLES: dict[str, StyleOptions] = {
 # ---------------------------------------------------------------------------
 
 
+def _xml_escape(text: str) -> str:
+    """Escape XML special characters for safe embedding in SVG text content."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _svg_text(x: float, y: float, font_size_mm: float, text: str, **extra: str) -> str:
     """Return an SVG ``<text>`` element."""
     attrs = f'x="{x}" y="{y}" font-size="{font_size_mm}" fill="black"'
     for key, value in extra.items():
         attrs += f' {key}="{value}"'
-    return f"<text {attrs}>{text}</text>"
+    return f"<text {attrs}>{_xml_escape(text)}</text>"
 
 
 def _common_stroke_attrs(
@@ -172,8 +177,6 @@ def _render_segment(
     if getattr(element, "name", None):
         mid_x = (element.p1.x + element.p2.x) / 2
         mid_y = (element.p1.y + element.p2.y) / 2
-        # Offset the label above the line by half a font-size so it sits close
-        # but doesn't overlap with the line itself.
         nodes.append(
             _svg_text(
                 mid_x,
@@ -234,7 +237,7 @@ def _render_info_box(element: InfoBox, style_dict: dict[str, Any]) -> list[str]:
         f'<text x="{x}" y="{y_start}" '
         f'font-size="{font_size_mm * 1.2}" font-weight="bold" fill="black" '
         f'text-anchor="middle" dominant-baseline="middle">'
-        f"{element.header}</text>"
+        f"{_xml_escape(element.header)}</text>"
     )
     # Notes
     for i, note in enumerate(element.notes):
@@ -243,7 +246,7 @@ def _render_info_box(element: InfoBox, style_dict: dict[str, Any]) -> list[str]:
             f'<text x="{x}" y="{y}" '
             f'font-size="{font_size_mm}" fill="black" '
             f'text-anchor="middle" dominant-baseline="middle">'
-            f"{note}</text>"
+            f"{_xml_escape(note)}</text>"
         )
     return nodes
 

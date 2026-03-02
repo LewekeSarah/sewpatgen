@@ -28,6 +28,7 @@ from sewpat import (
     STYLE_DART_STITCH,
     STYLE_FOLD,
     STYLE_STITCH,
+    STYLE_SEAM_ALLOWANCE,
     Dart,
     DartElements,
     Pattern,
@@ -72,6 +73,7 @@ _FOLD        = _scaled(STYLE_FOLD)
 _STITCH      = _scaled(STYLE_STITCH)
 _DART_STITCH = _scaled(STYLE_DART_STITCH)
 _DART_FOLD   = _scaled(STYLE_DART_FOLD)
+_DART_PP     = _scaled(STYLE_SEAM_ALLOWANCE)
 _GRAINLINE   = _scaled(STYLE_GRAINLINE)
 _REF_STYLE   = StyleOptions(stroke_color="#bbbbbb", stroke_width=0.15, dash_array=[3.0, 3.0])
 
@@ -153,38 +155,44 @@ def _add_outline(part: PatternPart, pts: dict[str, Point]) -> dict[str, Segment]
 
 def example_01_outer_explicit_depth() -> None:
     """Side-seam waist dart; depth given as an explicit mm value."""
-    pattern, pts = _build_block("Beispiel 1 – Außennaht-Abnäher (explizite Tiefe)")
-    part = PatternPart("Vorderteil")
+    pattern, pts = _build_block("Beispiel 1 – Abnäher an PatternElement")
+    part = PatternPart("Example")
     pattern.add_part(part)
     segs = _add_outline(part, pts)
 
     # Dart placed at t=0.35 along the side seam. The side-seam PatternElement
     # is passed directly so DartElements.from_edge inherits its style.
-    factory = DartElements.from_edge(
+    dart_right = DartElements.from_edge(
         segs["side"],
-        position_t=0.35,
+        position_t=0.25,
         width=22 * MM,
         depth=90 * MM,
         fold_direction="inward",
-        name="Taille",
+        name="Stitch Line",
         stitch_style=_DART_STITCH,
         fold_style=_DART_FOLD,
     )
-    result = part.add_dart(factory, notches=True, precision_tip=True)
+    result = part.add_dart(dart_right, notches=True, precision_tip=True)
+
+    # Second dart derived from the fold edge of to highlight different edge styles
+    dart_left = DartElements.from_edge(
+        segs["cf"],
+        position_t=0.25,
+        width=22 * MM,
+        depth=90 * MM,
+        fold_direction="inward",
+        name="Fold Line",
+    )
+    result2 = part.add_dart(dart_left, notches=True, precision_tip=True)
 
     # Info box
     part.add_info_box(
-        header="Vorderteil",
+        header="Example 1",
         notes=[
             "Außennaht-Abnäher",
-            "Tiefe: 90 mm",
-            "Breite: 22 mm",
+            "Abnäher: Tiefe 90 mm, Breite 22 mm",
+            "PatternElement + Edge Style",
         ],
-    )
-    part.add_grainline(
-        ANCHOR.translate(10 * MM, 10 * MM),
-        ANCHOR.translate(10 * MM, PIECE_H - 10 * MM),
-        style=_GRAINLINE,
     )
 
     export_pattern_svg_mm(
@@ -221,6 +229,7 @@ def example_02_outer_reference_point() -> None:
         name="Bustnaht",
         stitch_style=_DART_STITCH,
         fold_style=_DART_FOLD,
+        precision_style=_DART_PP
     )
     result = part.add_dart(factory, notches=True, precision_tip=True)
 

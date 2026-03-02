@@ -14,7 +14,7 @@ Modules:
 """
 
 from .dart import DartElements, DartResult
-from .element import PatternElement
+from .element import PatternElement, PrecisionPoint
 from .geometry import (
     Circle,
     CubicBezier,
@@ -60,6 +60,7 @@ from .style import (
     STYLE_FOLD,
     STYLE_GRAINLINE,
     STYLE_HEM,
+    STYLE_PRECISION_POINT,
     STYLE_SEAM_ALLOWANCE,
     STYLE_STITCH,
     STYLE_WAISTBAND,
@@ -91,6 +92,7 @@ __all__ = [
     "INCH",
     # Pattern element
     "PatternElement",
+    "PrecisionPoint",
     # Dart
     "DartResult",
     "DartElements",
@@ -130,4 +132,5 @@ __all__ = [
     "STYLE_DEBUG_RED",
     "STYLE_DART_STITCH",
     "STYLE_DART_FOLD",
+    "STYLE_PRECISION_POINT",
 ]
