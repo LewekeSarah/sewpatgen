@@ -29,14 +29,16 @@ from sewpat import (
     STYLE_FOLD,
     STYLE_STITCH,
     Dart,
+    DartElements,
     Pattern,
+    PatternElement,
     PatternPart,
     Point,
     Segment,
     transfer_dart,
 )
 from sewpat.geometry import CubicBezier, intersect
-from sewpat.part import ConstructionGrid
+from sewpat.pattern import ConstructionGrid
 from sewpat.render import export_pattern_svg_mm
 from sewpat.style import (
     STYLE_CENTER_LINE,
@@ -154,22 +156,21 @@ def example_01_outer_explicit_depth() -> None:
     pattern, pts = _build_block("Beispiel 1 – Außennaht-Abnäher (explizite Tiefe)")
     part = PatternPart("Vorderteil")
     pattern.add_part(part)
-    _add_outline(part, pts)
+    segs = _add_outline(part, pts)
 
-    # Dart placed at t=0.35 along the side seam (at bust-line height, well
-    # above the info box that sits near the waist area)
-    side_seam = Segment(pts["shoulder_side"], pts["hem_side"])
-    dart = Dart.from_edge(
-        side_seam,
+    # Dart placed at t=0.35 along the side seam. The side-seam PatternElement
+    # is passed directly so DartElements.from_edge inherits its style.
+    factory = DartElements.from_edge(
+        segs["side"],
         position_t=0.35,
         width=22 * MM,
         depth=90 * MM,
         fold_direction="inward",
-        name="Taillennaht",
-        edge_style=_STITCH,
+        name="Taille",
+        stitch_style=_DART_STITCH,
+        fold_style=_DART_FOLD,
     )
-    result = part.add_dart(dart, notches=True, precision_tip=True,
-                           stitch_style=_DART_STITCH, fold_style=_DART_FOLD)
+    result = part.add_dart(factory.dart, notches=True, precision_tip=True)
 
     # Info box
     part.add_info_box(
@@ -204,25 +205,24 @@ def example_02_outer_reference_point() -> None:
     pattern, pts = _build_block("Beispiel 2 – Bustnaht-Abnäher (Referenzpunkt)")
     part = PatternPart("Vorderteil")
     pattern.add_part(part)
-    _add_outline(part, pts)
+    segs = _add_outline(part, pts)
 
     # Mark the bust point as a precision mark on the construction grid
     grid_part = pattern.parts[0]
     grid_part.add_precision_points(pts["bust_point"])
 
-    side_seam = Segment(pts["shoulder_side"], pts["hem_side"])
-    dart = Dart.from_edge(
-        side_seam,
+    factory = DartElements.from_edge(
+        segs["side"],
         position_t=0.38,         # at bust-line height
         width=28 * MM,
         reference_point=pts["bust_point"],
         tip_shortfall=25 * MM,   # stop 2.5 cm short of bust point
         fold_direction="inward",
         name="Bustnaht",
-        edge_style=_STITCH,
+        stitch_style=_DART_STITCH,
+        fold_style=_DART_FOLD,
     )
-    result = part.add_dart(dart, notches=True, precision_tip=True,
-                           stitch_style=_DART_STITCH, fold_style=_DART_FOLD)
+    result = part.add_dart(factory.dart, notches=True, precision_tip=True)
 
     # Label the bust point on the part too
     part.add_precision_points(pts["bust_point"])
@@ -260,21 +260,25 @@ def example_03_inner_dart_rhombus() -> None:
     pattern, pts = _build_block("Beispiel 3 – Innennaht-Abnäher (Raute)")
     part = PatternPart("Vorderteil")
     pattern.add_part(part)
-    _add_outline(part, pts)
+    segs = _add_outline(part, pts)
 
-    # Inner dart sits on the bust line, in the middle of the front panel
-    bust_line = Segment(pts["bust_cf"], pts["bust_side"])
-    dart = Dart.from_edge(
-        bust_line,
+    # Inner dart sits on the bust line, in the middle of the front panel.
+    # The bust line is not part of the outline, so we create a styled
+    # PatternElement for it explicitly and pass it to from_edge.
+    bust_line_elem = PatternElement(
+        Segment(pts["bust_cf"], pts["bust_side"]), style=_STITCH
+    )
+    factory = DartElements.from_edge(
+        bust_line_elem,
         position_t=0.5,
         width=24 * MM,
         depth=55 * MM,
         fold_direction="outward",
         name="Eingriff",
-        edge_style=_STITCH,
+        stitch_style=_DART_STITCH,
+        fold_style=_DART_FOLD,
     )
-    result = part.add_dart(dart, notches=True, precision_tip=True,
-                           stitch_style=_DART_STITCH, fold_style=_DART_FOLD)
+    result = part.add_dart(factory.dart, notches=True, precision_tip=True)
 
     part.add_info_box(
         header="Vorderteil",
@@ -309,19 +313,19 @@ def example_04_dart_split() -> None:
     pattern, pts = _build_block("Beispiel 4 – Abnäher aufteilen (Split)")
     part = PatternPart("Vorderteil")
     pattern.add_part(part)
-    _add_outline(part, pts)
+    segs = _add_outline(part, pts)
 
-    # Build the original (large) dart first — shown faint as reference
-    side_seam = Segment(pts["shoulder_side"], pts["hem_side"])
-    original = Dart.from_edge(
-        side_seam,
+    # Build the original (large) dart first — shown faint as reference.
+    # Pass the side-seam PatternElement so edge_style is propagated to sub-darts.
+    original_factory = DartElements.from_edge(
+        segs["side"],
         position_t=0.55,
         width=36 * MM,
         depth=65 * MM,
         fold_direction="inward",
         name="Original",
-        edge_style=_STITCH,
     )
+    original = original_factory.dart
 
     # Show the original dart outline very lightly for reference
     part.append(original.stitch_line_a, style=_REF_STYLE)
@@ -368,20 +372,20 @@ def example_05_dart_transfer() -> None:
     pattern, pts = _build_block("Beispiel 5 – Abnäher verschieben (Pivot)")
     part = PatternPart("Vorderteil")
     pattern.add_part(part)
-    _add_outline(part, pts)
+    segs = _add_outline(part, pts)
 
     # ── Original dart on the side seam ───────────────────────────────────────
-    side_seam = Segment(pts["shoulder_side"], pts["hem_side"])
-    original = Dart.from_edge(
-        side_seam,
+    # Pass the side-seam PatternElement so edge_style is inherited automatically.
+    original_factory = DartElements.from_edge(
+        segs["side"],
         position_t=0.38,
         width=26 * MM,
         reference_point=pts["bust_point"],
         tip_shortfall=20 * MM,
         fold_direction="inward",
         name="Seitennaht (Original)",
-        edge_style=_STITCH,
     )
+    original = original_factory.dart
 
     # Show original dart lightly as reference
     part.append(original.stitch_line_a, style=_REF_STYLE)
@@ -389,16 +393,13 @@ def example_05_dart_transfer() -> None:
     part.append(original.fold_line,     style=_REF_STYLE)
 
     # ── Transferred dart on the shoulder seam ────────────────────────────────
-    # transfer_dart propagates edge_style; we only update name and edge_style
-    # to reflect the new destination seam (shoulder, also _STITCH style).
-    shoulder_seam = Segment(pts["shoulder_cf"], pts["shoulder_side"])
+    # transfer_dart propagates edge_style from original automatically.
+    # We only need to update the name via a direct Dart() call.
     transferred = transfer_dart(
         original,
-        new_edge=shoulder_seam,
-        new_position_t=0.55,   # slightly toward the armhole
+        new_edge=segs["shoulder"].geometry,
+        new_position_t=0.55,
     )
-    # Give the transferred dart its own name; edge_style is already _STITCH
-    # (propagated from original). Build a new Dart only to update the name.
     transferred = Dart(
         leg_a=transferred.leg_a,
         leg_b=transferred.leg_b,
@@ -406,7 +407,6 @@ def example_05_dart_transfer() -> None:
         tip=transferred.tip,
         fold_direction=transferred.fold_direction,
         name="Schulternaht (Übertragen)",
-        edge_style=transferred.edge_style,   # propagated automatically
     )
     result = part.add_dart(transferred, notches=True, precision_tip=True,
                            stitch_style=_DART_STITCH, fold_style=_DART_FOLD)

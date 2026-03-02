@@ -23,7 +23,8 @@ from sewpat.geometry import (
     Triangle,
     seam_length,
 )
-from sewpat.part import Block, OverlayPart, Pattern, PatternElement, PatternPart
+from sewpat.element import PatternElement
+from sewpat.pattern import Block, OverlayPart, Pattern, PatternPart
 from sewpat.style import STYLE_GRAINLINE, StyleOptions
 from sewpat.units import CM, MM
 

@@ -15,12 +15,12 @@ from sewpat.geometry import (
     geom_end,
     geom_start,
 )
+from sewpat.element import PatternElement
 from sewpat.markers import ARROW_DEFS, SCISSOR_BLADE_OVERHANG
-from sewpat.part import (
+from sewpat.pattern import (
     Block,
     ConstructionGridPart,
     Pattern,
-    PatternElement,
     PatternPart,
 )
 from sewpat.style import (

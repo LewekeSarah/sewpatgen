@@ -4,10 +4,11 @@ import math
 
 import pytest
 
-from sewpat import CM, MM, Dart, DartResult, Point, Segment, transfer_dart
+from sewpat import CM, MM, Dart, DartElements, DartResult, Point, Segment, transfer_dart
 from sewpat.geometry import CubicBezier
-from sewpat.part import PatternElement, PatternPart
-from sewpat.style import STYLE_DART_FOLD, STYLE_DART_STITCH
+from sewpat.element import PatternElement
+from sewpat.pattern import PatternPart
+from sewpat.style import STYLE_DART_FOLD, STYLE_DART_STITCH, StyleOptions
 
 
 # ---------------------------------------------------------------------------
@@ -121,50 +122,74 @@ class TestDartSplit:
             d.split(1.0)
 
 
-class TestDartFromEdge:
+class TestDartElementsFromEdge:
+    def _edge(self, p1: Point, p2: Point, style: StyleOptions | None = None) -> PatternElement:
+        return PatternElement(Segment(p1, p2), style=style or StyleOptions())
+
     def test_from_edge_explicit_depth(self) -> None:
-        edge = Segment(Point(0.0, 0.0), Point(100.0, 0.0))
-        d = Dart.from_edge(edge, position_t=0.5, width=20.0, depth=50.0)
+        edge = self._edge(Point(0.0, 0.0), Point(100.0, 0.0))
+        factory = DartElements.from_edge(edge, position_t=0.5, width=20.0, depth=50.0)
+        d = factory.dart
         assert d.center.x == pytest.approx(50.0)
         assert d.center.y == pytest.approx(0.0)
         assert d.width == pytest.approx(20.0)
         assert d.depth == pytest.approx(50.0)
-        # Legs should be symmetric
         assert d.leg_a.x == pytest.approx(40.0)
         assert d.leg_b.x == pytest.approx(60.0)
 
     def test_from_edge_reference_point(self) -> None:
-        edge = Segment(Point(0.0, 0.0), Point(100.0, 0.0))
+        edge = self._edge(Point(0.0, 0.0), Point(100.0, 0.0))
         bust_point = Point(50.0, 100.0)
-        d = Dart.from_edge(edge, position_t=0.5, width=20.0, reference_point=bust_point, tip_shortfall=20.0)
-        # Tip should be 20 mm short of bust_point along the direction center→bust
-        # distance from center (50,0) to bust (50,100) = 100 mm; tip at 80 mm
+        factory = DartElements.from_edge(
+            edge, position_t=0.5, width=20.0,
+            reference_point=bust_point, tip_shortfall=20.0,
+        )
+        d = factory.dart
         assert d.tip.y == pytest.approx(80.0)
         assert d.depth == pytest.approx(80.0)
 
+    def test_from_edge_inherits_style(self) -> None:
+        from sewpat.style import STYLE_CUT
+        edge = PatternElement(Segment(Point(0.0, 0.0), Point(100.0, 0.0)), style=STYLE_CUT)
+        factory = DartElements.from_edge(edge, position_t=0.5, width=20.0, depth=50.0)
+        assert factory.dart.edge_style is STYLE_CUT
+
     def test_from_edge_both_params_raises(self) -> None:
-        edge = Segment(Point(0.0, 0.0), Point(100.0, 0.0))
+        edge = self._edge(Point(0.0, 0.0), Point(100.0, 0.0))
         with pytest.raises(ValueError, match="exactly one"):
-            Dart.from_edge(edge, position_t=0.5, width=20.0, depth=50.0, reference_point=Point(50, 50))
+            DartElements.from_edge(edge, position_t=0.5, width=20.0, depth=50.0, reference_point=Point(50, 50))
 
     def test_from_edge_no_params_raises(self) -> None:
-        edge = Segment(Point(0.0, 0.0), Point(100.0, 0.0))
+        edge = self._edge(Point(0.0, 0.0), Point(100.0, 0.0))
         with pytest.raises(ValueError, match="exactly one"):
-            Dart.from_edge(edge, position_t=0.5, width=20.0)
+            DartElements.from_edge(edge, position_t=0.5, width=20.0)
 
     def test_from_edge_out_of_range_t(self) -> None:
-        edge = Segment(Point(0.0, 0.0), Point(100.0, 0.0))
+        edge = self._edge(Point(0.0, 0.0), Point(100.0, 0.0))
         with pytest.raises(ValueError, match="position_t"):
-            Dart.from_edge(edge, position_t=1.5, width=20.0, depth=50.0)
+            DartElements.from_edge(edge, position_t=1.5, width=20.0, depth=50.0)
 
     def test_from_edge_bezier(self) -> None:
-        # A straight-ish Bézier for a simple sanity check
         p0, p3 = Point(0.0, 0.0), Point(100.0, 0.0)
         bez = CubicBezier(p0, Point(33.3, 0.0), Point(66.6, 0.0), p3)
-        d = Dart.from_edge(bez, position_t=0.5, width=10.0, depth=30.0)
-        # Center should be near the midpoint
+        edge = PatternElement(bez)
+        factory = DartElements.from_edge(edge, position_t=0.5, width=10.0, depth=30.0)
+        d = factory.dart
         assert d.center.x == pytest.approx(50.0, abs=1.0)
         assert d.depth == pytest.approx(30.0, abs=1.0)
+
+    def test_from_edge_rejects_non_pattern_element(self) -> None:
+        with pytest.raises(TypeError, match="PatternElement"):
+            DartElements.from_edge(  # type: ignore[arg-type]
+                Segment(Point(0, 0), Point(100, 0)),
+                position_t=0.5, width=20.0, depth=50.0,
+            )
+
+    def test_from_edge_rejects_bad_geometry(self) -> None:
+        from sewpat.geometry import Circle
+        edge = PatternElement(Circle(Point(0, 0), radius=10.0))
+        with pytest.raises(ValueError, match="Segment or CubicBezier"):
+            DartElements.from_edge(edge, position_t=0.5, width=20.0, depth=50.0)
 
 
 # ---------------------------------------------------------------------------
@@ -209,23 +234,25 @@ class TestAddDartOuter:
             assert ce.style.corner_join == "miter"
 
     def test_cut_elements_based_on_style_cut(self) -> None:
-        """Cut segments inherit edge_style stored on the dart."""
+        """Cut segments inherit edge_style from dart.edge_style (set via DartElements.from_edge)."""
         from sewpat.style import STYLE_CUT, Marker
         part = _square_part()
-        d = Dart(
-            leg_a=Point(40, 0), leg_b=Point(60, 0),
-            center=Point(50, 0), tip=Point(50, 80),
-            fold_direction="inward", name="Bustnaht",
-            edge_style=STYLE_CUT,
+        edge = PatternElement(
+            Segment(Point(40, 0), Point(60, 0)),
+            style=STYLE_CUT,
         )
-        result = part.add_dart(d, notches=False, precision_tip=False)
+        factory = DartElements.from_edge(
+            edge, position_t=0.5, width=20.0, depth=80.0,
+            fold_direction="inward", name="Bustnaht",
+        )
+        result = part.add_dart(factory.dart, notches=False, precision_tip=False)
         for ce in result.cut_elements:
             assert ce.style.marker_end == Marker.SCISSOR
 
     def test_cut_elements_default_no_edge_style(self) -> None:
         """Without edge_style, cut segments use plain StyleOptions as base."""
         part = _square_part()
-        d = _simple_dart()  # edge_style=None by default
+        d = _simple_dart()
         result = part.add_dart(d, notches=False, precision_tip=False)
         for ce in result.cut_elements:
             assert ce.style.marker_end is None

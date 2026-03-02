@@ -7,15 +7,18 @@ Modules:
     geometry: Contains geometric primitives like Point, Line, Ray, Circle,
               Segment, Rect, and CubicBezier.
     style:    Contains StyleOptions and stroke-width constants.
-    part:     Contains PatternPart.
+    element:  Contains PatternElement.
+    dart:     Contains DartResult and DartElements.
+    pattern:  Contains PatternPart and related classes.
     render:   Contains the SVG export function.
 """
 
+from .dart import DartElements, DartResult
+from .element import PatternElement
 from .geometry import (
     Circle,
     CubicBezier,
     Dart,
-    DartResult,
     Line,
     Point,
     Ray,
@@ -37,13 +40,12 @@ from .measurements import (
     make_measurements_trouser,
 )
 from .pages import DinA0, DinA1, DinA2, DinA4
-from .part import (
+from .pattern import (
     Block,
     ConstructionGrid,
     ConstructionGridPart,
     OverlayPart,
     Pattern,
-    PatternElement,
     PatternPart,
 )
 from .style import (
@@ -77,7 +79,6 @@ __all__ = [
     "Triangle",
     "CubicBezier",
     "Dart",
-    "DartResult",
     # Geometry helpers
     "edge_tangent",
     "intersect",
@@ -88,9 +89,13 @@ __all__ = [
     "MM",
     "CM",
     "INCH",
+    # Pattern element
+    "PatternElement",
+    # Dart
+    "DartResult",
+    "DartElements",
     # Pattern
     "PatternPart",
-    "PatternElement",
     "Pattern",
     "ConstructionGrid",
     "ConstructionGridPart",

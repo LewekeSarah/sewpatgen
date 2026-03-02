@@ -16,7 +16,7 @@ from sewpat.measurements import (
     make_blouse_measurements,
 )
 from sewpat.pages import DinA0
-from sewpat.part import Pattern, PatternPart
+from sewpat.pattern import Pattern, PatternPart
 from sewpat.person import BalanceAdjustments, Person
 from sewpat.render import export_pattern_svg_mm
 from sewpat.units import CM

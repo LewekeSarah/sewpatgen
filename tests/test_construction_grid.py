@@ -13,11 +13,11 @@ import unittest
 from pathlib import Path
 
 from sewpat.geometry import Point, Segment, Triangle
-from sewpat.part import (
+from sewpat.element import PatternElement
+from sewpat.pattern import (
     ConstructionGrid,
     ConstructionGridPart,
     Pattern,
-    PatternElement,
     PatternPart,
 )
 from sewpat.render import _build_svg, export_pattern_svg_mm
