@@ -1761,7 +1761,10 @@ class Dart:
     def roof(self) -> Point:
         """Abnäherdach peak — the corrected seam point above the mouth centre.
 
-        Height h = (width/2)² / depth, displaced outward along the fold line.
+        Displaces the mouth centre outward (away from the tip) along the fold
+        line by ``h = tan(intake_angle) × (width/2)``.  This ensures the
+        folded dart lies flat: when the two stitch legs are brought together
+        the roof point becomes a smooth continuation of the seam edge.
         """
         roof_height = float(math.tan(self.intake_angle) * (self.width / 2))
         return self.center.move_towards(
@@ -1812,12 +1815,32 @@ class Dart:
         """Full intake angle in radians (leg_a–tip–leg_b)."""
         return float(2 * math.atan(self.width / (2 * self.depth)))
 
+    @property
+    def intake_angle_deg(self) -> float:
+        """Full intake angle in degrees (leg_a–tip–leg_b).
+
+        Convenience wrapper around :attr:`intake_angle` for human-readable
+        output; sewers typically think in degrees rather than radians.
+        """
+        return math.degrees(self.intake_angle)
+
     # ------------------------------------------------------------------
     # Transformations
     # ------------------------------------------------------------------
 
     def translate(self, dx: float, dy: float) -> "Dart":
         """Return a translated copy."""
+        def _translate_curve(c: "Segment | CubicBezier | None") -> "Segment | CubicBezier | None":
+            if c is None:
+                return None
+            if isinstance(c, Segment):
+                return Segment(c.p1.translate(dx, dy), c.p2.translate(dx, dy))
+            # CubicBezier — attributes are p0, p1, p2, p3
+            return CubicBezier(
+                c.p0.translate(dx, dy), c.p1.translate(dx, dy),
+                c.p2.translate(dx, dy), c.p3.translate(dx, dy),
+            )
+
         return Dart(
             leg_a=self.leg_a.translate(dx, dy),
             leg_b=self.leg_b.translate(dx, dy),
@@ -1826,6 +1849,8 @@ class Dart:
             dart_type=self.dart_type,
             name=self.name,
             second_tip=self.second_tip.translate(dx, dy) if self.second_tip else None,
+            stitch_curve_a=_translate_curve(self.stitch_curve_a),
+            stitch_curve_b=_translate_curve(self.stitch_curve_b),
         )
 
     def rotate(self, pivot: Point, angle_rad: float) -> "Dart":
@@ -1833,6 +1858,17 @@ class Dart:
 
         Preserves intake angle and depth — used for pivot-method dart transfer.
         """
+        def _rotate_curve(c: "Segment | CubicBezier | None") -> "Segment | CubicBezier | None":
+            if c is None:
+                return None
+            if isinstance(c, Segment):
+                return Segment(c.p1.rotate(pivot, angle_rad), c.p2.rotate(pivot, angle_rad))
+            # CubicBezier — attributes are p0, p1, p2, p3
+            return CubicBezier(
+                c.p0.rotate(pivot, angle_rad), c.p1.rotate(pivot, angle_rad),
+                c.p2.rotate(pivot, angle_rad), c.p3.rotate(pivot, angle_rad),
+            )
+
         return Dart(
             leg_a=self.leg_a.rotate(pivot, angle_rad),
             leg_b=self.leg_b.rotate(pivot, angle_rad),
@@ -1841,15 +1877,24 @@ class Dart:
             dart_type=self.dart_type,
             name=self.name,
             second_tip=self.second_tip.rotate(pivot, angle_rad) if self.second_tip else None,
+            stitch_curve_a=_rotate_curve(self.stitch_curve_a),
+            stitch_curve_b=_rotate_curve(self.stitch_curve_b),
         )
 
     def split(self, ratio: float = 0.5) -> "tuple[Dart, Dart]":
         """Split into two sub-darts sharing the same tip.
 
-        The intake angle is divided *ratio* : (1 − *ratio*).
+        The intake angle is divided *ratio* : (1 − *ratio*).  The
+        ``dart_type`` of both sub-darts matches the original.  When the
+        parent dart has a name, the sub-darts are named
+        ``"<name> A"`` and ``"<name> B"`` respectively; otherwise ``None``.
 
         Args:
             ratio: Fraction of the intake angle in the first sub-dart ∈ (0, 1).
+
+        Returns:
+            ``(dart_a, dart_b)`` — dart_a covers *ratio* of the total intake
+            angle, dart_b covers the remaining ``1 − ratio``.
         """
         if not (0.0 < ratio < 1.0):
             raise ValueError(f"ratio must be in (0, 1), got {ratio}")
@@ -1877,6 +1922,35 @@ class Dart:
             f"Dart(name={self.name!r}, leg_a={self.leg_a}, leg_b={self.leg_b}, "
             f"center={self.center}, tip={self.tip}, dart_type={self.dart_type!r})"
         )
+
+    def __eq__(self, other: object) -> bool:
+        """Value-based equality on all five defining fields plus dart_type and name.
+
+        Two ``Dart`` instances are equal when their geometry (leg_a, leg_b,
+        center, tip, second_tip) and metadata (dart_type, name) compare equal.
+        ``stitch_curve_a/b`` and the internal ``_edge_element`` are intentionally
+        excluded — they are rendering hints, not part of the dart's mathematical
+        identity.
+        """
+        if not isinstance(other, Dart):
+            return NotImplemented
+        return (
+            self.leg_a == other.leg_a
+            and self.leg_b == other.leg_b
+            and self.center == other.center
+            and self.tip == other.tip
+            and self.dart_type == other.dart_type
+            and self.name == other.name
+            and self.second_tip == other.second_tip
+        )
+
+    def __hash__(self) -> int:
+        """Hash based on tip coordinates, width and depth for use in sets/dicts."""
+        return hash((
+            round(self.tip.x, 6), round(self.tip.y, 6),
+            round(self.width, 6), round(self.depth, 6),
+            self.dart_type, self.name,
+        ))
 
 
 def _unwrap_edge(

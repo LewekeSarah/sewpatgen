@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Dart (Abnäher) Examples — sewpat library showcase.
 
-This script generates five SVG files, each demonstrating a different aspect
+This script generates six SVG files, each demonstrating a different aspect
 of dart support in sewpat:
 
     01_outer_dart_explicit_depth.svg   — Outer seam dart, depth given directly
@@ -10,7 +10,9 @@ of dart support in sewpat:
     03_inner_dart_rhombus.svg          — Inner/reverse dart, rhombus rendering
     04_dart_split.svg                  — One dart split into two sub-darts
     05_dart_transfer.svg               — Dart transferred to a new edge via the
-                                         pivot method
+                                         pivot method (Schwenkverfahren)
+    06_curved_dart.svg                 — Bust dart with curved CubicBezier stitch
+                                         legs (curved-seam / princess-style dart)
 
 Each file uses the same simple rectangular bodice-front block with a
 construction grid so the geometry is easy to follow.
@@ -38,6 +40,7 @@ from sewpat import (
     Segment,
 )
 from sewpat.geometry import CubicBezier, intersect
+import numpy as np
 from sewpat.pattern import ConstructionGrid
 from sewpat.render import export_pattern_svg_mm
 from sewpat.style import (
@@ -256,7 +259,7 @@ def example_04_dart_split() -> None:
     segs = _add_outline(part, pts)
 
     original = Dart.from_edge_at_t(
-        segs["side"], t=0.55, width=36 * MM, depth=65 * MM,
+        segs["side"], t=0.30, width=36 * MM, depth=65 * MM,
         dart_type=DartType.TRIANGLE, name="Original",
     )
 
@@ -282,6 +285,179 @@ def example_04_dart_split() -> None:
                           width_mm=_A4_W, height_mm=_A4_H)
     print("✓  04_dart_split.svg")
 
+
+# ---------------------------------------------------------------------------
+# Example 5 — Moving a dart upward along the seam (Dart.translate)
+# ---------------------------------------------------------------------------
+
+def example_05_dart_transfer() -> None:
+    """Reposition a side-seam dart 20 mm upward using Dart.translate().
+
+    In practice a fitter may need to slide a dart along a seam edge to sit
+    in a better position — for example to move a side-seam waist dart closer
+    to the bust level, or simply to clear a pocket.  Because a dart is an
+    immutable value object, ``Dart.translate(dx, dy)`` returns a new dart with
+    all four key points shifted by the given offset while the shape and intake
+    angle remain exactly the same.
+
+    This example places the original dart at t=0.45 on the side seam
+    (just below bust level) and translates it 20 mm upward (dy = -20 mm in
+    SVG coordinates where y increases downward).  Both darts sit on the side
+    seam so the result makes immediate sense to a sewer.  Positioning both
+    darts in the upper third of the piece keeps them clear of the info box.
+    """
+    pattern, pts = _build_block("Beispiel 5 – Abnäher verschieben (translate, 20 mm nach oben)")
+    part = PatternPart("Vorderteil")
+    pattern.add_part(part)
+    segs = _add_outline(part, pts)
+
+    # ── Original dart just below bust level on the side seam ───────────────
+    original = Dart.from_edge_at_t(
+        segs["side"], t=0.45,
+        width=24 * MM, depth=55 * MM,
+        dart_type=DartType.TRIANGLE, name="Original",
+    )
+
+    # Show original position as a faint reference
+    part.append(original.stitch_line_a, style=_REF_STYLE)
+    part.append(original.stitch_line_b, style=_REF_STYLE)
+    part.append(original.fold_line,     style=_REF_STYLE)
+
+    # ── Translate: slide the dart 20 mm upward (negative y in SVG coords) ──
+    moved = original.translate(dx=0, dy=-20 * MM)
+    moved = Dart(
+        leg_a=moved.leg_a, leg_b=moved.leg_b,
+        center=moved.center, tip=moved.tip,
+        dart_type=DartType.TRIANGLE,
+        name="Verschoben (+20 mm)",
+    )
+
+    part.add_dart(moved, stitch_style=_DART_STITCH, fold_style=_DART_FOLD,
+                  notches=True, precision_tip=True)
+
+    part.add_info_box(
+        header="Vorderteil",
+        notes=[
+            "Abnäher verschoben: 20 mm nach oben",
+            f"Breite: {moved.width:.0f} mm  |  Tiefe: {moved.depth:.0f} mm",
+            f"Einzug: {moved.intake_angle_deg:.1f}°  (unverändert)",
+            "(grau = ursprüngliche Position)",
+        ],
+    )
+    part.add_grainline(ANCHOR + Point(10 * MM, 10 * MM),
+                       ANCHOR + Point(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
+    export_pattern_svg_mm(pattern, filename=str(OUT_DIR / "05_dart_transfer.svg"),
+                          width_mm=_A4_W, height_mm=_A4_H)
+    print("✓  05_dart_transfer.svg")
+
+
+# ---------------------------------------------------------------------------
+# Example 6 — Bust dart with curved CubicBezier stitch legs
+# ---------------------------------------------------------------------------
+
+def example_06_curved_dart() -> None:
+    """Bust dart with curved stitch legs — the classic Schnittkurvenverfahren.
+
+    Real garment patterns often use gently curved stitch lines instead of
+    straight ones to improve the three-dimensional fit around the bust.
+    In sewpat this is achieved by assigning ``CubicBezier`` objects to
+    ``stitch_curve_a`` and ``stitch_curve_b`` on the ``Dart``.
+
+    Construction recipe:
+    1.  Build a standard straight dart with ``Dart.from_edge_free_tip()``.
+    2.  Offset each stitch leg slightly inward at its midpoint to create
+        a concave curve that pulls the seam toward the bust apex.
+    3.  Construct two ``CubicBezier`` objects (tip → leg) whose control
+        points lie on the inward-offset mid-points.
+    4.  Assign them as ``stitch_curve_a / b`` via the ``Dart`` constructor.
+    5.  Call ``part.add_dart()`` as usual — it automatically uses the
+        curved geometry for the stitch elements.
+
+    The straight reference lines are shown in light grey so the curvature
+    is easy to see.
+    """
+    pattern, pts = _build_block("Beispiel 6 – Bustnaht-Abnäher (geschwungene Stichlinien)")
+    part = PatternPart("Vorderteil")
+    pattern.add_part(part)
+    segs = _add_outline(part, pts)
+
+    # ── 1. Straight base dart aimed at the bust point ──────────────────────
+    straight = Dart.from_edge_free_tip(
+        segs["side"], t=0.40, width=26 * MM,
+        reference_point=pts["bust_point"], tip_shortfall=20 * MM,
+        dart_type=DartType.TRIANGLE, name="Bustnaht",
+    )
+
+    # Show the straight stitch lines as a faint reference
+    part.append(straight.stitch_line_a, style=_REF_STYLE)
+    part.append(straight.stitch_line_b, style=_REF_STYLE)
+    part.append(straight.fold_line,     style=_REF_STYLE)
+
+    # ── 2. Build curved stitch legs via CubicBezier ─────────────────────────
+    # Each leg runs tip → leg (consistent with the straight-leg direction).
+    # We pull the control points inward (toward the fold axis) to create a
+    # gentle concave curve that hugs the bust contour.
+
+    tip    = straight.tip
+    leg_a  = straight.leg_a
+    leg_b  = straight.leg_b
+    fold_dir = straight.fold_line.unit_direction   # unit vector center → tip
+    # Inward normal (toward the dart interior) — perpendicular to fold,
+    # pointing from leg_a side toward leg_b side.
+    inward = np.array([-fold_dir[1], fold_dir[0]])  # rotate 90° CCW
+
+    # Mid-point of each straight leg
+    mid_a = Point((tip.x + leg_a.x) / 2, (tip.y + leg_a.y) / 2)
+    mid_b = Point((tip.x + leg_b.x) / 2, (tip.y + leg_b.y) / 2)
+
+    # Offset the mid-points inward by 8 mm to create a clearly visible curve
+    CURVE_OFFSET = 8.0
+    mid_a_curved = Point(mid_a.x + inward[0] * CURVE_OFFSET,
+                         mid_a.y + inward[1] * CURVE_OFFSET)
+    mid_b_curved = Point(mid_b.x - inward[0] * CURVE_OFFSET,
+                         mid_b.y - inward[1] * CURVE_OFFSET)
+
+    # Cubic Bézier: tip → cp1 → cp2 → leg
+    # To make the curve pass near the offset midpoint we place both control
+    # points AT the offset midpoint (symmetric tent).  This gives a parabola-
+    # like arc that visibly bows inward by ~3/4 of CURVE_OFFSET at its peak.
+    curve_a = CubicBezier(tip, mid_a_curved, mid_a_curved, leg_a)
+    curve_b = CubicBezier(tip, mid_b_curved, mid_b_curved, leg_b)
+
+    # ── 3. Build the curved dart ────────────────────────────────────────────
+    curved = Dart(
+        leg_a=leg_a, leg_b=leg_b,
+        center=straight.center, tip=tip,
+        dart_type=DartType.TRIANGLE, name="Bustnaht (kurvig)",
+        stitch_curve_a=curve_a,
+        stitch_curve_b=curve_b,
+        _edge_element=straight._edge_element,
+    )
+
+    part.add_dart(curved, stitch_style=_DART_STITCH, fold_style=_DART_FOLD,
+                  precision_style=_PRECISION, notches=True, precision_tip=True)
+
+    # Mark the bust point
+    part.add_precision_points(pts["bust_point"])
+    part.append(Segment(straight.center, pts["bust_point"]), style=_AUX)
+
+    part.add_info_box(
+        header="Vorderteil",
+        notes=[
+            "Bustnaht — geschwungene Stichlinien",
+            f"Einzug: {curved.intake_angle_deg:.1f}°",
+            f"Tiefe: {curved.depth:.0f} mm",
+            "Kurvenversatz: 8 mm inward",
+            "(grau = gerade Linien als Referenz)",
+        ],
+    )
+    part.add_grainline(ANCHOR + Point(10 * MM, 10 * MM),
+                       ANCHOR + Point(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
+    export_pattern_svg_mm(pattern, filename=str(OUT_DIR / "06_curved_dart.svg"),
+                          width_mm=_A4_W, height_mm=_A4_H)
+    print("✓  06_curved_dart.svg")
+
+
 # ---------------------------------------------------------------------------
 # README — embed SVGs as inline base64 data URIs
 # ---------------------------------------------------------------------------
@@ -302,6 +478,8 @@ def embed_svgs_in_readme() -> None:
         "02_outer_dart_reference_point.svg",
         "03_inner_dart_rhombus.svg",
         "04_dart_split.svg",
+        "05_dart_transfer.svg",
+        "06_curved_dart.svg",
     ]
 
     readme = OUT_DIR / "README.md"
@@ -342,5 +520,7 @@ if __name__ == "__main__":
     example_02_outer_reference_point()
     example_03_inner_dart_rhombus()
     example_04_dart_split()
+    example_05_dart_transfer()
+    example_06_curved_dart()
     print(f"\nAll SVGs written to: {OUT_DIR.resolve()}\n")
     embed_svgs_in_readme()

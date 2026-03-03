@@ -72,6 +72,16 @@ class DartResult:
     def __repr__(self) -> str:
         return f"DartResult(dart={self.dart!r}, elements={len(self.elements)})"
 
+    def __iter__(self):
+        """Iterate as ``(dart, *elements)`` to allow unpacking.
+
+        Example::
+
+            dart, *elems = part.add_dart(my_dart)
+        """
+        yield self.dart
+        yield from self.elements
+
 
 class PatternPart:
     """A collection of pattern elements forming one pattern piece."""

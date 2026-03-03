@@ -99,6 +99,76 @@ class TestDartGeometry:
                  dart_type="rhombus", second_tip=explicit)
         assert d.effective_second_tip is explicit
 
+    def test_intake_angle_deg(self) -> None:
+        d = _simple_dart()
+        assert d.intake_angle_deg == pytest.approx(math.degrees(d.intake_angle), rel=1e-9)
+
+    def test_intake_angle_deg_45(self) -> None:
+        """A dart with width == 2*depth has a 90° total intake angle."""
+        d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 10))
+        assert d.intake_angle_deg == pytest.approx(2 * math.degrees(math.atan(1.0)), rel=1e-6)
+
+    def test_roof_displaced_outward(self) -> None:
+        """roof must be beyond center (away from tip) along the fold direction."""
+        d = _simple_dart()
+        # center is at y=0, tip at y=80 → outward means y < 0
+        assert d.roof.y < d.center.y
+        # height = tan(intake_angle) * (width/2)
+        expected_h = math.tan(d.intake_angle) * (d.width / 2)
+        assert d.center.distance_to(d.roof) == pytest.approx(expected_h, rel=1e-4)
+
+    def test_translate_preserves_stitch_curves(self) -> None:
+        d = _simple_dart()
+        curve_a = Segment(d.tip, d.leg_a)
+        curve_b = Segment(d.tip, d.leg_b)
+        d2 = Dart(d.leg_a, d.leg_b, d.center, d.tip,
+                  stitch_curve_a=curve_a, stitch_curve_b=curve_b)
+        dt = d2.translate(5.0, 10.0)
+        assert dt.stitch_curve_a is not None
+        assert dt.stitch_curve_b is not None
+        assert dt.stitch_curve_a.p1.x == pytest.approx(d.tip.x + 5.0)
+        assert dt.stitch_curve_b.p2.x == pytest.approx(d.leg_b.x + 5.0)
+
+    def test_rotate_preserves_stitch_curves(self) -> None:
+        d = _simple_dart()
+        curve_a = Segment(d.tip, d.leg_a)
+        curve_b = Segment(d.tip, d.leg_b)
+        d2 = Dart(d.leg_a, d.leg_b, d.center, d.tip,
+                  stitch_curve_a=curve_a, stitch_curve_b=curve_b)
+        dr = d2.rotate(d.tip, math.pi / 4)
+        assert dr.stitch_curve_a is not None
+        assert dr.stitch_curve_b is not None
+        # After rotation, curves must have been transformed
+        assert dr.stitch_curve_a.p1.x != pytest.approx(d.tip.x)
+
+    def test_eq_same_dart(self) -> None:
+        d1 = _simple_dart()
+        d2 = _simple_dart()
+        assert d1 == d2
+
+    def test_eq_different_tip(self) -> None:
+        d1 = _simple_dart()
+        d2 = Dart(d1.leg_a, d1.leg_b, d1.center, Point(50.0, 90.0), name="Bustnaht")
+        assert d1 != d2
+
+    def test_eq_different_name(self) -> None:
+        d1 = _simple_dart()
+        d2 = Dart(d1.leg_a, d1.leg_b, d1.center, d1.tip, name="AndererName")
+        assert d1 != d2
+
+    def test_eq_non_dart(self) -> None:
+        assert _simple_dart().__eq__("not a dart") is NotImplemented
+
+    def test_hash_equal_darts_same_hash(self) -> None:
+        d1 = _simple_dart()
+        d2 = _simple_dart()
+        assert hash(d1) == hash(d2)
+
+    def test_dart_in_set(self) -> None:
+        d1 = _simple_dart()
+        d2 = _simple_dart()
+        assert len({d1, d2}) == 1
+
 
 class TestDartSplit:
     def test_split_equal(self) -> None:
@@ -119,6 +189,25 @@ class TestDartSplit:
             d.split(0.0)
         with pytest.raises(ValueError):
             d.split(1.0)
+
+    def test_split_preserves_dart_type_rhombus(self) -> None:
+        d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                 dart_type=DartType.RHOMBUS, name="Raute")
+        a, b = d.split(0.5)
+        assert a.dart_type is DartType.RHOMBUS
+        assert b.dart_type is DartType.RHOMBUS
+
+    def test_split_named_suffixes(self) -> None:
+        d = _simple_dart()  # name="Bustnaht"
+        a, b = d.split(0.5)
+        assert a.name == "Bustnaht A"
+        assert b.name == "Bustnaht B"
+
+    def test_split_unnamed_no_suffix(self) -> None:
+        d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80))
+        a, b = d.split(0.5)
+        assert a.name is None
+        assert b.name is None
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +290,12 @@ class TestDartFactories:
                                     reference_point=bust, tip_shortfall=20.0)
         assert d.tip.y == pytest.approx(80.0)
         assert d.depth == pytest.approx(80.0)
+
+    def test_from_edge_free_tip_invalid_t(self) -> None:
+        edge = PatternElement(Segment(Point(0, 0), Point(100, 0)))
+        with pytest.raises(ValueError, match="t must be"):
+            Dart.from_edge_free_tip(edge, t=-0.1, width=20.0,
+                                    reference_point=Point(50, 100))
 
     def test_from_edge_at_t_bezier(self) -> None:
         bez = CubicBezier(Point(0, 0), Point(33.3, 0), Point(66.6, 0), Point(100, 0))
@@ -359,3 +454,68 @@ class TestDartResult:
         baseline = len(part.elements)
         result = part.add_dart(_simple_dart(), notches=True, precision_tip=True)
         assert all(e in part.elements for e in result.elements)
+
+    def test_iter_unpacking(self) -> None:
+        """DartResult must support (dart, *elems) unpacking."""
+        part = _square_part()
+        result = part.add_dart(_simple_dart(), notches=False, precision_tip=False)
+        dart, *elems = result
+        from sewpat import Dart as _Dart
+        assert isinstance(dart, _Dart)
+        assert len(elems) == len(result.elements)
+
+    def test_iter_dart_first(self) -> None:
+        part = _square_part()
+        result = part.add_dart(_simple_dart(), notches=False, precision_tip=False)
+        items = list(result)
+        assert items[0] is result.dart
+
+
+class TestAddDartCurved:
+    """add_dart() must use stitch_curve_a/b geometry when set."""
+
+    def test_curved_stitch_elements_are_not_segments(self) -> None:
+        from sewpat.geometry import CubicBezier as _CB
+        d = _simple_dart()
+        # Replace straight legs with explicit CubicBezier curves
+        cp1a = Point(50, 60)
+        cp2a = Point(43, 20)
+        curve_a = _CB(d.tip, cp1a, cp2a, d.leg_a)
+        cp1b = Point(50, 60)
+        cp2b = Point(57, 20)
+        curve_b = _CB(d.tip, cp1b, cp2b, d.leg_b)
+        d_curved = Dart(d.leg_a, d.leg_b, d.center, d.tip,
+                        stitch_curve_a=curve_a, stitch_curve_b=curve_b)
+        part = _square_part()
+        result = part.add_dart(d_curved, notches=False, precision_tip=False)
+        stitch_geoms = [e.geometry for e in result.elements if e.role == "dart_stitch"]
+        assert len(stitch_geoms) == 2
+        assert all(isinstance(g, _CB) for g in stitch_geoms)
+
+
+class TestDartSeamAllowance:
+    """Dart stitch / fold lines must carry seam_allowance=0 so they are
+    never offset during add_seam_allowance()."""
+
+    def test_dart_stitch_style_no_seam_allowance(self) -> None:
+        assert STYLE_DART_STITCH.seam_allowance == 0.0
+
+    def test_dart_fold_style_no_seam_allowance(self) -> None:
+        assert STYLE_DART_FOLD.seam_allowance is None or STYLE_DART_FOLD.seam_allowance == 0.0
+
+
+class TestAddDartRhombusPrecisionTip:
+    """Rhombus darts with precision_tip=True must mark both apices."""
+
+    def test_two_tip_marks_for_rhombus(self) -> None:
+        d = Dart(
+            leg_a=Point(40, 0), leg_b=Point(60, 0),
+            center=Point(50, 0), tip=Point(50, 80),
+            dart_type=DartType.RHOMBUS, name="Raute",
+        )
+        part = _square_part()
+        result = part.add_dart(d, notches=False, precision_tip=True)
+        tip_elems = [e for e in result.elements if e.role == "dart_tip"]
+        # There must be at least two tip markers (one per apex)
+        assert len(tip_elems) >= 2
+
