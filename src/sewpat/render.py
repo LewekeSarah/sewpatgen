@@ -194,10 +194,19 @@ def _render_segment(
 
 
 def _render_circle(element: Circle, style_dict: dict[str, Any]) -> list[str]:
-    """Return SVG elements for a Circle."""
+    """Return SVG elements for a Circle.
+
+    The stroke is painted on the inside of the radius so the outer edge of the
+    visible stroke coincides exactly with the declared radius.  This mirrors
+    the ``stroke-alignment: inside`` behaviour used by ``_render_rect``.
+    """
     attrs = _common_stroke_attrs(style_dict)
+    cx, cy, r = element.center.x, element.center.y, element.radius
+    # Unique clip id derived from the circle's geometry.
+    clip_id = f"cc_{int(round(cx * 100))}_{int(round(cy * 100))}_{int(round(r * 100))}"
     return [
-        f'<circle cx="{element.center.x}" cy="{element.center.y}" r="{element.radius}mm" {attrs} />'
+        f'<clipPath id="{clip_id}"><circle cx="{cx}" cy="{cy}" r="{r}" /></clipPath>',
+        f'<circle cx="{cx}" cy="{cy}" r="{r}" clip-path="url(#{clip_id})" {attrs} />',
     ]
 
 

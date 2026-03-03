@@ -3,12 +3,12 @@
 
 from pathlib import Path
 
-from sewpat import PatternElement, STYLE_STITCH, STYLE_DEBUG_RED, CubicBezier, STYLE_DEBUG_RED
+from sewpat import PatternElement, STYLE_STITCH, STYLE_DEBUG_RED, CubicBezier, STYLE_DART_FOLD
 from sewpat.geometry import (
     Circle,
+    Dart,
     Point,
     Segment,
-    Ray,
     intersect,
 )
 from sewpat.grids import TopGrid
@@ -94,8 +94,8 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     pt13 = intersect(grid.sleeve_front, grid.chest)[0]
     pt14 = intersect(grid.center_front, grid.chest)[0]
     pt15 = intersect(grid.bust_point, grid.chest)[0]
-    pt16 = intersect(grid.sleeve_back, grid.shoulder)[0]
-    pt17 = intersect(grid.shoulder, grid.neck)[0]
+    pt16 = intersect(grid.sleeve_back, grid.shoulder_back)[0]
+    pt17 = intersect(grid.shoulder_back, grid.neck)[0]
     pt18 = pt16.translate(0, 1.5 * CM) # TODO don't hard-code
 
     pt_sHlP = pt17.translate(0, - 2 * CM) # TODO don't hard-code
@@ -103,20 +103,22 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     pt_hÄP = Segment(pt18, pt10).point_at_t(0.25).translate(1.5 * CM, 0) # TODO don't hard-code
 
     pt19 = intersect(grid.bust_point, grid.waist)[0]
-    pt20 = pt19.translate(0, - meas.VL) # TODO check VL vs VL2
+    pt20 = intersect(grid.shoulder_front, grid.bust_point)[0]
     pt_BrP = pt20.translate(0, meas.BrT) # TODO check BrT vs BrT2
-    pt21 = intersect(grid.center_front, Ray(pt20, [1, 0]))[0]
+    pt21 = intersect(grid.center_front, grid.shoulder_front)[0]
     pt22 = pt21.translate(0, meas.HlB + 1.5 * CM) # TODO don't hard-code
     pt_sHlP_front = pt21.translate(-meas.HlB, 0)
 
     pt_vÄP = pt13.translate(0,- 0.25 * meas.ArD)
     aux_l = Segment(pt18, pt10).length - 2 * CM
-    print(pt18)
-    print(pt10)
-    print(aux_l)
-    pt23 = pt13.translate(0, aux_l) # TODO don't hard-code
-    pt_SuP = Circle(pt13, aux_l).point_along_from(pt23,  meas.BrU / 20 + 0 * CM) # TODO don't hard-code
+    pt23 = pt13.translate(0, - aux_l) # TODO don't hard-code
+    pt_SuP = Circle(pt13, aux_l).point_along_from(pt23, - meas.BrU / 20 + 0 * CM) # TODO don't hard-code
     pt24 = intersect(Circle(pt_BrP, meas.BrT), Circle(pt_SuP, meas.SuB))[0]
+
+    shoulder_front = Segment(pt24, pt_SuP)
+    pt25 = shoulder_front.point_along_from(pt24, Segment(pt_sHlP_front, pt20).length)
+    pt26 = pt_BrP.translate(0, - Segment(pt_BrP, pt25).length)
+
     if not (pt14.coords == pt7.translate((meas.BrW / 2 + 10 * CM), 0).coords).all():
         raise ValueError("BrW is plotted incorrect.")
 
@@ -128,20 +130,24 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
         PatternElement(Segment.from_direction(pt_sHlP, pt18, length=meas.SuB + 1 * CM), style=STYLE_STITCH, is_outline=True),
     ]
     block_back.extend(back_basic)
+    block_back.add_dart()
 
     # STEP Center Front, Neckline, and Shoulder
     front_basic = [
         PatternElement(Segment(pt22, intersect(grid.center_front, grid.hem)[0]), style=STYLE_STITCH, is_outline=True),
         PatternElement(CubicBezier(pt22, pt22, pt21.translate(-meas.HlB, meas.HlB), pt_sHlP_front), style=STYLE_STITCH, is_outline=True),
-        PatternElement(pt_SuP, style=STYLE_STITCH, is_outline=True),
-        PatternElement(Circle(pt13, aux_l), style=STYLE_STITCH, is_outline=True),
-        PatternElement(Circle(pt13, aux_l / 2 ), style=STYLE_STITCH, is_outline=True),
-        PatternElement(pt13, style=STYLE_DEBUG_RED, is_outline=True),
-        PatternElement(Segment(Point(5, 5), Point(15, 5))),
-        PatternElement(Circle(Point(5,5), 10))
-        # PatternElement(Segment(pt_SuP, pt24), style=STYLE_STITCH, is_outline=True)
+        PatternElement(Segment(pt_SuP, pt25), style=STYLE_STITCH, is_outline=True),
+        PatternElement(Segment(pt_sHlP_front, pt26), style=STYLE_STITCH, is_outline=True),
     ]
     block_front.extend(front_basic)
+    block_front.add_dart(
+        Dart.from_tip_and_legs(pt_BrP, pt26, pt25),
+        stitch_style=STYLE_STITCH,  # optional override
+        fold_style=STYLE_DART_FOLD,       # optional override
+        precision_style=None,             # optional override
+        notches=True,                     # notch triangles at leg_a, leg_b and roof
+        precision_tip=True,               # precision circles at the tip
+)
     return pattern
 
 

@@ -30,7 +30,8 @@ class TopGrid:
     Attributes:
         part: The :class:`~sewpat.pattern.ConstructionGridPart` ready to add
             to a :class:`~sewpat.pattern.Pattern`.
-        shoulder: Horizontal guide at the shoulder level.
+        shoulder_front: Horizontal guide at the shoulder_front level.
+        shoulder_back: Horizontal guide at the shoulder_back level.
         chest: Horizontal guide at the bust / chest level.
         waist: Horizontal guide at the waist level.
         hip: Horizontal guide at the hip level.
@@ -49,7 +50,8 @@ class TopGrid:
     part: ConstructionGridPart
 
     # horizontals
-    shoulder: Segment
+    shoulder_front: Segment
+    shoulder_back: Segment
     chest: Segment
     waist: Segment
     hip: Segment
@@ -92,7 +94,8 @@ class TopGrid:
         cg = ConstructionGrid(
             anchor=config.anchor,
             horizontals=[
-                ("Shoulder", 0),
+                ("Shoulder Front", meas.RüL - meas.VL), # TODO check VL vs VL2
+                ("Shoulder Back", 0),
                 ("Chest",    meas.AlT),
                 ("Waist",    meas.RüL),
                 ("Hip",      meas.RüL + meas.HüT),
@@ -118,7 +121,8 @@ class TopGrid:
 
         return cls(
             part=built,
-            shoulder=seg("Shoulder"),
+            shoulder_front=seg("Shoulder Front"),
+            shoulder_back=seg("Shoulder Back"),
             chest=seg("Chest"),
             waist=seg("Waist"),
             hip=seg("Hip"),
