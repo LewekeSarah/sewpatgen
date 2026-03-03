@@ -27,6 +27,7 @@ from sewpat.style import STYLE_CONSTRUCTION_GRID, StyleOptions
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _square_part(side: float = 100.0) -> PatternPart:
     """A closed square outline."""
     part = PatternPart(name="Square")
@@ -42,8 +43,8 @@ def _square_part(side: float = 100.0) -> PatternPart:
 # ConstructionGridPart subclass
 # ---------------------------------------------------------------------------
 
-class TestConstructionGridPart(unittest.TestCase):
 
+class TestConstructionGridPart(unittest.TestCase):
     def test_is_instance_of_pattern_part(self):
         grid = ConstructionGridPart()
         self.assertIsInstance(grid, PatternPart)
@@ -60,9 +61,13 @@ class TestConstructionGridPart(unittest.TestCase):
         part = PatternPart(name="p")
         part.append(Segment(Point(0, 0), Point(10, 0)))
         svg = _build_svg(
-            title="t", element_groups=[part.elements],
-            width_mm=100, height_mm=100, margin_mm=5,
-            show_points=False, show_bezier_control_points=False,
+            title="t",
+            element_groups=[part.elements],
+            width_mm=100,
+            height_mm=100,
+            margin_mm=5,
+            show_points=False,
+            show_bezier_control_points=False,
         )
         self.assertIn("<line ", svg)
 
@@ -70,9 +75,13 @@ class TestConstructionGridPart(unittest.TestCase):
         grid = ConstructionGridPart()
         grid.append(Segment(Point(0, 0), Point(50, 0)))
         svg = _build_svg(
-            title="t", element_groups=[grid.elements],
-            width_mm=100, height_mm=100, margin_mm=5,
-            show_points=False, show_bezier_control_points=False,
+            title="t",
+            element_groups=[grid.elements],
+            width_mm=100,
+            height_mm=100,
+            margin_mm=5,
+            show_points=False,
+            show_bezier_control_points=False,
         )
         self.assertIn("<line ", svg)
 
@@ -83,9 +92,13 @@ class TestConstructionGridPart(unittest.TestCase):
         grid = ConstructionGridPart()
         grid.append(Segment(Point(0, 0), Point(50, 50)))
         svg = _build_svg(
-            title="t", element_groups=[part.elements],
-            width_mm=100, height_mm=100, margin_mm=5,
-            show_points=False, show_bezier_control_points=False,
+            title="t",
+            element_groups=[part.elements],
+            width_mm=100,
+            height_mm=100,
+            margin_mm=5,
+            show_points=False,
+            show_bezier_control_points=False,
         )
         # Only the 10mm segment from part is in svg, not the 50mm diagonal
         self.assertIn("<line ", svg)
@@ -95,8 +108,8 @@ class TestConstructionGridPart(unittest.TestCase):
 # PatternPart.add_construction_line
 # ---------------------------------------------------------------------------
 
-class TestAddConstructionLine(unittest.TestCase):
 
+class TestAddConstructionLine(unittest.TestCase):
     def test_returns_pattern_element(self):
         part = ConstructionGridPart()
         elem = part.add_construction_line(Segment(Point(0, 0), Point(10, 0)))
@@ -115,7 +128,9 @@ class TestAddConstructionLine(unittest.TestCase):
     def test_custom_style_respected(self):
         part = ConstructionGridPart()
         custom = StyleOptions(stroke_color="blue")
-        elem = part.add_construction_line(Segment(Point(0, 0), Point(10, 0)), style=custom)
+        elem = part.add_construction_line(
+            Segment(Point(0, 0), Point(10, 0)), style=custom
+        )
         self.assertEqual(elem.style.stroke_color, "blue")
 
     def test_not_is_outline(self):
@@ -128,8 +143,8 @@ class TestAddConstructionLine(unittest.TestCase):
 # ConstructionGrid.build
 # ---------------------------------------------------------------------------
 
-class TestConstructionGridBuild(unittest.TestCase):
 
+class TestConstructionGridBuild(unittest.TestCase):
     def _simple_grid(self) -> ConstructionGridPart:
         return ConstructionGrid(
             anchor=Point(0, 0),
@@ -156,11 +171,15 @@ class TestConstructionGridBuild(unittest.TestCase):
         self.assertAlmostEqual(seg.p1.y, seg.p2.y, places=6)
 
     def test_custom_part_name(self):
-        grid = ConstructionGrid(anchor=Point(0, 0), verticals=[("v", 0)], part_name="MyGrid")
+        grid = ConstructionGrid(
+            anchor=Point(0, 0), verticals=[("v", 0)], part_name="MyGrid"
+        )
         self.assertEqual(grid.build().name, "MyGrid")
 
     def test_default_part_name(self):
-        self.assertEqual(ConstructionGrid(anchor=Point(0, 0)).build().name, "Konstruktionsgitter")
+        self.assertEqual(
+            ConstructionGrid(anchor=Point(0, 0)).build().name, "Konstruktionsgitter"
+        )
 
     def test_element_names_match_labels(self):
         grid = ConstructionGrid(
@@ -177,20 +196,24 @@ class TestConstructionGridBuild(unittest.TestCase):
             anchor=Point(0, 0), verticals=[("v", 0)], horizontals=[("h", 10)]
         ).build()
         for elem in grid.elements:
-            self.assertEqual(elem.style.stroke_color, STYLE_CONSTRUCTION_GRID.stroke_color)
+            self.assertEqual(
+                elem.style.stroke_color, STYLE_CONSTRUCTION_GRID.stroke_color
+            )
 
 
 # ---------------------------------------------------------------------------
 # PatternPart.add_grid_notches
 # ---------------------------------------------------------------------------
 
-class TestAddGridNotches(unittest.TestCase):
 
+class TestAddGridNotches(unittest.TestCase):
     def _square_with_grid(self):
         """100×100 square with a horizontal grid line at y=50."""
         part = _square_part(side=100.0)
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-200, 50), Point(200, 50), name="Mitte"))
+        grid.add_construction_line(
+            Segment(Point(-200, 50), Point(200, 50), name="Mitte")
+        )
         return part, grid
 
     def test_returns_list_of_pattern_elements(self):
@@ -255,7 +278,9 @@ class TestAddGridNotches(unittest.TestCase):
         grid.add_construction_line(Segment(Point(50, -200), Point(50, 200)))
         part.add_grid_notches(grid)
         triangles = [e for e in part.elements if isinstance(e.geometry, Triangle)]
-        xs = [(t.geometry.p1.x + t.geometry.p2.x + t.geometry.p3.x) / 3 for t in triangles]
+        xs = [
+            (t.geometry.p1.x + t.geometry.p2.x + t.geometry.p3.x) / 3 for t in triangles
+        ]
         for cx in xs:
             self.assertAlmostEqual(cx, 50.0, delta=2.0)
 
@@ -334,7 +359,9 @@ class TestAddGridNotches(unittest.TestCase):
         part = PatternPart(name="p")
         part.append(Segment(Point(0, 50), Point(100, 50)), is_outline=True)
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-200, 50.5), Point(200, 50.5), name="H"))
+        grid.add_construction_line(
+            Segment(Point(-200, 50.5), Point(200, 50.5), name="H")
+        )
         grid.add_construction_line(Segment(Point(50, -200), Point(50, 200), name="V"))
         created = part.add_grid_notches(grid, min_spacing=8.0)
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
@@ -393,8 +420,8 @@ class TestAddGridNotches(unittest.TestCase):
 # Integration: parts= name-based grid inclusion in export_pattern_svg_mm
 # ---------------------------------------------------------------------------
 
-class TestGridsExportParameter(unittest.TestCase):
 
+class TestGridsExportParameter(unittest.TestCase):
     def _pattern_and_grid(self):
         pat = Pattern(name="Test")
         piece = _square_part(side=50.0)
@@ -431,4 +458,3 @@ class TestGridsExportParameter(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

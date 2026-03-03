@@ -164,7 +164,6 @@ def test_offset_adaptive_each_segment_within_eps():
     result = curve.split(0.5)  # pre-split for the tight S
     segments = curve.offset_adaptive(d, eps=eps)
     for seg in segments:
-
         # We cannot compute _true_offset_ls for a sub-segment of the original
         # curve directly, but we CAN check that each segment's self-reported
         # error (via offset_error on the *original* sub-curve) is ≤ eps.
@@ -173,15 +172,15 @@ def test_offset_adaptive_each_segment_within_eps():
         # instead verify the simpler invariant: endpoints are shifted by ≈d.
         dist_start = curve.p0.distance_to(seg.p0) if seg == segments[0] else None
         if dist_start is not None:
-            assert (
-                abs(dist_start - d) < d * 0.1
-            ), f"first segment start not shifted by d: {dist_start:.3f} vs {d}"
+            assert abs(dist_start - d) < d * 0.1, (
+                f"first segment start not shifted by d: {dist_start:.3f} vs {d}"
+            )
     # The last segment's end must also be ≈d from the original curve's end
     last = segments[-1]
     dist_end = curve.p3.distance_to(last.p3)
-    assert (
-        abs(dist_end - d) < d * 0.1
-    ), f"last segment end not shifted by d: {dist_end:.3f} vs {d}"
+    assert abs(dist_end - d) < d * 0.1, (
+        f"last segment end not shifted by d: {dist_end:.3f} vs {d}"
+    )
 
 
 def test_offset_adaptive_segments_are_connected():
@@ -217,9 +216,9 @@ def test_offset_adaptive_better_than_single_offset_on_tight_curve():
     ls_adaptive = _sg.LineString(all_pts)
     err_adaptive = ls_true.hausdorff_distance(ls_adaptive)
 
-    assert (
-        err_adaptive < err_single
-    ), f"adaptive ({err_adaptive:.3f} mm) not better than single ({err_single:.3f} mm)"
+    assert err_adaptive < err_single, (
+        f"adaptive ({err_adaptive:.3f} mm) not better than single ({err_single:.3f} mm)"
+    )
 
 
 def test_offset_adaptive_depth_limit_respected():

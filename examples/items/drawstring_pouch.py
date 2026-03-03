@@ -38,14 +38,14 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     grid = ConstructionGrid(
         anchor=pattern.anchor,
         horizontals=[
-            ("Oberkante",          0),
-            ("Tunnelzug oben",     model.drawstring_margin),
-            ("Tunnelzug unten",    model.drawstring_margin + model.drawstring_height),
-            ("Unterkante",         model.height),
+            ("Oberkante", 0),
+            ("Tunnelzug oben", model.drawstring_margin),
+            ("Tunnelzug unten", model.drawstring_margin + model.drawstring_height),
+            ("Unterkante", model.height),
         ],
         verticals=[
-            ("linke Kante",        0),
-            ("rechte Kante",       model.width),
+            ("linke Kante", 0),
+            ("rechte Kante", model.width),
         ],
         part_name="Konstruktionsgitter Beutel",
     )
@@ -53,18 +53,18 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     pattern.add_part(grid_part)
 
     # Named grid lines
-    g_top    = grid_part.get_element("Oberkante").geometry
+    g_top = grid_part.get_element("Oberkante").geometry
     g_ds_top = grid_part.get_element("Tunnelzug oben").geometry
     g_ds_bot = grid_part.get_element("Tunnelzug unten").geometry
-    g_bot    = grid_part.get_element("Unterkante").geometry
-    g_left   = grid_part.get_element("linke Kante").geometry
-    g_right  = grid_part.get_element("rechte Kante").geometry
+    g_bot = grid_part.get_element("Unterkante").geometry
+    g_left = grid_part.get_element("linke Kante").geometry
+    g_right = grid_part.get_element("rechte Kante").geometry
 
     # Key points derived from grid intersections
-    top_left     = intersect(g_top,  g_left)[0]
-    top_right    = intersect(g_top,  g_right)[0]
-    bottom_left  = intersect(g_bot,  g_left)[0]
-    bottom_right = intersect(g_bot,  g_right)[0]
+    top_left = intersect(g_top, g_left)[0]
+    top_right = intersect(g_top, g_right)[0]
+    bottom_left = intersect(g_bot, g_left)[0]
+    bottom_right = intersect(g_bot, g_right)[0]
 
     # -----------------------------------------------------------------------
     # Part 1: Main body
@@ -128,7 +128,10 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     )
 
     ## Notches — automatically placed where outline edges cross grid lines
-    body.add_grid_notches(grid_part, corner_clearance = 0.0,)
+    body.add_grid_notches(
+        grid_part,
+        corner_clearance=0.0,
+    )
 
     # -----------------------------------------------------------------------
     # Part 2: Drawstring channel — drafted as an overlay on the body,
@@ -150,8 +153,10 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
         is_outline=True,
     )
     drawstring.add_grainline(
-        start=Point(ds_origin.x + model.width * 0.5, ds_origin.y ),
-        end=Point(ds_origin.x + model.width * 0.5, ds_origin.y + model.drawstring_height),
+        start=Point(ds_origin.x + model.width * 0.5, ds_origin.y),
+        end=Point(
+            ds_origin.x + model.width * 0.5, ds_origin.y + model.drawstring_height
+        ),
     )
 
     # Explode first (before SA), then add SA only to the standalone cut piece.
@@ -165,11 +170,12 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     drawstring_cut.add_info_box(
         header="Drawstring",
         notes=[
-        f"Nahtzugabe {model.seam_allowance / CM:.0f} cm",
-        "Testing purpose only",
-    ])
+            f"Nahtzugabe {model.seam_allowance / CM:.0f} cm",
+            "Testing purpose only",
+        ],
+    )
 
-    pattern.add_part(drawstring)      # overlay — visible on body during drafting
+    pattern.add_part(drawstring)  # overlay — visible on body during drafting
     pattern.add_part(drawstring_cut)  # standalone cut piece
 
     return pattern

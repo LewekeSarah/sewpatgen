@@ -208,7 +208,7 @@ STYLE_DART_STITCH = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
     dash_array=[5.0, 2.0],
-    seam_allowance=0.0
+    seam_allowance=0.0,
 )
 
 # Dart Fold / Crease Line — long-dash–dot centre line of a dart.

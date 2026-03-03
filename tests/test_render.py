@@ -78,7 +78,6 @@ def _simple_pattern(name: str = "My Pattern") -> Pattern:
 
 
 class TestResolveStyles(unittest.TestCase):
-
     def test_returns_all_default_keys(self):
         styles = _resolve_styles(None)
         self.assertIn("segment", styles)
@@ -131,7 +130,6 @@ class TestResolveStyles(unittest.TestCase):
 
 
 class TestBuildSvg(unittest.TestCase):
-
     @staticmethod
     def _default_kwargs(element_groups=None):
         return dict(
@@ -210,7 +208,6 @@ class TestBuildSvg(unittest.TestCase):
 
 
 class TestRenderSegment(unittest.TestCase):
-
     @staticmethod
     def _svg(segment, style=None):
         part = PatternPart(name="p")
@@ -254,7 +251,6 @@ class TestRenderSegment(unittest.TestCase):
 
 
 class TestRenderCircle(unittest.TestCase):
-
     @staticmethod
     def _svg(circle, style=None):
         part = PatternPart(name="p")
@@ -281,7 +277,6 @@ class TestRenderCircle(unittest.TestCase):
 
 
 class TestRenderRect(unittest.TestCase):
-
     @staticmethod
     def _svg(rect, style=None):
         part = PatternPart(name="p")
@@ -344,7 +339,6 @@ class TestRenderRect(unittest.TestCase):
 
 
 class TestRenderTriangle(unittest.TestCase):
-
     @staticmethod
     def _svg(triangle, style=None):
         part = PatternPart(name="p")
@@ -371,7 +365,6 @@ class TestRenderTriangle(unittest.TestCase):
 
 
 class TestRenderPoint(unittest.TestCase):
-
     @staticmethod
     def _svg(point, show_points=True, style=None):
         part = PatternPart(name="p")
@@ -401,7 +394,6 @@ class TestRenderPoint(unittest.TestCase):
 
 
 class TestRenderInfoBox(unittest.TestCase):
-
     @staticmethod
     def _svg(info_box):
         part = PatternPart(name="p")
@@ -441,7 +433,6 @@ class TestRenderInfoBox(unittest.TestCase):
 
 
 class TestRenderCubicBezier(unittest.TestCase):
-
     @staticmethod
     def _svg(bezier, show_control=False, style=None):
         part = PatternPart(name="p")
@@ -499,7 +490,6 @@ class TestRenderCubicBezier(unittest.TestCase):
 
 
 class TestExportPatternPartSvgMm(unittest.TestCase):
-
     def test_creates_file(self):
         part = _simple_part()
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
@@ -581,7 +571,6 @@ class TestExportPatternPartSvgMm(unittest.TestCase):
 
 
 class TestExportPatternSvgMm(unittest.TestCase):
-
     def test_creates_file(self):
         pat = _simple_pattern()
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
@@ -740,7 +729,6 @@ class TestExportPatternSvgMm(unittest.TestCase):
 
 
 class TestElementNameOverride(unittest.TestCase):
-
     @staticmethod
     def _svg_for(geometry, elem_name=None, geom_name=None):
         """Render a single element and return the SVG string."""

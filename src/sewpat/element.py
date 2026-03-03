@@ -31,7 +31,14 @@ class PatternElement:
 
     def __init__(
         self,
-        geometry: Segment | Rect | Circle | Triangle | CubicBezier | Point | InfoBox | Dart,
+        geometry: Segment
+        | Rect
+        | Circle
+        | Triangle
+        | CubicBezier
+        | Point
+        | InfoBox
+        | Dart,
         style: StyleOptions | None = None,
         name: str | None = None,
         role: str | None = None,
@@ -91,6 +98,10 @@ class PrecisionPoint:
             inner circle second.
         """
         return [
-            PatternElement(Circle(self.center, radius=self.outer_radius), style=self.style),
-            PatternElement(Circle(self.center, radius=self.inner_radius), style=self.style),
+            PatternElement(
+                Circle(self.center, radius=self.outer_radius), style=self.style
+            ),
+            PatternElement(
+                Circle(self.center, radius=self.inner_radius), style=self.style
+            ),
         ]

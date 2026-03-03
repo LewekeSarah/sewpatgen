@@ -171,8 +171,7 @@ def _render_segment(
             y2 -= SCISSOR_BLADE_OVERHANG * dy / length
 
     nodes.append(
-        f'<line x1="{element.p1.x}" y1="{element.p1.y}" '
-        f'x2="{x2}" y2="{y2}" {attrs} />'
+        f'<line x1="{element.p1.x}" y1="{element.p1.y}" x2="{x2}" y2="{y2}" {attrs} />'
     )
     if getattr(element, "name", None):
         mid_x = (element.p1.x + element.p2.x) / 2
@@ -438,7 +437,7 @@ def _render_elements(
                     if isinstance(element, Point)
                     else setattr(element, "name", effective_name)
                 )
-            except (AttributeError, TypeError):
+            except AttributeError, TypeError:
                 pass
             svg_nodes.extend(renderer(element, style.as_dict()))
             try:
@@ -447,7 +446,7 @@ def _render_elements(
                     if isinstance(element, Point)
                     else setattr(element, "name", original_name)
                 )
-            except (AttributeError, TypeError):
+            except AttributeError, TypeError:
                 pass
 
     # Render all SA elements as one connected path (clean corners via linejoin).
@@ -587,8 +586,7 @@ def export_pattern_svg_mm(
         selected_parts = [p for p in pattern.parts if p.name in parts]
     else:
         selected_parts = [
-            p for p in pattern.parts
-            if not isinstance(p, (ConstructionGridPart, Block))
+            p for p in pattern.parts if not isinstance(p, (ConstructionGridPart, Block))
         ]
 
     element_groups: list[list[PatternElement]] = []

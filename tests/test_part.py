@@ -1281,8 +1281,8 @@ class TestSeamAllowanceCornerJoin(unittest.TestCase):
 # Block
 # ---------------------------------------------------------------------------
 
-class TestBlock(unittest.TestCase):
 
+class TestBlock(unittest.TestCase):
     def test_is_instance_of_pattern_part(self):
         block = Block(name="Grundschnitt")
         self.assertIsInstance(block, PatternPart)
@@ -1345,14 +1345,18 @@ class TestBlock(unittest.TestCase):
         from sewpat.render import export_pattern_svg_mm
 
         block = Block(name="Grundschnitt")
-        block.append(Segment(Point(0, 0), Point(50, 0), name="Oberkante"), is_outline=True)
+        block.append(
+            Segment(Point(0, 0), Point(50, 0), name="Oberkante"), is_outline=True
+        )
 
         pat = Pattern(name="Test")
         pat.add_part(block)
 
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
-        export_pattern_svg_mm(pat, fname, width_mm=200, height_mm=200, parts=["Grundschnitt"])
+        export_pattern_svg_mm(
+            pat, fname, width_mm=200, height_mm=200, parts=["Grundschnitt"]
+        )
         svg = Path(fname).read_text()
 
         self.assertIn("Oberkante", svg)
@@ -1378,6 +1382,7 @@ class TestBlock(unittest.TestCase):
 # OverlayPart
 # ---------------------------------------------------------------------------
 
+
 def _front_part() -> PatternPart:
     """A simple 100 × 150 mm front piece."""
     part = PatternPart(name="Vorderteil")
@@ -1389,7 +1394,6 @@ def _front_part() -> PatternPart:
 
 
 class TestOverlayPart(unittest.TestCase):
-
     def test_is_instance_of_pattern_part(self):
         front = _front_part()
         overlay = OverlayPart(name="Tasche", parent=front)
@@ -1493,7 +1497,9 @@ class TestOverlayPart(unittest.TestCase):
         front = _front_part()
         pocket = OverlayPart(name="Tasche", parent=front)
         style = StyleOptions(stroke_color="red")
-        pocket.append(Segment(Point(10, 10), Point(40, 10)), style=style, is_outline=True)
+        pocket.append(
+            Segment(Point(10, 10), Point(40, 10)), style=style, is_outline=True
+        )
         result = pocket.explode(offset=Point(110, 0))
         self.assertEqual(result.elements[0].style.stroke_color, "red")
 

@@ -96,24 +96,30 @@ class TopGrid:
         cg = ConstructionGrid(
             anchor=config.anchor,
             horizontals=[
-                ("Shoulder Front", meas.RüL - meas.VL), # TODO check VL vs VL2
+                ("Shoulder Front", meas.RüL - meas.VL),  # TODO check VL vs VL2
                 ("Shoulder Back", 0),
-                ("Chest",    meas.AlT),
-                ("Waist",    meas.RüL),
-                ("Hip",      meas.RüL + meas.HüT),
-                ("Hem",      model.MoL),
+                ("Chest", meas.AlT),
+                ("Waist", meas.RüL),
+                ("Hip", meas.RüL + meas.HüT),
+                ("Hem", model.MoL),
             ],
             verticals=[
-                ("Center Back",    0),
+                ("Center Back", 0),
                 ("Hip Adjustment", hip_adj),
-                ("Neck",           0 + meas.HlB),
-                ("Dart Back",      hip_adj + meas.RüB / 2),
-                ("Sleeve Back",    hip_adj + meas.RüB),
-                ("Side Back",      hip_adj + meas.RüB + meas.ArD * 2 / 3),
-                ("Side Front",     hip_adj + meas.RüB + meas.ArD * 2 / 3 + config.margin),
-                ("Sleeve Front",   hip_adj + meas.RüB + meas.ArD + config.margin),
-                ("Bustpoint",      hip_adj + meas.RüB + meas.ArD + meas.BrB - bust_pos + config.margin),
-                ("Center Front",   hip_adj + meas.RüB + meas.ArD + meas.BrB + config.margin),
+                ("Neck", 0 + meas.HlB),
+                ("Dart Back", hip_adj + meas.RüB / 2),
+                ("Sleeve Back", hip_adj + meas.RüB),
+                ("Side Back", hip_adj + meas.RüB + meas.ArD * 2 / 3),
+                ("Side Front", hip_adj + meas.RüB + meas.ArD * 2 / 3 + config.margin),
+                ("Sleeve Front", hip_adj + meas.RüB + meas.ArD + config.margin),
+                (
+                    "Bustpoint",
+                    hip_adj + meas.RüB + meas.ArD + meas.BrB - bust_pos + config.margin,
+                ),
+                (
+                    "Center Front",
+                    hip_adj + meas.RüB + meas.ArD + meas.BrB + config.margin,
+                ),
             ],
             part_name="Grid",
         )

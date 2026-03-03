@@ -93,7 +93,12 @@ class DartResult:
 class PatternPart:
     """A collection of pattern elements forming one pattern piece."""
 
-    def __init__(self, name: str, elements: list[PatternElement] | None = None, is_construction: bool = False) -> None:
+    def __init__(
+        self,
+        name: str,
+        elements: list[PatternElement] | None = None,
+        is_construction: bool = False,
+    ) -> None:
         self.name = name
         self.elements: list[PatternElement] = elements if elements is not None else []
         self.is_construction: bool = is_construction
@@ -280,7 +285,10 @@ class PatternPart:
         """
         start = self._nudge_point_inside(start, end)
         end = self._nudge_point_inside(end, start)
-        return self.append(Segment(start, end, name=name), style=style if style is not None else STYLE_GRAINLINE)
+        return self.append(
+            Segment(start, end, name=name),
+            style=style if style is not None else STYLE_GRAINLINE,
+        )
 
     def add_info_box(
         self, header: str | None = None, notes: list[str] | None = None
@@ -644,7 +652,11 @@ class PatternPart:
             and edge_elem.is_outline
             and isinstance(edge_elem.geometry, (Segment, CubicBezier))
         ):
-            src_style = copy.copy(edge_elem.style) if edge_elem.style is not None else StyleOptions()
+            src_style = (
+                copy.copy(edge_elem.style)
+                if edge_elem.style is not None
+                else StyleOptions()
+            )
             all_subs = edge_elem.geometry.split_at_points([dart.leg_a, dart.leg_b])
             # The middle sub-segment (between the two legs) is the dart mouth —
             # discard it; keep only the first and last sub-segments.
@@ -652,8 +664,9 @@ class PatternPart:
             edge_elem.is_outline = False
             idx = self.elements.index(edge_elem)
             for i, seg in enumerate(outer_subs):
-                stub = PatternElement(seg, style=src_style,
-                                     is_outline=True, role="dart_edge_stub")
+                stub = PatternElement(
+                    seg, style=src_style, is_outline=True, role="dart_edge_stub"
+                )
                 self.elements.insert(idx + 1 + i, stub)
                 created.append(stub)
 
@@ -672,10 +685,22 @@ class PatternPart:
 
             # Abnäherdach roof outline — replaces the straight mouth edge
             roof = dart.roof
-            _add(PatternElement(Segment(dart.leg_a, roof), style=roof_style,
-                                is_outline=True, role="dart_roof"))
-            _add(PatternElement(Segment(dart.leg_b, roof), style=roof_style,
-                                is_outline=True, role="dart_roof"))
+            _add(
+                PatternElement(
+                    Segment(dart.leg_a, roof),
+                    style=roof_style,
+                    is_outline=True,
+                    role="dart_roof",
+                )
+            )
+            _add(
+                PatternElement(
+                    Segment(dart.leg_b, roof),
+                    style=roof_style,
+                    is_outline=True,
+                    role="dart_roof",
+                )
+            )
 
             # Centre notch at the roof peak
             if notches:
@@ -689,14 +714,18 @@ class PatternPart:
 
             # Tip precision mark
             if precision_tip:
-                for e in PrecisionPoint(dart.tip, style=precision_style).build_elements():
+                for e in PrecisionPoint(
+                    dart.tip, style=precision_style
+                ).build_elements():
                     e.role = "dart_tip"
                     _add(e)
                 if dart.name:
-                    _add(PatternElement(
-                        InfoBox(dart.tip - Point(0, 14 * MM), header=dart.name),
-                        role="dart_tip",
-                    ))
+                    _add(
+                        PatternElement(
+                            InfoBox(dart.tip - Point(0, 14 * MM), header=dart.name),
+                            role="dart_tip",
+                        )
+                    )
 
             # Leg notches
             if notches:
@@ -726,10 +755,12 @@ class PatternPart:
                         e.role = "dart_tip"
                         _add(e)
                 if dart.name:
-                    _add(PatternElement(
-                        InfoBox(dart.tip - Point(0, 14 * MM), header=dart.name),
-                        role="dart_tip",
-                    ))
+                    _add(
+                        PatternElement(
+                            InfoBox(dart.tip - Point(0, 14 * MM), header=dart.name),
+                            role="dart_tip",
+                        )
+                    )
 
         return DartResult(dart=dart, elements=created)
 
@@ -769,8 +800,16 @@ class PatternPart:
 
         from .geometry import intersect as _intersect
 
-        outline_elems = [e for e in self.elements if e.is_outline and isinstance(e.geometry, (Segment, CubicBezier))]
-        grid_geoms = [e.geometry for e in grid_part.elements if isinstance(e.geometry, (Segment, CubicBezier, Ray))]
+        outline_elems = [
+            e
+            for e in self.elements
+            if e.is_outline and isinstance(e.geometry, (Segment, CubicBezier))
+        ]
+        grid_geoms = [
+            e.geometry
+            for e in grid_part.elements
+            if isinstance(e.geometry, (Segment, CubicBezier, Ray))
+        ]
 
         # Build map of forward tangents at each outline endpoint for corner detection.
         ep_tangents: dict[tuple, list] = {}
@@ -779,8 +818,12 @@ class PatternPart:
             e = geom_end(oe.geometry)
             sk = (round(s.x, 3), round(s.y, 3))
             ek = (round(e.x, 3), round(e.y, 3))
-            ep_tangents.setdefault(sk, []).append(edge_tangent(oe.geometry, at_end=False))
-            ep_tangents.setdefault(ek, []).append(edge_tangent(oe.geometry, at_end=True))
+            ep_tangents.setdefault(sk, []).append(
+                edge_tangent(oe.geometry, at_end=False)
+            )
+            ep_tangents.setdefault(ek, []).append(
+                edge_tangent(oe.geometry, at_end=True)
+            )
 
         def _is_corner_endpoint(pt: Point) -> bool:
             """True when *pt* is within *tolerance* of a sharp corner or free endpoint."""
@@ -791,11 +834,11 @@ class PatternPart:
                     key = (round(ep.x, 3), round(ep.y, 3))
                     tangents = ep_tangents.get(key, [])
                     if len(tangents) < 2:
-                        return True   # free endpoint
+                        return True  # free endpoint
                     t0, t1 = tangents[0], tangents[1]
                     cos_a = float(_np.clip(_np.dot(t0, t1), -1.0, 1.0))
                     if _math.degrees(_math.acos(abs(cos_a))) > corner_angle_threshold:
-                        return True   # sharp corner
+                        return True  # sharp corner
             return False
 
         def _is_horizontal(g: Segment | CubicBezier | Ray) -> bool:
@@ -836,7 +879,7 @@ class PatternPart:
                 is_horiz = _is_horizontal(gg)
                 try:
                     pts = _intersect(oe.geometry, gg)
-                except (TypeError, Exception):
+                except TypeError, Exception:
                     continue
                 priority = 0 if is_horiz else 1
                 for pt in pts:
@@ -865,7 +908,9 @@ class PatternPart:
             if not is_vertical:
                 elem_has_horizontal.add(id(seam_geom))
             before = len(self.elements)
-            self.add_notches(pt, seam_edge=seam_geom, length=length, width=width, is_back=is_back)
+            self.add_notches(
+                pt, seam_edge=seam_geom, length=length, width=width, is_back=is_back
+            )
             created.extend(self.elements[before:])
         return created
 
@@ -881,7 +926,11 @@ class ConstructionGridPart(PatternPart):
     creating them directly.
     """
 
-    def __init__(self, name: str = "Konstruktionsgitter", elements: list[PatternElement] | None = None) -> None:
+    def __init__(
+        self,
+        name: str = "Konstruktionsgitter",
+        elements: list[PatternElement] | None = None,
+    ) -> None:
         super().__init__(name=name, elements=elements)
 
 
@@ -1009,10 +1058,20 @@ class ConstructionGrid:
         ax, ay = self.anchor.x, self.anchor.y
         for name, x_off in self.verticals:
             x = ax + x_off
-            part.add_construction_line(Segment(Point(x, ay - self.extent), Point(x, ay + self.extent), name=name), style=self.style)
+            part.add_construction_line(
+                Segment(
+                    Point(x, ay - self.extent), Point(x, ay + self.extent), name=name
+                ),
+                style=self.style,
+            )
         for name, y_off in self.horizontals:
             y = ay + y_off
-            part.add_construction_line(Segment(Point(ax - self.extent, y), Point(ax + self.extent, y), name=name), style=self.style)
+            part.add_construction_line(
+                Segment(
+                    Point(ax - self.extent, y), Point(ax + self.extent, y), name=name
+                ),
+                style=self.style,
+            )
         return part
 
 
@@ -1059,7 +1118,8 @@ class Pattern:
         target_part: PatternPart | None = part
         if target_part is None:
             regular = [
-                p for p in self.parts
+                p
+                for p in self.parts
                 if not isinstance(p, (ConstructionGridPart, Block))
             ]
             if len(regular) == 1:
@@ -1106,4 +1166,3 @@ class Pattern:
             if part.name == name:
                 return part
         raise KeyError(f"No PatternPart named {name!r}")
-
