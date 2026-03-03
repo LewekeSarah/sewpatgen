@@ -2,6 +2,7 @@
 
 This module owns:
 
+* :class:`DartResult` — return value of :meth:`PatternPart.add_dart`.
 * :class:`PatternPart` — a single pattern piece (a named list of elements).
 * :class:`ConstructionGridPart` / :class:`ConstructionGrid` — orthogonal grid helpers.
 * :class:`Block` — a base-block pattern piece.
@@ -9,9 +10,10 @@ This module owns:
 * :class:`Pattern` — a complete sewing pattern (collection of parts).
 """
 
+import copy
+
 import shapely.geometry as _sg
 
-from .dart import DartElements, DartResult
 from .element import PatternElement, PrecisionPoint
 from .geometry import (
     CubicBezier,
@@ -42,12 +44,33 @@ from .geometry import (
 )
 from .style import (
     STYLE_CONSTRUCTION_GRID,
+    STYLE_DART_FOLD,
+    STYLE_DART_STITCH,
     STYLE_GRAINLINE,
     STYLE_PRECISION_POINT,
     STYLE_SEAM_ALLOWANCE,
     StyleOptions,
 )
 from .units import CM, MM
+
+
+class DartResult:
+    """Return value of :meth:`PatternPart.add_dart`.
+
+    Attributes:
+        dart: The dart geometry.
+        elements: All :class:`PatternElement` objects created, in draw order.
+            Filter by ``element.role`` for specific groups:
+            ``"dart_stitch"``, ``"dart_fold"``, ``"dart_roof"``,
+            ``"dart_tip"``, ``"dart_notch"``.
+    """
+
+    def __init__(self, dart: Dart, elements: list[PatternElement]) -> None:
+        self.dart = dart
+        self.elements = elements
+
+    def __repr__(self) -> str:
+        return f"DartResult(dart={self.dart!r}, elements={len(self.elements)})"
 
 
 class PatternPart:
@@ -534,97 +557,126 @@ class PatternPart:
 
     def add_dart(
         self,
-        dart: DartElements,
+        dart: Dart,
         *,
+        stitch_style: StyleOptions | None = None,
+        fold_style: StyleOptions | None = None,
+        precision_style: StyleOptions | None = None,
         notches: bool = True,
         precision_tip: bool = True,
         notch_kwargs: dict | None = None,
     ) -> DartResult:
-        """Add all visual elements for *dart* to this part and return a :class:`DartResult`.
+        """Add all visual elements for *dart* to this part.
 
-        This method must be called **before** :meth:`add_seam_allowance` so that
-        dart legs placed on the outline can be given the correct
-        ``seam_allowance`` override.
+        The dart's ``_edge_element`` (set automatically by the
+        ``Dart.from_edge_*`` factories) provides the style for the roof
+        outline segments.  When absent a plain default style is used.
 
-        The rendering mode is determined by ``dart.dart.dart_type``:
+        **Triangle dart:** stitch lines, fold line, Abnäherdach roof outline
+        (``is_outline=True``), notches, precision tip mark.
 
-        **Triangle dart** (``dart_type="triangle"``):
-            * Two stitching lines (leg_a → tip, leg_b → tip).
-            * One fold/crease line (mouth center → tip).
-            * The Abnäherdach roof outline (``leg_a → roof_a → roof_b → leg_b``)
-              as ``is_outline=True`` cut segments — these inherit the seam edge
-              style and replace the straight mouth edge on the pattern.
-            * Notch at mouth center + notches at leg_a and leg_b.
-            * Two concentric precision circles at the tip.
-
-        **Rhombus dart** (``dart_type="rhombus"``):
-            Rendered as a rhombus: four stitching segments
-            ``leg_a → tip → leg_b → mirror_tip → leg_a``.
-            No notches are added (the mouth lies on an inner construction
-            line, not a cut edge).
+        **Rhombus dart:** four diamond sides, precision marks at both apices.
 
         Args:
-            dart: A :class:`~sewpat.dart.DartElements` factory — build it via
-                  :meth:`DartElements.from_edge` so the ``edge_style`` is
-                  inherited automatically from the source seam element, or
-                  construct :class:`DartElements` directly for existing darts.
-            notches: Whether to add notch triangles.
-            precision_tip: Whether to add precision circles at the tip.
-            notch_kwargs: Keyword-argument overrides forwarded to :meth:`add_notches`.
+            dart: A :class:`~sewpat.geometry.Dart` instance.
+            stitch_style: Override for stitch-line style.
+            fold_style: Override for fold-line style.
+            precision_style: Override for precision-mark style.
+            notches: Add notch marks at the leg points (triangle darts only).
+            precision_tip: Add precision circles at the tip.
+            notch_kwargs: Extra kwargs forwarded to :meth:`add_notches`.
 
         Returns:
-            A :class:`~sewpat.dart.DartResult` with all created elements grouped by role.
+            :class:`DartResult` with ``dart`` and ``elements``.
         """
+        _stitch = stitch_style if stitch_style is not None else STYLE_DART_STITCH
+        _fold = fold_style if fold_style is not None else STYLE_DART_FOLD
         _nkw: dict = notch_kwargs if notch_kwargs is not None else {}
-        factory = dart
-        geom = factory.dart
 
-        stitch_elems: list[PatternElement] = []
-        fold_elem: PatternElement | None = None
-        tip_elems: list[PatternElement] = []
-        notch_elems: list[PatternElement] = []
-        cut_elems: list[PatternElement] = []
+        # Edge style for the roof outline: inherit from source element when available.
+        edge_elem = getattr(dart, "_edge_element", None)
+        edge_style = getattr(edge_elem, "style", None)
+        roof_style = copy.copy(edge_style) if edge_style is not None else StyleOptions()
+        roof_style.corner_join = "miter"
 
-        # build_stitch_elements handles both triangle (2 legs) and rhombus (4 sides)
-        stitch_elems = factory.build_stitch_elements()
-        self.extend(stitch_elems)
+        created: list[PatternElement] = []
 
-        if geom.is_triangle:
-            # ── Outer dart ────────────────────────────────────────────────────
-            fold_elem = factory.build_fold_element()
-            self.extend([fold_elem])
+        def _add(elem: PatternElement) -> PatternElement:
+            self.elements.append(elem)
+            created.append(elem)
+            return elem
 
-            # Roof-shaped outline replaces the straight mouth edge
-            cut_elems = factory.build_cut_elements()
-            self.extend(cut_elems)
+        if dart.is_triangle:
+            # Stitch lines (tip → leg_a, tip → leg_b)
+            _add(PatternElement(dart.stitch_line_a, style=_stitch, role="dart_stitch"))
+            _add(PatternElement(dart.stitch_line_b, style=_stitch, role="dart_stitch"))
 
-            # Mouth-center notch (perpendicular to the dart mouth edge)
-            mouth_edge = Segment(geom.leg_a, geom.leg_b).translate(geom.roof.x - geom.center.x, geom.roof.y - geom.center.y)
-            before = len(self.elements)
-            self.add_notches(geom.roof, seam_edge=mouth_edge, **_nkw, symbol="Rectangle")
-            notch_elems.extend(self.elements[before:])
+            # Fold / crease line
+            _add(PatternElement(dart.fold_line, style=_fold, role="dart_fold"))
 
-        # Tip precision mark
-        if precision_tip:
-            tip_elems = factory.build_tip_elements()
-            self.extend(tip_elems)
+            # Abnäherdach roof outline — replaces the straight mouth edge
+            roof = dart.roof
+            _add(PatternElement(Segment(dart.leg_a, roof), style=roof_style,
+                                is_outline=True, role="dart_roof"))
+            _add(PatternElement(Segment(dart.leg_b, roof), style=roof_style,
+                                is_outline=True, role="dart_roof"))
 
-        # Leg notches — outer darts only (rhombus darts have no seam at the mouth)
-        if notches and geom.is_triangle:
-            mouth_edge = Segment(geom.leg_a, geom.leg_b)
-            for pt in (geom.leg_a, geom.leg_b):
+            # Centre notch at the roof peak
+            if notches:
+                mouth_edge = Segment(dart.leg_a, dart.leg_b).translate(
+                    roof.x - dart.center.x, roof.y - dart.center.y
+                )
                 before = len(self.elements)
-                self.add_notches(pt, seam_edge=mouth_edge, **_nkw, symbol="Rectangle", is_back=False)
-                notch_elems.extend(self.elements[before:])
+                self.add_notches(roof, seam_edge=mouth_edge, **_nkw)
+                for e in self.elements[before:]:
+                    e.role = "dart_notch"
+                    created.append(e)
 
-        return DartResult(
-            dart=geom,
-            stitch_elements=stitch_elems,
-            fold_element=fold_elem,
-            tip_elements=tip_elems,
-            notch_elements=notch_elems,
-            cut_elements=cut_elems,
-        )
+            # Tip precision mark
+            if precision_tip:
+                for e in PrecisionPoint(dart.tip, style=precision_style).build_elements():
+                    e.role = "dart_tip"
+                    _add(e)
+                if dart.name:
+                    _add(PatternElement(
+                        InfoBox(Point(dart.tip.x, dart.tip.y - 14 * MM), header=dart.name),
+                        role="dart_tip",
+                    ))
+
+            # Leg notches
+            if notches:
+                mouth_edge = Segment(dart.leg_a, dart.leg_b)
+                for pt in (dart.leg_a, dart.leg_b):
+                    before = len(self.elements)
+                    self.add_notches(pt, seam_edge=mouth_edge, **_nkw)
+                    for e in self.elements[before:]:
+                        e.role = "dart_notch"
+                        created.append(e)
+
+        else:
+            # Rhombus dart — four diamond sides
+            st = dart.effective_second_tip
+            for p1, p2 in [
+                (dart.leg_a, dart.tip),
+                (dart.tip, dart.leg_b),
+                (dart.leg_b, st),
+                (st, dart.leg_a),
+            ]:
+                _add(PatternElement(Segment(p1, p2), style=_stitch, role="dart_stitch"))
+
+            # Precision marks at both apices
+            if precision_tip:
+                for pt in (dart.tip, st):
+                    for e in PrecisionPoint(pt, style=precision_style).build_elements():
+                        e.role = "dart_tip"
+                        _add(e)
+                if dart.name:
+                    _add(PatternElement(
+                        InfoBox(Point(dart.tip.x, dart.tip.y - 14 * MM), header=dart.name),
+                        role="dart_tip",
+                    ))
+
+        return DartResult(dart=dart, elements=created)
 
     def add_construction_line(
         self,

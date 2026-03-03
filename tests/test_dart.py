@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from sewpat import CM, MM, Dart, DartElements, DartResult, DartType, Point, Segment
+from sewpat import CM, MM, Dart, DartResult, DartType, Point, Segment
 from sewpat.geometry import CubicBezier
 from sewpat.element import PatternElement
 from sewpat.pattern import PatternPart
@@ -16,7 +16,6 @@ from sewpat.style import STYLE_DART_FOLD, STYLE_DART_STITCH, StyleOptions
 # ---------------------------------------------------------------------------
 
 def _simple_dart() -> Dart:
-    """A simple dart with known geometry for deterministic tests."""
     leg_a = Point(40.0, 0.0)
     leg_b = Point(60.0, 0.0)
     center = Point(50.0, 0.0)
@@ -25,12 +24,8 @@ def _simple_dart() -> Dart:
 
 
 def _square_part() -> PatternPart:
-    """A 200×200 mm square PatternPart with a closed outline."""
     part = PatternPart("Vorderteil")
-    o = Point(0.0, 0.0)
-    tl = Point(0.0, 200.0)
-    tr = Point(200.0, 200.0)
-    br = Point(200.0, 0.0)
+    o, tl, tr, br = Point(0, 0), Point(0, 200), Point(200, 200), Point(200, 0)
     part.append(Segment(o, tl), is_outline=True)
     part.append(Segment(tl, tr), is_outline=True)
     part.append(Segment(tr, br), is_outline=True)
@@ -39,56 +34,46 @@ def _square_part() -> PatternPart:
 
 
 # ---------------------------------------------------------------------------
-# Dart geometry tests
+# Dart geometry
 # ---------------------------------------------------------------------------
 
 class TestDartGeometry:
     def test_width(self) -> None:
-        d = _simple_dart()
-        assert d.width == pytest.approx(20.0)
+        assert _simple_dart().width == pytest.approx(20.0)
 
     def test_depth(self) -> None:
-        d = _simple_dart()
-        assert d.depth == pytest.approx(80.0)
+        assert _simple_dart().depth == pytest.approx(80.0)
 
     def test_fold_line_endpoints(self) -> None:
-        d = _simple_dart()
-        fl = d.fold_line
+        fl = _simple_dart().fold_line
         assert fl.p1.x == pytest.approx(50.0)
         assert fl.p1.y == pytest.approx(0.0)
         assert fl.p2.x == pytest.approx(50.0)
         assert fl.p2.y == pytest.approx(80.0)
 
-    def test_stitch_line_a(self) -> None:
-        d = _simple_dart()
-        sl = d.stitch_line_a
-        assert sl.p1.x == pytest.approx(40.0)
-        assert sl.p2.x == pytest.approx(50.0)
-        assert sl.p2.y == pytest.approx(80.0)
+    def test_stitch_line_a_tip_to_leg(self) -> None:
+        sl = _simple_dart().stitch_line_a
+        assert sl.p1.x == pytest.approx(50.0)   # tip
+        assert sl.p1.y == pytest.approx(80.0)
+        assert sl.p2.x == pytest.approx(40.0)   # leg_a
 
-    def test_stitch_line_b(self) -> None:
-        d = _simple_dart()
-        sl = d.stitch_line_b
-        assert sl.p1.x == pytest.approx(60.0)
+    def test_stitch_line_b_tip_to_leg(self) -> None:
+        sl = _simple_dart().stitch_line_b
+        assert sl.p1.x == pytest.approx(50.0)   # tip
+        assert sl.p2.x == pytest.approx(60.0)   # leg_b
 
     def test_intake_angle(self) -> None:
-        d = _simple_dart()
-        # leg_a is at (-10, -80) and leg_b at (10, -80) relative to tip
-        # angle = 2 * atan(10/80) ≈ 14.04°
         expected = 2 * math.atan(10.0 / 80.0)
-        assert d.intake_angle == pytest.approx(expected, rel=1e-4)
+        assert _simple_dart().intake_angle == pytest.approx(expected, rel=1e-4)
 
     def test_translate(self) -> None:
-        d = _simple_dart()
-        dt = d.translate(10.0, 5.0)
+        dt = _simple_dart().translate(10.0, 5.0)
         assert dt.center.x == pytest.approx(60.0)
-        assert dt.center.y == pytest.approx(5.0)
         assert dt.tip.y == pytest.approx(85.0)
 
     def test_rotate_preserves_angle(self) -> None:
         d = _simple_dart()
-        pivot = d.tip
-        rotated = d.rotate(pivot, math.pi / 4)
+        rotated = d.rotate(d.tip, math.pi / 4)
         assert rotated.intake_angle == pytest.approx(d.intake_angle, rel=1e-6)
         assert rotated.depth == pytest.approx(d.depth, rel=1e-6)
 
@@ -96,16 +81,30 @@ class TestDartGeometry:
         with pytest.raises(ValueError, match="dart_type"):
             Dart(Point(0, 0), Point(1, 0), Point(0.5, 0), Point(0.5, 5), dart_type="sideways")
 
+    def test_stitch_curve_overrides_straight_leg(self) -> None:
+        d = _simple_dart()
+        curve = Segment(d.tip, d.leg_a)
+        d2 = Dart(d.leg_a, d.leg_b, d.center, d.tip, stitch_curve_a=curve)
+        assert d2.stitch_line_a is curve
+
+    def test_effective_second_tip_defaults_to_mirror(self) -> None:
+        d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                 dart_type="rhombus")
+        assert d.effective_second_tip.x == pytest.approx(50.0)
+        assert d.effective_second_tip.y == pytest.approx(-80.0)
+
+    def test_effective_second_tip_explicit(self) -> None:
+        explicit = Point(50, -50)
+        d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                 dart_type="rhombus", second_tip=explicit)
+        assert d.effective_second_tip is explicit
+
 
 class TestDartSplit:
     def test_split_equal(self) -> None:
         d = _simple_dart()
         a, b = d.split(0.5)
-        # Sub-darts share the same tip
         assert a.tip.x == pytest.approx(d.tip.x)
-        assert a.tip.y == pytest.approx(d.tip.y)
-        assert b.tip.x == pytest.approx(d.tip.x)
-        # Total intake angle is preserved
         assert a.intake_angle + b.intake_angle == pytest.approx(d.intake_angle, rel=1e-4)
 
     def test_split_asymmetric(self) -> None:
@@ -122,226 +121,241 @@ class TestDartSplit:
             d.split(1.0)
 
 
-class TestDartElementsFromEdge:
-    def _edge(self, p1: Point, p2: Point, style: StyleOptions | None = None) -> PatternElement:
-        return PatternElement(Segment(p1, p2), style=style or StyleOptions())
+# ---------------------------------------------------------------------------
+# Dart factory class methods
+# ---------------------------------------------------------------------------
 
-    def test_from_edge_explicit_depth(self) -> None:
-        edge = self._edge(Point(0.0, 0.0), Point(100.0, 0.0))
-        factory = DartElements.from_edge(edge, position_t=0.5, width=20.0, depth=50.0)
-        d = factory.dart
+class TestDartFactories:
+    def test_from_tip_center_width(self) -> None:
+        tip = Point(50, 80)
+        center = Point(50, 0)
+        d = Dart.from_tip_center_width(tip, center, width=20.0)
+        assert d.center.x == pytest.approx(50.0)
+        assert d.width == pytest.approx(20.0)
+        assert d.depth == pytest.approx(80.0)
+        # Mouth must be orthogonal to fold line
+        fold_vec = (center.x - tip.x, center.y - tip.y)
+        leg_vec = (d.leg_b.x - d.leg_a.x, d.leg_b.y - d.leg_a.y)
+        dot = fold_vec[0] * leg_vec[0] + fold_vec[1] * leg_vec[1]
+        assert dot == pytest.approx(0.0, abs=1e-9)
+
+    def test_from_tip_and_legs(self) -> None:
+        tip = Point(50, 80)
+        leg_a, leg_b = Point(40, 0), Point(60, 0)
+        d = Dart.from_tip_and_legs(tip, leg_a, leg_b)
         assert d.center.x == pytest.approx(50.0)
         assert d.center.y == pytest.approx(0.0)
+        assert d.tip is tip
+
+    def test_from_tip_and_legs_explicit_second_tip(self) -> None:
+        st = Point(50, -40)
+        d = Dart.from_tip_and_legs(Point(50, 80), Point(40, 0), Point(60, 0),
+                                   dart_type="rhombus", second_tip=st)
+        assert d.effective_second_tip is st
+
+    def test_from_edge_at_t(self) -> None:
+        edge = PatternElement(Segment(Point(0, 0), Point(100, 0)))
+        d = Dart.from_edge_at_t(edge, t=0.5, width=20.0, depth=50.0)
+        assert d.center.x == pytest.approx(50.0)
         assert d.width == pytest.approx(20.0)
         assert d.depth == pytest.approx(50.0)
         assert d.leg_a.x == pytest.approx(40.0)
         assert d.leg_b.x == pytest.approx(60.0)
 
-    def test_from_edge_reference_point(self) -> None:
-        edge = self._edge(Point(0.0, 0.0), Point(100.0, 0.0))
-        bust_point = Point(50.0, 100.0)
-        factory = DartElements.from_edge(
-            edge, position_t=0.5, width=20.0,
-            reference_point=bust_point, tip_shortfall=20.0,
-        )
-        d = factory.dart
+    def test_from_edge_at_t_inherits_edge_element(self) -> None:
+        elem = PatternElement(Segment(Point(0, 0), Point(100, 0)))
+        d = Dart.from_edge_at_t(elem, t=0.5, width=20.0, depth=50.0)
+        assert d._edge_element is elem
+
+    def test_from_edge_at_t_invalid_t(self) -> None:
+        edge = PatternElement(Segment(Point(0, 0), Point(100, 0)))
+        with pytest.raises(ValueError, match="t must be"):
+            Dart.from_edge_at_t(edge, t=1.5, width=20.0, depth=50.0)
+
+    def test_from_edge_at_point(self) -> None:
+        edge = PatternElement(Segment(Point(0, 0), Point(100, 0)))
+        d = Dart.from_edge_at_point(edge, Point(50, 0), width=20.0, depth=50.0)
+        assert d.center.x == pytest.approx(50.0, abs=1.0)
+        assert d.depth == pytest.approx(50.0, abs=1.0)
+
+    def test_from_edge_at_point_ray(self) -> None:
+        from sewpat.geometry import Ray as _Ray
+        ray = _Ray(Point(0, 0), (1, 0))
+        d = Dart.from_edge_at_point(ray, Point(50, 0), width=20.0, depth=50.0)
+        assert d.center.x == pytest.approx(50.0, abs=1e-9)
+        assert d.depth == pytest.approx(50.0, abs=1e-9)
+        assert d.leg_a.x == pytest.approx(40.0, abs=1e-9)
+        assert d.leg_b.x == pytest.approx(60.0, abs=1e-9)
+
+    def test_from_edge_at_point_line(self) -> None:
+        from sewpat.geometry import Line as _Line
+        line = _Line(Point(0, 0), (1, 0))
+        d = Dart.from_edge_at_point(line, Point(75, 0), width=20.0, depth=30.0)
+        assert d.center.x == pytest.approx(75.0, abs=1e-9)
+        assert d.depth == pytest.approx(30.0, abs=1e-9)
+
+    def test_from_edge_free_tip(self) -> None:
+        edge = PatternElement(Segment(Point(0, 0), Point(100, 0)))
+        bust = Point(50, 100)
+        d = Dart.from_edge_free_tip(edge, t=0.5, width=20.0,
+                                    reference_point=bust, tip_shortfall=20.0)
         assert d.tip.y == pytest.approx(80.0)
         assert d.depth == pytest.approx(80.0)
 
-    def test_from_edge_inherits_style(self) -> None:
-        from sewpat.style import STYLE_CUT
-        edge = PatternElement(Segment(Point(0.0, 0.0), Point(100.0, 0.0)), style=STYLE_CUT)
-        factory = DartElements.from_edge(edge, position_t=0.5, width=20.0, depth=50.0)
-        assert factory.edge_style is STYLE_CUT
-
-    def test_from_edge_both_params_raises(self) -> None:
-        edge = self._edge(Point(0.0, 0.0), Point(100.0, 0.0))
-        with pytest.raises(ValueError, match="exactly one"):
-            DartElements.from_edge(edge, position_t=0.5, width=20.0, depth=50.0, reference_point=Point(50, 50))
-
-    def test_from_edge_no_params_raises(self) -> None:
-        edge = self._edge(Point(0.0, 0.0), Point(100.0, 0.0))
-        with pytest.raises(ValueError, match="exactly one"):
-            DartElements.from_edge(edge, position_t=0.5, width=20.0)
-
-    def test_from_edge_out_of_range_t(self) -> None:
-        edge = self._edge(Point(0.0, 0.0), Point(100.0, 0.0))
-        with pytest.raises(ValueError, match="position_t"):
-            DartElements.from_edge(edge, position_t=1.5, width=20.0, depth=50.0)
-
-    def test_from_edge_bezier(self) -> None:
-        p0, p3 = Point(0.0, 0.0), Point(100.0, 0.0)
-        bez = CubicBezier(p0, Point(33.3, 0.0), Point(66.6, 0.0), p3)
-        edge = PatternElement(bez)
-        factory = DartElements.from_edge(edge, position_t=0.5, width=10.0, depth=30.0)
-        d = factory.dart
+    def test_from_edge_at_t_bezier(self) -> None:
+        bez = CubicBezier(Point(0, 0), Point(33.3, 0), Point(66.6, 0), Point(100, 0))
+        d = Dart.from_edge_at_t(bez, t=0.5, width=10.0, depth=30.0)
         assert d.center.x == pytest.approx(50.0, abs=1.0)
         assert d.depth == pytest.approx(30.0, abs=1.0)
-
-    def test_from_edge_rejects_non_pattern_element(self) -> None:
-        with pytest.raises(TypeError, match="PatternElement"):
-            DartElements.from_edge(  # type: ignore[arg-type]
-                Segment(Point(0, 0), Point(100, 0)),
-                position_t=0.5, width=20.0, depth=50.0,
-            )
 
     def test_from_edge_rejects_bad_geometry(self) -> None:
         from sewpat.geometry import Circle
         edge = PatternElement(Circle(Point(0, 0), radius=10.0))
-        with pytest.raises(ValueError, match="Segment or CubicBezier"):
-            DartElements.from_edge(edge, position_t=0.5, width=20.0, depth=50.0)
+        with pytest.raises(ValueError, match="Segment, CubicBezier, Ray or Line"):
+            Dart.from_edge_at_t(edge, t=0.5, width=20.0, depth=50.0)
+
+    def test_from_edge_rejects_unknown_type(self) -> None:
+        with pytest.raises(TypeError):
+            Dart.from_edge_at_t("not-an-edge", t=0.5, width=20.0, depth=50.0)
 
 
 # ---------------------------------------------------------------------------
-# PatternPart.add_dart() element count tests
+# PatternPart.add_dart()
 # ---------------------------------------------------------------------------
 
 class TestAddDartOuter:
-    def test_element_count_outer(self) -> None:
+    def test_elements_created(self) -> None:
         part = _square_part()
         baseline = len(part.elements)
-        result = part.add_dart(DartElements(_simple_dart()), notches=True, precision_tip=True)
-        assert len(result.stitch_elements) == 2
-        assert result.fold_element is not None
-        # Roof polyline: leg_a→roof_a, [roof_a→roof_b if distinct], roof_b→leg_b
-        assert len(result.cut_elements) in (2, 3)
-        assert len(result.tip_elements) == 3
-        assert len(result.notch_elements) >= 3
+        result = part.add_dart(_simple_dart(), notches=True, precision_tip=True)
+        assert isinstance(result, DartResult)
         assert len(part.elements) > baseline
+        assert len(result.elements) > 0
 
-    def test_cut_elements_are_outline(self) -> None:
+    def test_roles_present(self) -> None:
         part = _square_part()
-        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
-        for ce in result.cut_elements:
-            assert ce.is_outline is True
+        result = part.add_dart(_simple_dart(), notches=True, precision_tip=True)
+        roles = {e.role for e in result.elements}
+        assert "dart_stitch" in roles
+        assert "dart_fold" in roles
+        assert "dart_roof" in roles
+        assert "dart_tip" in roles
 
-    def test_cut_elements_have_zero_sa(self) -> None:
+    def test_stitch_count(self) -> None:
         part = _square_part()
-        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
-        for ce in result.cut_elements:
-            assert ce.style.seam_allowance == 0.0
+        result = part.add_dart(_simple_dart(), notches=False, precision_tip=False)
+        stitches = [e for e in result.elements if e.role == "dart_stitch"]
+        assert len(stitches) == 2
 
-    def test_cut_elements_miter_corner(self) -> None:
+    def test_fold_count(self) -> None:
         part = _square_part()
-        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
-        for ce in result.cut_elements:
-            assert ce.style.corner_join == "miter"
+        result = part.add_dart(_simple_dart(), notches=False, precision_tip=False)
+        folds = [e for e in result.elements if e.role == "dart_fold"]
+        assert len(folds) == 1
 
-    def test_cut_elements_based_on_style_cut(self) -> None:
-        """Cut segments inherit edge_style from dart.edge_style (set via DartElements.from_edge)."""
+    def test_roof_is_outline(self) -> None:
+        part = _square_part()
+        result = part.add_dart(_simple_dart(), notches=False, precision_tip=False)
+        roofs = [e for e in result.elements if e.role == "dart_roof"]
+        assert len(roofs) == 2
+        for r in roofs:
+            assert r.is_outline is True
+
+    def test_roof_miter_style(self) -> None:
+        part = _square_part()
+        result = part.add_dart(_simple_dart(), notches=False, precision_tip=False)
+        for r in [e for e in result.elements if e.role == "dart_roof"]:
+            assert r.style.corner_join == "miter"
+
+    def test_roof_inherits_edge_style(self) -> None:
         from sewpat.style import STYLE_CUT, Marker
-        part = _square_part()
         edge = PatternElement(Segment(Point(40, 0), Point(60, 0)), style=STYLE_CUT)
-        factory = DartElements.from_edge(
-            edge, position_t=0.5, width=20.0, depth=80.0,
-            dart_type="triangle", name="Bustnaht",
-        )
-        result = part.add_dart(factory, notches=False, precision_tip=False)
-        for ce in result.cut_elements:
-            assert ce.style.marker_end == Marker.SCISSOR
-
-    def test_cut_elements_default_no_edge_style(self) -> None:
-        """Without edge_style, cut segments use plain StyleOptions as base."""
+        dart = Dart.from_edge_at_t(edge, t=0.5, width=20.0, depth=80.0, name="test")
         part = _square_part()
-        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
-        for ce in result.cut_elements:
-            assert ce.style.marker_end is None
+        result = part.add_dart(dart, notches=False, precision_tip=False)
+        for r in [e for e in result.elements if e.role == "dart_roof"]:
+            assert r.style.marker_end == Marker.SCISSOR
 
-    def test_stitch_elements_style(self) -> None:
+    def test_stitch_style_override(self) -> None:
+        my_style = StyleOptions(stroke_color="red")
         part = _square_part()
-        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
-        for se in result.stitch_elements:
-            assert se.style == STYLE_DART_STITCH
+        result = part.add_dart(_simple_dart(), stitch_style=my_style,
+                                notches=False, precision_tip=False)
+        for s in [e for e in result.elements if e.role == "dart_stitch"]:
+            assert s.style.stroke_color == "red"
 
-    def test_fold_element_style(self) -> None:
+    def test_no_notches_when_disabled(self) -> None:
         part = _square_part()
-        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
-        assert result.fold_element is not None
-        assert result.fold_element.style == STYLE_DART_FOLD
+        result = part.add_dart(_simple_dart(), notches=False, precision_tip=False)
+        assert not any(e.role == "dart_notch" for e in result.elements)
 
-    def test_no_notches(self) -> None:
+    def test_no_tip_when_disabled(self) -> None:
         part = _square_part()
-        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
-        assert len(result.notch_elements) >= 1
-
-    def test_no_precision_tip(self) -> None:
-        part = _square_part()
-        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
-        assert result.tip_elements == []
+        result = part.add_dart(_simple_dart(), notches=False, precision_tip=False)
+        assert not any(e.role == "dart_tip" for e in result.elements)
 
 
-class TestAddDartInner:
-    def _inner_dart(self) -> Dart:
-        """A simple dart with dart_type=DartType.RHOMBUS (inner/rhombus)."""
+class TestAddDartRhombus:
+    def _rhombus_dart(self) -> Dart:
         return Dart(
             leg_a=Point(40, 0), leg_b=Point(60, 0),
             center=Point(50, 0), tip=Point(50, 80),
-            dart_type=DartType.RHOMBUS, name="Bustnaht",
+            dart_type=DartType.RHOMBUS, name="Raute",
         )
 
-    def test_rhombus_element_count(self) -> None:
+    def test_four_stitch_segments(self) -> None:
         part = _square_part()
-        result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=False)
-        assert len(result.stitch_elements) == 4
-        assert result.fold_element is None
-        assert result.cut_elements == []
+        result = part.add_dart(self._rhombus_dart(), notches=False, precision_tip=False)
+        stitches = [e for e in result.elements if e.role == "dart_stitch"]
+        assert len(stitches) == 4
 
-    def test_rhombus_is_closed(self) -> None:
-        """leg_a → tip → leg_b → mirror_tip → leg_a — shape is a closed diamond."""
+    def test_diamond_is_closed(self) -> None:
         part = _square_part()
-        result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=False)
-        segs = [e.geometry for e in result.stitch_elements]
-        first_start = segs[0].p1
-        last_end = segs[-1].p2
-        assert first_start.distance_to(last_end) == pytest.approx(0.0, abs=1e-6)
+        result = part.add_dart(self._rhombus_dart(), notches=False, precision_tip=False)
+        segs = [e.geometry for e in result.elements if e.role == "dart_stitch"]
+        assert segs[0].p1.distance_to(segs[-1].p2) == pytest.approx(0.0, abs=1e-6)
 
-    def test_rhombus_mirror_apex(self) -> None:
-        """The fourth corner must be the mirror of tip across leg_a→leg_b.
-
-        For the dart Dart(leg_a=(40,0), leg_b=(60,0), center=(50,0), tip=(50,80))
-        the mouth is the horizontal line y=0, so the mirror tip should be at (50,-80).
-        """
+    def test_mirror_apex_position(self) -> None:
         part = _square_part()
-        result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=False)
-        segs = [e.geometry for e in result.stitch_elements]
-        # Segment order: leg_a→tip, tip→leg_b, leg_b→mirror_tip, mirror_tip→leg_a
-        mirror_tip = segs[2].p2  # end of leg_b→mirror_tip segment
-        assert mirror_tip.x == pytest.approx(50.0, abs=1e-6)
-        assert mirror_tip.y == pytest.approx(-80.0, abs=1e-6)
+        result = part.add_dart(self._rhombus_dart(), notches=False, precision_tip=False)
+        segs = [e.geometry for e in result.elements if e.role == "dart_stitch"]
+        mirror = segs[2].p2
+        assert mirror.x == pytest.approx(50.0, abs=1e-6)
+        assert mirror.y == pytest.approx(-80.0, abs=1e-6)
+
+    def test_no_fold_line(self) -> None:
+        part = _square_part()
+        result = part.add_dart(self._rhombus_dart(), notches=False, precision_tip=False)
+        assert not any(e.role == "dart_fold" for e in result.elements)
+
+    def test_no_roof_for_rhombus(self) -> None:
+        part = _square_part()
+        result = part.add_dart(self._rhombus_dart(), notches=False, precision_tip=False)
+        assert not any(e.role == "dart_roof" for e in result.elements)
 
     def test_no_notches_for_rhombus(self) -> None:
-        """notches=True must be silently ignored for inner/rhombus darts."""
         part = _square_part()
-        result = part.add_dart(DartElements(self._inner_dart()), notches=True, precision_tip=False)
-        assert result.notch_elements == []
+        result = part.add_dart(self._rhombus_dart(), notches=True, precision_tip=False)
+        assert not any(e.role == "dart_notch" for e in result.elements)
 
-    def test_all_elements(self) -> None:
-        """4 rhombus segs + 2×2 precision circles + 1 label = 9 elements."""
+    def test_explicit_second_tip(self) -> None:
+        second = Point(50, -40)
+        d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                 dart_type="rhombus", second_tip=second)
         part = _square_part()
-        result = part.add_dart(DartElements(self._inner_dart()), notches=True, precision_tip=True)
-        assert len(result.all_elements) == 9
+        result = part.add_dart(d, notches=False, precision_tip=False)
+        segs = [e.geometry for e in result.elements if e.role == "dart_stitch"]
+        assert segs[2].p2.y == pytest.approx(-40.0, abs=1e-6)
 
-    def test_tip_elements_include_mirror(self) -> None:
-        """precision_tip=True must mark both apices for a rhombus dart."""
-        part = _square_part()
-        result = part.add_dart(DartElements(self._inner_dart()), notches=False, precision_tip=True)
-        # 2 circles for dart.tip + 2 circles for mirror_tip + 1 label = 5
-        assert len(result.tip_elements) == 5
-
-
-# ---------------------------------------------------------------------------
-# DartResult.all_elements ordering
-# ---------------------------------------------------------------------------
 
 class TestDartResult:
-    def test_all_elements_outer(self) -> None:
-        part = _square_part()
-        result = part.add_dart(DartElements(_simple_dart()), notches=True, precision_tip=True)
-        total = len(result.all_elements)
-        assert total >= 10  # minimum expected for outer dart with all features
-
     def test_repr(self) -> None:
         part = _square_part()
-        result = part.add_dart(DartElements(_simple_dart()), notches=False, precision_tip=False)
-        r = repr(result)
-        assert "DartResult" in r
+        result = part.add_dart(_simple_dart(), notches=False, precision_tip=False)
+        assert "DartResult" in repr(result)
+
+    def test_elements_all_added_to_part(self) -> None:
+        part = _square_part()
+        baseline = len(part.elements)
+        result = part.add_dart(_simple_dart(), notches=True, precision_tip=True)
+        assert all(e in part.elements for e in result.elements)

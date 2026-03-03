@@ -30,7 +30,6 @@ from sewpat import (
     STYLE_STITCH,
     STYLE_SEAM_ALLOWANCE,
     Dart,
-    DartElements,
     DartType,
     Pattern,
     PatternElement,
@@ -156,52 +155,30 @@ def _add_outline(part: PatternPart, pts: dict[str, Point]) -> dict[str, Segment]
 
 def example_01_outer_explicit_depth() -> None:
     """Side-seam waist dart; depth given as an explicit mm value."""
-    pattern, pts = _build_block("Beispiel 1 – Abnäher an PatternElement")
-    part = PatternPart("Example")
+    pattern, pts = _build_block("Beispiel 1 – Außennaht-Abnäher (Tiefe explizit)")
+    part = PatternPart("Vorderteil")
     pattern.add_part(part)
     segs = _add_outline(part, pts)
 
-    # Dart placed at t=0.35 along the side seam. The side-seam PatternElement
-    # is passed directly so DartElements.from_edge inherits its style.
-    dart_right = DartElements.from_edge(
-        segs["side"],
-        position_t=0.25,
-        width=22 * MM,
-        depth=90 * MM,
-        dart_type=DartType.TRIANGLE,
-        name="Stitch Line",
-        stitch_style=_DART_STITCH,
-        fold_style=_DART_FOLD,
+    dart_right = Dart.from_edge_at_t(
+        segs["side"], t=0.25, width=22 * MM, depth=90 * MM,
+        dart_type=DartType.TRIANGLE, name="Seitennaht",
     )
-    result = part.add_dart(dart_right, notches=True, precision_tip=True)
+    part.add_dart(dart_right, stitch_style=_DART_STITCH, fold_style=_DART_FOLD,
+                  notches=True, precision_tip=True)
 
-    # Second dart derived from the fold edge of to highlight different edge styles
-    dart_left = DartElements.from_edge(
-        segs["cf"],
-        position_t=0.25,
-        width=22 * MM,
-        depth=90 * MM,
-        dart_type=DartType.TRIANGLE,
-        name="Fold Line",
+    dart_left = Dart.from_edge_at_t(
+        segs["cf"], t=0.25, width=22 * MM, depth=90 * MM,
+        dart_type=DartType.TRIANGLE, name="Mittelnaht",
     )
-    result2 = part.add_dart(dart_left, notches=True, precision_tip=True)
+    part.add_dart(dart_left, notches=True, precision_tip=True)
 
-    # Info box
     part.add_info_box(
-        header="Example 1",
-        notes=[
-            "Außennaht-Abnäher",
-            "Abnäher: Tiefe 90 mm, Breite 22 mm",
-            "PatternElement + Edge Style",
-        ],
+        header="Beispiel 1",
+        notes=["Außennaht-Abnäher", "Tiefe 90 mm, Breite 22 mm"],
     )
-
-    export_pattern_svg_mm(
-        pattern,
-        filename=str(OUT_DIR / "01_outer_dart_explicit_depth.svg"),
-        width_mm=_A4_W,
-        height_mm=_A4_H,
-    )
+    export_pattern_svg_mm(pattern, filename=str(OUT_DIR / "01_outer_dart_explicit_depth.svg"),
+                          width_mm=_A4_W, height_mm=_A4_H)
     print("✓  01_outer_dart_explicit_depth.svg")
 
 
@@ -216,48 +193,27 @@ def example_02_outer_reference_point() -> None:
     pattern.add_part(part)
     segs = _add_outline(part, pts)
 
-    # Mark the bust point as a precision mark on the construction grid
     grid_part = pattern.parts[0]
     grid_part.add_precision_points(pts["bust_point"])
 
-    factory = DartElements.from_edge(
-        segs["side"],
-        position_t=0.38,         # at bust-line height
-        width=28 * MM,
-        reference_point=pts["bust_point"],
-        tip_shortfall=25 * MM,   # stop 2.5 cm short of bust point
-        dart_type=DartType.TRIANGLE,
-        name="Bustnaht",
-        stitch_style=_DART_STITCH,
-        fold_style=_DART_FOLD,
-        precision_style=_DART_PP
+    dart = Dart.from_edge_free_tip(
+        segs["side"], t=0.38, width=28 * MM,
+        reference_point=pts["bust_point"], tip_shortfall=25 * MM,
+        dart_type=DartType.TRIANGLE, name="Bustnaht",
     )
-    result = part.add_dart(factory, notches=True, precision_tip=True)
-    result = part.append(Segment(factory.dart.center, pts["bust_point"]), style=_AUX)
-    # Label the bust point on the part too
+    part.add_dart(dart, stitch_style=_DART_STITCH, fold_style=_DART_FOLD,
+                  precision_style=_DART_PP, notches=True, precision_tip=True)
+    part.append(Segment(dart.center, pts["bust_point"]), style=_AUX)
     part.add_precision_points(pts["bust_point"])
 
     part.add_info_box(
         header="Vorderteil",
-        notes=[
-            "Bustnaht-Abnäher",
-            "Referenz: Bustpunkt",
-            "Kurzfall: 25 mm",
-            "Breite: 28 mm",
-        ],
+        notes=["Bustnaht-Abnäher", "Referenz: Bustpunkt", "Kurzfall: 25 mm", "Breite: 28 mm"],
     )
-    part.add_grainline(
-        ANCHOR.translate(10 * MM, 10 * MM),
-        ANCHOR.translate(10 * MM, PIECE_H - 10 * MM),
-        style=_GRAINLINE,
-    )
-
-    export_pattern_svg_mm(
-        pattern,
-        filename=str(OUT_DIR / "02_outer_dart_reference_point.svg"),
-        width_mm=_A4_W,
-        height_mm=_A4_H,
-    )
+    part.add_grainline(ANCHOR.translate(10 * MM, 10 * MM),
+                       ANCHOR.translate(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
+    export_pattern_svg_mm(pattern, filename=str(OUT_DIR / "02_outer_dart_reference_point.svg"),
+                          width_mm=_A4_W, height_mm=_A4_H)
     print("✓  02_outer_dart_reference_point.svg")
 
 
@@ -266,42 +222,25 @@ def example_02_outer_reference_point() -> None:
 # ---------------------------------------------------------------------------
 
 def example_03_inner_dart_rhombus() -> None:
-    """Princess-seam style inner dart rendered as a rhombus (Raute)."""
+    """Princess-seam inner dart rendered as a rhombus (Raute)."""
     pattern, pts = _build_block("Beispiel 3 – Innennaht-Abnäher (Raute)")
     part = PatternPart("Vorderteil")
     pattern.add_part(part)
     segs = _add_outline(part, pts)
 
-    # Inner dart sits on the bust line, in the middle of the front panel.
-    # The bust line is not part of the outline, so we create a styled
-    # PatternElement for it explicitly and pass it to from_edge.
     bust_line_elem = PatternElement(
         Segment(pts["bust_cf"], pts["bust_side"]), style=_STITCH
     )
-    factory = DartElements.from_edge(
-        bust_line_elem,
-        position_t=0.5,
-        width=24 * MM,
-        depth=55 * MM,
-        dart_type=DartType.RHOMBUS,
-        name="Rhombus Dart",
-        stitch_style=_DART_STITCH,
-        fold_style=_DART_FOLD,
+    dart = Dart.from_edge_at_t(
+        bust_line_elem, t=0.5, width=24 * MM, depth=55 * MM,
+        dart_type=DartType.RHOMBUS, name="Raute",
     )
-    result = part.add_dart(factory, notches=True, precision_tip=True)
+    part.add_dart(dart, stitch_style=_DART_STITCH, notches=True, precision_tip=True)
 
-    part.add_grainline(
-        ANCHOR.translate(10 * MM, 10 * MM),
-        ANCHOR.translate(10 * MM, PIECE_H - 10 * MM),
-        style=_GRAINLINE,
-    )
-
-    export_pattern_svg_mm(
-        pattern,
-        filename=str(OUT_DIR / "03_inner_dart_rhombus.svg"),
-        width_mm=_A4_W,
-        height_mm=_A4_H,
-    )
+    part.add_grainline(ANCHOR.translate(10 * MM, 10 * MM),
+                       ANCHOR.translate(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
+    export_pattern_svg_mm(pattern, filename=str(OUT_DIR / "03_inner_dart_rhombus.svg"),
+                          width_mm=_A4_W, height_mm=_A4_H)
     print("✓  03_inner_dart_rhombus.svg")
 
 
@@ -310,61 +249,37 @@ def example_03_inner_dart_rhombus() -> None:
 # ---------------------------------------------------------------------------
 
 def example_04_dart_split() -> None:
-    """One large waist dart split into two equal sub-darts via Dart.split()."""
+    """One large dart split into two equal sub-darts via Dart.split()."""
     pattern, pts = _build_block("Beispiel 4 – Abnäher aufteilen (Split)")
     part = PatternPart("Vorderteil")
     pattern.add_part(part)
     segs = _add_outline(part, pts)
 
-    # Build the original (large) dart first — shown faint as reference.
-    # Pass the side-seam PatternElement so edge_style is propagated to sub-darts.
-    original_factory = DartElements.from_edge(
-        segs["side"],
-        position_t=0.55,
-        width=36 * MM,
-        depth=65 * MM,
-        dart_type=DartType.TRIANGLE,
-        name="Original",
+    original = Dart.from_edge_at_t(
+        segs["side"], t=0.55, width=36 * MM, depth=65 * MM,
+        dart_type=DartType.TRIANGLE, name="Original",
     )
-    original = original_factory.dart
 
-    # Show the original dart outline very lightly for reference
+    # Show the original dart lightly as reference
     part.append(original.stitch_line_a, style=_REF_STYLE)
     part.append(original.stitch_line_b, style=_REF_STYLE)
     part.append(original.fold_line,     style=_REF_STYLE)
 
-    # Split into two equal sub-darts (ratio=0.5) — edge_style is propagated
     dart_a, dart_b = original.split(ratio=0.5)
-
-    result_a = part.add_dart(
-        DartElements(dart_a, stitch_style=_DART_STITCH, fold_style=_DART_FOLD),
-        notches=True, precision_tip=True,
-    )
-    result_b = part.add_dart(
-        DartElements(dart_b, stitch_style=_DART_STITCH, fold_style=_DART_FOLD),
-        notches=True, precision_tip=True,
-    )
+    part.add_dart(dart_a, stitch_style=_DART_STITCH, fold_style=_DART_FOLD,
+                  notches=True, precision_tip=True)
+    part.add_dart(dart_b, stitch_style=_DART_STITCH, fold_style=_DART_FOLD,
+                  notches=True, precision_tip=True)
 
     part.add_info_box(
         header="Vorderteil",
-        notes=[
-            "Ursprünglicher Abnäher: 36 mm",
-            "→ aufgeteilt in 2 × 18 mm",
-            "(grau = Original als Referenz)",
-        ],
+        notes=["Ursprünglicher Abnäher: 36 mm", "→ aufgeteilt in 2 × 18 mm",
+               "(grau = Original als Referenz)"],
     )
-    part.add_grainline(
-        ANCHOR.translate(10 * MM, 10 * MM),
-        ANCHOR.translate(10 * MM, PIECE_H - 10 * MM),
-        style=_GRAINLINE,
-    )
-
-    export_pattern_svg_mm(
-        pattern,
-        filename=str(OUT_DIR / "04_dart_split.svg"),
-        width_mm=_A4_W,
-        height_mm=_A4_H,
-    )
+    part.add_grainline(ANCHOR.translate(10 * MM, 10 * MM),
+                       ANCHOR.translate(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
+    export_pattern_svg_mm(pattern, filename=str(OUT_DIR / "04_dart_split.svg"),
+                          width_mm=_A4_W, height_mm=_A4_H)
     print("✓  04_dart_split.svg")
 
 # ---------------------------------------------------------------------------
@@ -390,7 +305,6 @@ def embed_svgs_in_readme() -> None:
         "02_outer_dart_reference_point.svg",
         "03_inner_dart_rhombus.svg",
         "04_dart_split.svg",
-        "05_dart_transfer.svg",
     ]
 
     readme = OUT_DIR / "README.md"

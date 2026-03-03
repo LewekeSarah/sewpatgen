@@ -1538,37 +1538,21 @@ def offset_adaptive(
 # ---------------------------------------------------------------------------
 
 class Dart:
-    """An immutable dart (Abnäher) geometry primitive.
+    """Immutable dart (Abnäher) geometry.
 
-    A dart is a wedge-shaped tuck sewn into a pattern piece to add
-    three-dimensional shaping (e.g. a bust dart or waist dart).  It is
-    uniquely defined by four key points:
+    Defined by four key points: *leg_a*, *leg_b* (mouth endpoints), *center*
+    (mouth midpoint, base of the fold line) and *tip* (apex).  All secondary
+    geometry is derived as properties.
 
-    * **leg_a** / **leg_b** — the two endpoints of the dart opening
-      (mouth) on the seam line.
-    * **center** — the midpoint of the mouth; the fold/crease line runs
-      from here to the tip.
-    * **tip** — the apex of the dart inside the pattern piece.
+    For rhombus darts a *second_tip* may be supplied explicitly; when omitted
+    it defaults to ``mirror_tip`` (reflection of *tip* across the mouth line).
 
-    All secondary geometry (stitching legs, fold line, opening width,
-    depth) is derived as properties.
+    Curved stitching legs (*stitch_curve_a*, *stitch_curve_b*) replace the
+    straight stitch lines when set.  Both run **tip → leg** so direction is
+    always consistent with straight legs.
 
-    Dart type convention:
-        ``DartType.TRIANGLE`` — dart is on a seam edge; rendered as two stitching
-                         lines + fold line + cut-line mouth segments.
-        ``DartType.RHOMBUS``  — dart sits on an inner/panel edge; rendered as a
-                         closed four-point diamond (Raute).
-
-    The ``dart_type`` fully determines the rendering mode; there is no
-    separate flag needed at render time.
-
-    Args:
-        leg_a: First dart leg endpoint on the seam.
-        leg_b: Second dart leg endpoint on the seam.
-        center: Midpoint of the dart mouth (on the seam).
-        tip: Apex of the dart.
-        dart_type: :class:`DartType` member.  Defaults to ``DartType.TRIANGLE``.
-        name: Optional label for the dart.
+    Use the factory class methods for the common construction cases rather than
+    supplying all four points by hand.
     """
 
     def __init__(
@@ -1577,8 +1561,12 @@ class Dart:
         leg_b: Point,
         center: Point,
         tip: Point,
-        dart_type: DartType = DartType.TRIANGLE,
+        dart_type: DartType | str = DartType.TRIANGLE,
         name: str | None = None,
+        second_tip: Point | None = None,
+        stitch_curve_a: Segment | CubicBezier | None = None,
+        stitch_curve_b: Segment | CubicBezier | None = None,
+        _edge_element: object | None = None,
     ) -> None:
         try:
             dart_type = DartType(dart_type)
@@ -1592,67 +1580,243 @@ class Dart:
         self.tip = tip
         self.dart_type: DartType = dart_type
         self.name = name
+        self.second_tip: Point | None = second_tip
+        self.stitch_curve_a: "Segment | CubicBezier | None" = stitch_curve_a
+        self.stitch_curve_b: "Segment | CubicBezier | None" = stitch_curve_b
+        # Internal: the source PatternElement (carries edge style for roof rendering).
+        self._edge_element = _edge_element
 
-    @property
-    def is_triangle(self) -> bool:
-        """``True`` when this is a seam-edge triangle dart (``dart_type == DartType.TRIANGLE``)."""
-        return self.dart_type is DartType.TRIANGLE
+    # ------------------------------------------------------------------
+    # Factory class methods
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_tip_center_width(
+        cls,
+        tip: Point,
+        center: Point,
+        width: float,
+        dart_type: "DartType | str" = DartType.TRIANGLE,
+        name: str | None = None,
+    ) -> "Dart":
+        """Construct a dart from tip, mouth centre and width.
+
+        The mouth is placed orthogonally to the fold line (tip→center) at
+        *center*, with *leg_a* and *leg_b* each ``width/2`` to either side.
+        """
+        fold_seg = Segment(tip, center)
+        if fold_seg.length < 1e-9:
+            raise ValueError("tip and center must be distinct")
+        perp = fold_seg.unit_normal   # ⊥ to fold line, already unit-length
+        half = width / 2.0
+        leg_a = center.translate(-half * float(perp[0]), -half * float(perp[1]))
+        leg_b = center.translate(+half * float(perp[0]), +half * float(perp[1]))
+        return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
+                   dart_type=dart_type, name=name)
+
+    @classmethod
+    def from_tip_and_legs(
+        cls,
+        tip: Point,
+        leg_a: Point,
+        leg_b: Point,
+        dart_type: "DartType | str" = DartType.TRIANGLE,
+        name: str | None = None,
+        second_tip: Point | None = None,
+    ) -> "Dart":
+        """Construct a dart from tip and the two explicit mouth endpoints.
+
+        The mouth centre is the midpoint of *leg_a* and *leg_b*.
+
+        Args:
+            second_tip: Explicit second apex for rhombus darts.  Defaults to
+                the reflection of *tip* across the mouth line.
+        """
+        center = Segment(leg_a, leg_b).midpoint
+        return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
+                   dart_type=dart_type, name=name, second_tip=second_tip)
+
+    @classmethod
+    def from_edge_at_t(
+        cls,
+        edge: "object",
+        t: float,
+        width: float,
+        depth: float,
+        dart_type: "DartType | str" = DartType.TRIANGLE,
+        name: str | None = None,
+    ) -> "Dart":
+        """Place a dart orthogonally on *edge* at parameter *t*.
+
+        The mouth centre is ``edge.point_at_t(t)``.  The tip is placed
+        *depth* mm along the inward normal.  *leg_a* and *leg_b* are
+        ``width/2`` to either side along the edge.
+
+        Args:
+            edge: ``PatternElement`` wrapping a ``Segment`` or ``CubicBezier``,
+                or the geometry object itself.
+            t: Parameter ∈ [0, 1] on *edge* for the mouth centre.
+        """
+        if not (0.0 <= t <= 1.0):
+            raise ValueError(f"t must be in [0, 1], got {t}")
+        geom, edge_elem = _unwrap_edge(edge)
+        center = geom.point_at_t(t)
+        # CubicBezier has a position-dependent normal; Segment/Ray/Line expose
+        # a constant unit_normal property.
+        normal: np.ndarray = (
+            geom.normal_at_t(t) if isinstance(geom, CubicBezier) else geom.unit_normal
+        )
+        tip = center.translate(depth * float(normal[0]), depth * float(normal[1]))
+        leg_a = center.move_towards(geom, -width / 2.0)
+        leg_b = center.move_towards(geom, +width / 2.0)
+        return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
+                   dart_type=dart_type, name=name, _edge_element=edge_elem)
+
+    @classmethod
+    def from_edge_at_point(
+        cls,
+        edge: "object",
+        point: Point,
+        width: float,
+        depth: float,
+        dart_type: "DartType | str" = DartType.TRIANGLE,
+        name: str | None = None,
+    ) -> "Dart":
+        """Place a dart orthogonally on *edge* at a fixed point on the edge.
+
+        The point is projected onto *edge* to find the mouth centre.
+        Supports ``Segment``, ``CubicBezier``, ``Ray`` and ``Line``
+        (wrapped in a ``PatternElement`` or passed directly).
+
+        For ``Segment`` and ``CubicBezier`` the normalised Shapely projection
+        yields a *t* parameter which is forwarded to :meth:`from_edge_at_t`.
+
+        For ``Ray`` and ``Line`` the foot of the perpendicular from *point* is
+        computed directly via a dot product — no bounded *t* parameter applies.
+        """
+        geom, edge_elem = _unwrap_edge(edge)
+
+        if isinstance(geom, (Ray, Line)):
+            # Project point onto the infinite direction via dot product.
+            origin: Point = geom.origin if isinstance(geom, Ray) else geom.point
+            s = float(np.dot(point.coords - origin.coords, geom.unit_direction))
+            center = origin.translate(
+                s * float(geom.unit_direction[0]),
+                s * float(geom.unit_direction[1]),
+            )
+        else:
+            # Segment or CubicBezier — find t via Shapely projection, then build.
+            t = float(np.clip(
+                geom_to_shapely(geom).project(_sg.Point(point.x, point.y), normalized=True),
+                0.0, 1.0,
+            ))
+            center = geom.point_at_t(t)
+
+        normal: np.ndarray = (
+                geom.normal_at_t(t) if isinstance(geom, CubicBezier) else geom.unit_normal
+            )
+        tip = center.translate(depth * float(normal[0]), depth * float(normal[1]))
+        leg_a = center.move_towards(geom, -width / 2.0)
+        leg_b = center.move_towards(geom, +width / 2.0)
+        return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
+                   dart_type=dart_type, name=name, _edge_element=edge_elem)
+
+    @classmethod
+    def from_edge_free_tip(
+        cls,
+        edge: "object",
+        t: float,
+        width: float,
+        reference_point: Point,
+        tip_shortfall: float = 20.0,
+        dart_type: "DartType | str" = DartType.TRIANGLE,
+        name: str | None = None,
+    ) -> "Dart":
+        """Place a dart on *edge* at parameter *t* with the tip aimed at a landmark.
+
+        The tip is *tip_shortfall* mm short of *reference_point* along the
+        straight line from *reference_point* to the mouth centre.
+        """
+        if not (0.0 <= t <= 1.0):
+            raise ValueError(f"t must be in [0, 1], got {t}")
+        geom, edge_elem = _unwrap_edge(edge)
+        center = geom.point_at_t(t)
+        tip = reference_point.move_towards(Segment(reference_point, center), tip_shortfall)
+        leg_a = center.move_towards(geom, -width / 2.0)
+        leg_b = center.move_towards(geom, +width / 2.0)
+        return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
+                   dart_type=dart_type, name=name, _edge_element=edge_elem)
 
     # ------------------------------------------------------------------
     # Derived geometry
     # ------------------------------------------------------------------
 
     @property
-    def roof(self) -> Point:
-        roof_height = float(math.tan(self.intake_angle)*(self.width / 2))
-        return self.center.move_towards(Ray(self.tip, self.tip.coords - self.center.coords), arc_length=-roof_height)
+    def is_triangle(self) -> bool:
+        """``True`` for a seam-edge triangle dart."""
+        return self.dart_type is DartType.TRIANGLE
 
     @property
-    def fold_line(self) -> Segment:
-        """The center crease/fold line from the mouth center to the tip."""
+    def roof(self) -> Point:
+        """Abnäherdach peak — the corrected seam point above the mouth centre.
+
+        Height h = (width/2)² / depth, displaced outward along the fold line.
+        """
+        roof_height = float(math.tan(self.intake_angle) * (self.width / 2))
+        return self.center.move_towards(
+            Ray(self.tip, self.tip.coords - self.center.coords), arc_length=-roof_height
+        )
+
+    @property
+    def fold_line(self) -> "Segment":
+        """Fold/crease line from mouth centre to tip."""
         return Segment(self.center, self.tip)
 
     @property
-    def stitch_line_a(self) -> Segment:
-        """Stitching line from leg_a to the tip."""
-        return Segment(self.leg_a, self.tip)
+    def stitch_line_a(self) -> "Segment | CubicBezier":
+        """Stitch line from tip to leg_a (straight or curved)."""
+        if self.stitch_curve_a is not None:
+            return self.stitch_curve_a
+        return Segment(self.tip, self.leg_a)
 
     @property
-    def stitch_line_b(self) -> Segment:
-        """Stitching line from leg_b to the tip."""
-        return Segment(self.leg_b, self.tip)
+    def stitch_line_b(self) -> "Segment | CubicBezier":
+        """Stitch line from tip to leg_b (straight or curved)."""
+        if self.stitch_curve_b is not None:
+            return self.stitch_curve_b
+        return Segment(self.tip, self.leg_b)
 
     @property
     def width(self) -> float:
-        """Opening width (mouth) of the dart in mm (distance leg_a → leg_b)."""
+        """Mouth opening width in mm (leg_a → leg_b)."""
         return self.leg_a.distance_to(self.leg_b)
 
     @property
     def depth(self) -> float:
-        """Depth of the dart in mm (distance from mouth center to tip)."""
+        """Depth in mm (mouth centre → tip)."""
         return self.center.distance_to(self.tip)
 
     @property
     def mirror_tip(self) -> Point:
-        """The opposite apex of the rhombus: tip reflected across the leg_a→leg_b mouth line.
-
-        For a rhombus dart (``dart_type="rhombus"``) this is the second
-        stitching apex on the far side of the seam.  For a triangle dart it is
-        geometrically valid but has no standard sewing use.
-        """
+        """Tip reflected across the mouth line — default second apex for rhombus darts."""
         return Segment(self.leg_a, self.leg_b).reflect_point(self.tip)
 
     @property
+    def effective_second_tip(self) -> Point:
+        """Second apex for rhombus darts: ``second_tip`` if set, else ``mirror_tip``."""
+        return self.second_tip if self.second_tip is not None else self.mirror_tip
+
+    @property
     def intake_angle(self) -> float:
-        """Full intake angle in radians (angle leg_a–tip–leg_b)."""
-        return float(2*math.atan(self.width/(2 * self.depth)))
+        """Full intake angle in radians (leg_a–tip–leg_b)."""
+        return float(2 * math.atan(self.width / (2 * self.depth)))
 
     # ------------------------------------------------------------------
-    # Transformation
+    # Transformations
     # ------------------------------------------------------------------
 
-    def translate(self, dx: float, dy: float) -> Dart:
-        """Return a copy translated by (dx, dy)."""
+    def translate(self, dx: float, dy: float) -> "Dart":
+        """Return a translated copy."""
         return Dart(
             leg_a=self.leg_a.translate(dx, dy),
             leg_b=self.leg_b.translate(dx, dy),
@@ -1660,13 +1824,13 @@ class Dart:
             tip=self.tip.translate(dx, dy),
             dart_type=self.dart_type,
             name=self.name,
+            second_tip=self.second_tip.translate(dx, dy) if self.second_tip else None,
         )
 
-    def rotate(self, pivot: Point, angle_rad: float) -> Dart:
-        """Return a copy rotated by *angle_rad* (CCW) around *pivot*.
+    def rotate(self, pivot: Point, angle_rad: float) -> "Dart":
+        """Return a rotated copy (CCW around *pivot*).
 
-        This is the pivot-method dart transfer operation: rotating the dart
-        to a new edge position preserves the intake angle and depth.
+        Preserves intake angle and depth — used for pivot-method dart transfer.
         """
         return Dart(
             leg_a=self.leg_a.rotate(pivot, angle_rad),
@@ -1675,52 +1839,68 @@ class Dart:
             tip=self.tip.rotate(pivot, angle_rad),
             dart_type=self.dart_type,
             name=self.name,
+            second_tip=self.second_tip.rotate(pivot, angle_rad) if self.second_tip else None,
         )
 
-    def split(self, ratio: float = 0.5) -> tuple[Dart, Dart]:
-        """Split this dart into two darts, sharing the same tip and mouth center.
+    def split(self, ratio: float = 0.5) -> "tuple[Dart, Dart]":
+        """Split into two sub-darts sharing the same tip.
 
-        The intake angle is divided in proportion *ratio* : (1 − ratio).  The
-        two darts share the tip point and the mouth center; the split point on
-        the original mouth becomes the inner leg of each sub-dart.
+        The intake angle is divided *ratio* : (1 − *ratio*).
 
         Args:
-            ratio: Fraction of the intake angle in the first sub-dart.
-                   Must be in the open interval (0, 1). Defaults to 0.5.
-
-        Returns:
-            A ``(dart_a, dart_b)`` tuple where dart_a covers the *ratio*
-            portion and dart_b the remainder.
+            ratio: Fraction of the intake angle in the first sub-dart ∈ (0, 1).
         """
         if not (0.0 < ratio < 1.0):
             raise ValueError(f"ratio must be in (0, 1), got {ratio}")
-        half_angle = self.intake_angle * ratio
+        split_angle = self.intake_angle * ratio
         da = np.array(self.leg_a.coords) - np.array(self.tip.coords)
         db = np.array(self.leg_b.coords) - np.array(self.tip.coords)
-        cross = float(da[0] * db[1] - da[1] * db[0])
-        sign = 1.0 if cross >= 0 else -1.0
-        split_leg = self.leg_a.rotate(self.tip, sign * half_angle)
+        sign = 1.0 if float(da[0] * db[1] - da[1] * db[0]) >= 0 else -1.0
+        split_leg = self.leg_a.rotate(self.tip, sign * split_angle)
+        mid_a = Point(*(0.5 * (np.array(self.leg_a.coords) + np.array(split_leg.coords))))
+        mid_b = Point(*(0.5 * (np.array(split_leg.coords) + np.array(self.leg_b.coords))))
         dart_a = Dart(
-            leg_a=self.leg_a,
-            leg_b=split_leg,
-            center=Point(*(0.5 * (np.array(self.leg_a.coords) + np.array(split_leg.coords)))),
-            tip=self.tip,
+            leg_a=self.leg_a, leg_b=split_leg, center=mid_a, tip=self.tip,
             dart_type=self.dart_type,
             name=(f"{self.name} A" if self.name else None),
         )
         dart_b = Dart(
-            leg_a=split_leg,
-            leg_b=self.leg_b,
-            center=Point(*(0.5 * (np.array(split_leg.coords) + np.array(self.leg_b.coords)))),
-            tip=self.tip,
+            leg_a=split_leg, leg_b=self.leg_b, center=mid_b, tip=self.tip,
             dart_type=self.dart_type,
             name=(f"{self.name} B" if self.name else None),
         )
         return dart_a, dart_b
-
 
     def __repr__(self) -> str:
         return (
             f"Dart(name={self.name!r}, leg_a={self.leg_a}, leg_b={self.leg_b}, "
             f"center={self.center}, tip={self.tip}, dart_type={self.dart_type!r})"
         )
+
+
+def _unwrap_edge(
+    edge: object,
+) -> "tuple[Segment | CubicBezier | Ray | Line, object | None]":
+    """Extract geometry and optional source PatternElement from an edge argument.
+
+    Accepts a ``PatternElement`` wrapping a ``Segment``, ``CubicBezier``,
+    ``Ray`` or ``Line``, or any of those geometry objects directly.
+    Returns ``(geometry, element_or_None)``.
+    """
+    _LINEAR = (Segment, CubicBezier, Ray, Line)
+    geom_attr = getattr(edge, "geometry", None)
+    if geom_attr is not None:
+        if not isinstance(geom_attr, _LINEAR):
+            raise ValueError(
+                "PatternElement must wrap a Segment, CubicBezier, Ray or Line, "
+                f"got {type(geom_attr).__name__!r}"
+            )
+        return geom_attr, edge
+    if isinstance(edge, _LINEAR):
+        return edge, None
+    raise TypeError(
+        "edge must be a PatternElement, Segment, CubicBezier, Ray or Line, "
+        f"got {type(edge).__name__!r}"
+    )
+
+

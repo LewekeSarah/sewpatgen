@@ -1,19 +1,5 @@
-"""Sewpat package - A Python library for generating sewing patterns.
+"""Sewpat — a Python library for generating sewing patterns."""
 
-This package provides geometric primitives for CAD operations,
-designed for generating and manipulating vector patterns.
-
-Modules:
-    geometry: Contains geometric primitives like Point, Line, Ray, Circle,
-              Segment, Rect, and CubicBezier.
-    style:    Contains StyleOptions and stroke-width constants.
-    element:  Contains PatternElement.
-    dart:     Contains DartResult and DartElements.
-    pattern:  Contains PatternPart and related classes.
-    render:   Contains the SVG export function.
-"""
-
-from .dart import DartElements, DartResult
 from .element import PatternElement, PrecisionPoint
 from .geometry import (
     Circle,
@@ -44,6 +30,7 @@ from .pattern import (
     Block,
     ConstructionGrid,
     ConstructionGridPart,
+    DartResult,
     OverlayPart,
     Pattern,
     PatternPart,
@@ -53,9 +40,8 @@ from .style import (
     DEFAULT_STROKE_WIDTH_GRAIN,
     STYLE_CENTER_LINE,
     STYLE_CONSTRUCTION_GRID,
-    STYLE_CUT,
-    STYLE_DART_FOLD,
     STYLE_DART_STITCH,
+    STYLE_DART_FOLD,
     STYLE_DEBUG_RED,
     STYLE_FOLD,
     STYLE_GRAINLINE,
@@ -93,9 +79,8 @@ __all__ = [
     # Pattern element
     "PatternElement",
     "PrecisionPoint",
-    # Dart
+    # Dart result
     "DartResult",
-    "DartElements",
     # Pattern
     "PatternPart",
     "Pattern",
@@ -123,7 +108,6 @@ __all__ = [
     "STYLE_GRAINLINE",
     "STYLE_FOLD",
     "STYLE_HEM",
-    "STYLE_CUT",
     "STYLE_STITCH",
     "STYLE_WAISTBAND",
     "STYLE_CENTER_LINE",
