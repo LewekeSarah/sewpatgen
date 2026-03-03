@@ -611,6 +611,31 @@ class PatternPart:
 
         created: list[PatternElement] = []
 
+        # ── Split the source edge at the dart legs ───────────────────────────
+        # When the dart was created from an outline edge, the original segment
+        # is replaced by the outer sub-segments produced by splitting at the
+        # two leg points.  The dart mouth between the legs is thereby removed
+        # from the outline so add_seam_allowance() sees the correct polygon.
+        if (
+            dart.is_triangle
+            and edge_elem is not None
+            and edge_elem in self.elements
+            and edge_elem.is_outline
+            and isinstance(edge_elem.geometry, (Segment, CubicBezier))
+        ):
+            src_style = copy.copy(edge_elem.style) if edge_elem.style is not None else StyleOptions()
+            all_subs = edge_elem.geometry.split_at_points([dart.leg_a, dart.leg_b])
+            # The middle sub-segment (between the two legs) is the dart mouth —
+            # discard it; keep only the first and last sub-segments.
+            outer_subs = all_subs[:1] + (all_subs[-1:] if len(all_subs) > 1 else [])
+            edge_elem.is_outline = False
+            idx = self.elements.index(edge_elem)
+            for i, seg in enumerate(outer_subs):
+                stub = PatternElement(seg, style=src_style,
+                                     is_outline=True, role="dart_edge_stub")
+                self.elements.insert(idx + 1 + i, stub)
+                created.append(stub)
+
         def _add(elem: PatternElement) -> PatternElement:
             self.elements.append(elem)
             created.append(elem)

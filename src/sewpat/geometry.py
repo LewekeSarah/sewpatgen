@@ -130,6 +130,15 @@ class Point:
         """Return the negated point (-x, -y)."""
         return Point(*(-self.coords))
 
+    def __eq__(self, other: object) -> bool:
+        """Scalar equality: True when both coordinates and name match exactly."""
+        if not isinstance(other, Point):
+            return NotImplemented
+        return bool(np.array_equal(self.coords, other.coords)) and self.name == other.name
+
+    def __hash__(self) -> int:
+        return hash((round(float(self.coords[0]), 9), round(float(self.coords[1]), 9), self.name))
+
     def rotate(self, center: "Point", angle_rad: float) -> "Point":
         """Return a copy rotated by *angle_rad* around *center* (counter-clockwise)."""
         cos_a, sin_a = math.cos(angle_rad), math.sin(angle_rad)
@@ -222,6 +231,80 @@ class Segment:
         if not (0 <= t <= 1):
             raise ValueError(f"{t = } expected in [0, 1]")
         return self.p1 * (1.0 - t) + self.p2 * t
+
+    def split(self, t: float) -> "tuple[Segment, Segment]":
+        """Split at parameter *t* ∈ (0, 1) and return ``(left, right)``.
+
+        Mirrors :meth:`CubicBezier.split` so both geometry types share the
+        same split interface.
+
+        Args:
+            t: Split parameter in the open interval (0, 1).
+
+        Returns:
+            A pair ``(Segment(p1, mid), Segment(mid, p2))`` where
+            ``mid = point_at_t(t)``.
+        """
+        if not (0.0 < t < 1.0):
+            raise ValueError(f"t must be in (0, 1), got {t}")
+        mid = self.point_at_t(t)
+        return Segment(self.p1, mid, name=self.name), Segment(mid, self.p2, name=self.name)
+
+    def split_at_points(
+        self,
+        points: list["Point"],
+        tolerance: float = 0.5,
+    ) -> "list[Segment]":
+        """Split at a list of points that lie on this segment.
+
+        Each point is projected onto the segment's axis using
+        :attr:`unit_direction` and :attr:`length` to obtain its arc-length
+        parameter *t ∈ [0, 1]*.  The points are then sorted by *t* before
+        splitting, so their order in *points* does not matter.  Points within
+        *tolerance* mm of either endpoint are silently dropped (they would
+        produce a degenerate zero-length stub).
+
+        The method delegates each individual split to :meth:`split`, so the
+        two methods share the same underlying arithmetic.
+
+        Args:
+            points: List of :class:`Point` objects lying on the segment.
+            tolerance: Minimum distance from an endpoint (in mm) for a split
+                point to be kept.  Defaults to 0.5 mm.
+
+        Returns:
+            List of :class:`Segment` sub-segments in p1→p2 order.  Returns a
+            single-element list containing the original segment when all points
+            fall within *tolerance* of the endpoints.
+        """
+        total_len = self.length
+        if total_len == 0.0:
+            return [Segment(self.p1, self.p2, name=self.name)]
+
+        # Project each point onto [0, 1] using already-available helpers:
+        # arc-length from p1 = dot(pt - p1, unit_direction), then divide by length.
+        eps = tolerance / total_len
+        ts: list[float] = sorted(
+            float(np.dot(pt.coords - self.p1.coords, self.unit_direction)) / total_len
+            for pt in points
+        )
+        breakpoints: list[float] = [t for t in ts if eps < t < 1.0 - eps]
+
+        if not breakpoints:
+            return [Segment(self.p1, self.p2, name=self.name)]
+
+        # Walk through breakpoints, splitting the remaining tail each time.
+        # Re-use split() so there is a single source of truth for the arithmetic.
+        tail: Segment = Segment(self.p1, self.p2, name=self.name)
+        sub_segments: list[Segment] = []
+        consumed: float = 0.0          # fraction of original length already cut off
+        for t in breakpoints:
+            local_t = (t - consumed) / (1.0 - consumed)
+            head, tail = tail.split(local_t)
+            sub_segments.append(head)
+            consumed = t
+        sub_segments.append(tail)
+        return sub_segments
 
     def point_perpendicular(
         self,
@@ -885,6 +968,62 @@ class CubicBezier:
                 Point(right.end.real, right.end.imag),
             ),
         )
+
+    def split_at_points(
+        self,
+        points: list["Point"],
+        tolerance: float = 0.5,
+    ) -> "list[CubicBezier]":
+        """Split at a list of points that lie on this curve.
+
+        Each point is located on the curve via :func:`_bezier_closest_t` (the
+        same helper used by :meth:`point_along_from`), giving its parameter
+        *t ∈ [0, 1]*.  The points are sorted by *t* before splitting, so their
+        order in *points* does not matter.  Points within *tolerance* mm of
+        either endpoint are silently dropped to avoid degenerate zero-length
+        sub-curves.
+
+        Delegates each individual cut to :meth:`split`, keeping one source of
+        truth for the de Casteljau arithmetic.
+
+        Args:
+            points: List of :class:`Point` objects lying on the curve.
+            tolerance: Minimum distance from an endpoint (in mm) for a split
+                point to be kept.  Defaults to 0.5 mm.
+
+        Returns:
+            List of :class:`CubicBezier` sub-curves in p0→p3 order.  Returns a
+            single-element list containing the original curve when all points
+            fall within *tolerance* of the endpoints.
+        """
+        total_len = self.length
+        if total_len == 0.0:
+            return [CubicBezier(self.p0, self.p1, self.p2, self.p3)]
+
+        svg = self._svg()
+        eps = tolerance / total_len
+
+        ts: list[float] = sorted(
+            _bezier_closest_t(svg, complex(pt.x, pt.y))
+            for pt in points
+        )
+        breakpoints: list[float] = [t for t in ts if eps < t < 1.0 - eps]
+
+        if not breakpoints:
+            return [CubicBezier(self.p0, self.p1, self.p2, self.p3)]
+
+        # Walk through breakpoints re-using split(), converting each absolute t
+        # into a local parameter on the remaining tail — same pattern as Segment.
+        tail: CubicBezier = CubicBezier(self.p0, self.p1, self.p2, self.p3)
+        sub_curves: list[CubicBezier] = []
+        consumed: float = 0.0
+        for t in breakpoints:
+            local_t = (t - consumed) / (1.0 - consumed)
+            head, tail = tail.split(local_t)
+            sub_curves.append(head)
+            consumed = t
+        sub_curves.append(tail)
+        return sub_curves
 
     def bounding_box(self) -> tuple[Point, Point]:
         """Compute the axis-aligned bounding box by finding B'(t)=0 extrema (not the control-point hull)."""

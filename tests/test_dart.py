@@ -138,8 +138,9 @@ class TestDartGeometry:
         dr = d2.rotate(d.tip, math.pi / 4)
         assert dr.stitch_curve_a is not None
         assert dr.stitch_curve_b is not None
-        # After rotation, curves must have been transformed
-        assert dr.stitch_curve_a.p1.x != pytest.approx(d.tip.x)
+        # After rotation around the tip, p1 (= tip) stays fixed; p2 (leg end) moves
+        assert dr.stitch_curve_a.p1.x == pytest.approx(d.tip.x)
+        assert dr.stitch_curve_a.p2.x != pytest.approx(d.leg_a.x)
 
     def test_eq_same_dart(self) -> None:
         d1 = _simple_dart()

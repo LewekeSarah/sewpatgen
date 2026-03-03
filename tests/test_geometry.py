@@ -1056,6 +1056,75 @@ class TestCubicBezierNewMethods(unittest.TestCase):
         self.assertIsInstance(right, CubicBezier)
 
 
+class TestCubicBezierSplitAtPoints(unittest.TestCase):
+    """Tests for CubicBezier.split_at_points()."""
+
+    @staticmethod
+    def _curve():
+        return CubicBezier(
+            p0=Point(10, 10),
+            p1=Point(20, 0),
+            p2=Point(30, 20),
+            p3=Point(40, 10),
+        )
+
+    def test_split_at_one_point_gives_two_curves(self):
+        b = self._curve()
+        subs = b.split_at_points([b.point_at_t(0.5)])
+        self.assertEqual(len(subs), 2)
+        for s in subs:
+            self.assertIsInstance(s, CubicBezier)
+
+    def test_split_at_two_points_gives_three_curves(self):
+        b = self._curve()
+        subs = b.split_at_points([b.point_at_t(0.25), b.point_at_t(0.75)])
+        self.assertEqual(len(subs), 3)
+
+    def test_split_at_points_lengths_sum_to_original(self):
+        b = self._curve()
+        subs = b.split_at_points([b.point_at_t(0.3), b.point_at_t(0.7)])
+        total = sum(s.length for s in subs)
+        self.assertAlmostEqual(total, b.length, places=4)
+
+    def test_split_at_points_chain_is_continuous(self):
+        """End of each sub-curve must equal the start of the next."""
+        b = self._curve()
+        subs = b.split_at_points([b.point_at_t(0.2), b.point_at_t(0.6), b.point_at_t(0.9)])
+        for a, c in zip(subs, subs[1:]):
+            self.assertAlmostEqual(a.p3.x, c.p0.x, places=6)
+            self.assertAlmostEqual(a.p3.y, c.p0.y, places=6)
+
+    def test_split_at_points_unsorted_input_same_result(self):
+        """Points in reverse order must produce the same sub-lengths."""
+        b = self._curve()
+        pa, pb = b.point_at_t(0.3), b.point_at_t(0.7)
+        forward  = b.split_at_points([pa, pb])
+        backward = b.split_at_points([pb, pa])
+        self.assertEqual(len(forward), len(backward))
+        for a, c in zip(forward, backward):
+            self.assertAlmostEqual(a.length, c.length, places=4)
+
+    def test_split_at_endpoint_produces_no_degenerate_stub(self):
+        """A point coinciding with p0 must be dropped (only one real split left)."""
+        b = self._curve()
+        subs = b.split_at_points([b.p0, b.point_at_t(0.5)])
+        self.assertEqual(len(subs), 2)
+
+    def test_split_at_points_all_near_endpoints_returns_original(self):
+        """When all points are at endpoints, return the original curve."""
+        b = self._curve()
+        subs = b.split_at_points([b.p0, b.p3])
+        self.assertEqual(len(subs), 1)
+        self.assertAlmostEqual(subs[0].length, b.length, places=4)
+
+    def test_split_preserves_start_and_end(self):
+        """First sub-curve starts at p0; last ends at p3."""
+        b = self._curve()
+        subs = b.split_at_points([b.point_at_t(0.4)])
+        self.assertAlmostEqual(subs[0].p0.x, b.p0.x, places=8)
+        self.assertAlmostEqual(subs[-1].p3.x, b.p3.x, places=8)
+
+
 class TestSegmentNewMethods(unittest.TestCase):
     """Tests for Segment.point_at_length() and Segment.bounding_box()."""
 
@@ -1114,6 +1183,96 @@ class TestSegmentNewMethods(unittest.TestCase):
         s = Segment(Point(0, 5), Point(10, 5))
         mn, mx = s.bounding_box()
         self.assertAlmostEqual(mn.y, mx.y)  # zero height
+
+    # ── split ────────────────────────────────────────────────────────────────
+
+    def test_split_returns_two_segments(self):
+        left, right = self._seg().split(0.5)
+        self.assertIsInstance(left, Segment)
+        self.assertIsInstance(right, Segment)
+
+    def test_split_midpoint_at_half(self):
+        left, right = self._seg().split(0.5)
+        # left ends / right starts at midpoint (15, 20)
+        self.assertAlmostEqual(left.p2.x, 15.0)
+        self.assertAlmostEqual(left.p2.y, 20.0)
+        self.assertAlmostEqual(right.p1.x, 15.0)
+        self.assertAlmostEqual(right.p1.y, 20.0)
+
+    def test_split_lengths_sum_to_original(self):
+        s = self._seg()
+        left, right = s.split(0.4)
+        self.assertAlmostEqual(left.length + right.length, s.length, places=6)
+
+    def test_split_preserves_endpoints(self):
+        s = self._seg()
+        left, right = s.split(0.3)
+        self.assertAlmostEqual(left.p1.x, s.p1.x)
+        self.assertAlmostEqual(right.p2.x, s.p2.x)
+        self.assertAlmostEqual(right.p2.y, s.p2.y)
+
+    def test_split_invalid_t_zero_raises(self):
+        with self.assertRaises(ValueError):
+            self._seg().split(0.0)
+
+    def test_split_invalid_t_one_raises(self):
+        with self.assertRaises(ValueError):
+            self._seg().split(1.0)
+
+    # ── split_at_points ──────────────────────────────────────────────────────
+
+    def test_split_at_one_point_gives_two_segments(self):
+        s = self._seg()
+        mid = s.point_at_t(0.5)
+        subs = s.split_at_points([mid])
+        self.assertEqual(len(subs), 2)
+
+    def test_split_at_two_points_gives_three_segments(self):
+        s = self._seg()
+        pa = s.point_at_t(0.25)
+        pb = s.point_at_t(0.75)
+        subs = s.split_at_points([pa, pb])
+        self.assertEqual(len(subs), 3)
+
+    def test_split_at_points_lengths_sum_to_original(self):
+        s = self._seg()
+        pa = s.point_at_t(0.3)
+        pb = s.point_at_t(0.7)
+        subs = s.split_at_points([pa, pb])
+        total = sum(seg.length for seg in subs)
+        self.assertAlmostEqual(total, s.length, places=6)
+
+    def test_split_at_points_chain_is_continuous(self):
+        """End of each sub-segment must equal start of the next."""
+        s = self._seg()
+        subs = s.split_at_points([s.point_at_t(0.2), s.point_at_t(0.6), s.point_at_t(0.9)])
+        for a, b in zip(subs, subs[1:]):
+            self.assertAlmostEqual(a.p2.x, b.p1.x, places=6)
+            self.assertAlmostEqual(a.p2.y, b.p1.y, places=6)
+
+    def test_split_at_points_unsorted_input_same_result(self):
+        """Points given in reverse order must produce the same splits."""
+        s = self._seg()
+        pa, pb = s.point_at_t(0.3), s.point_at_t(0.7)
+        forward = s.split_at_points([pa, pb])
+        backward = s.split_at_points([pb, pa])
+        self.assertEqual(len(forward), len(backward))
+        for a, b in zip(forward, backward):
+            self.assertAlmostEqual(a.length, b.length, places=6)
+
+    def test_split_at_endpoint_produces_no_degenerate_stub(self):
+        """A point coinciding with p1 or p2 must be silently dropped."""
+        s = self._seg()
+        subs = s.split_at_points([s.p1, s.point_at_t(0.5)])
+        # p1 is within tolerance of endpoint → only one split point remains
+        self.assertEqual(len(subs), 2)
+
+    def test_split_at_points_all_near_endpoints_returns_original(self):
+        """When all points collapse onto endpoints, return the original segment."""
+        s = self._seg()
+        subs = s.split_at_points([s.p1, s.p2])
+        self.assertEqual(len(subs), 1)
+        self.assertAlmostEqual(subs[0].length, s.length, places=6)
 
 
 class TestCubicBezierConsistencyMethods(unittest.TestCase):

@@ -512,10 +512,10 @@ def example_07_dart_with_seam_allowance() -> None:
                   notches=True, precision_tip=True)
 
     # ── Seam allowance ───────────────────────────────────────────────────────
-    part.add_seam_allowance(
-        distance=SA,
-        outline_elements=[cf, shldr, side, hem],
-    )
+    # add_dart() has already split the side edge at the dart legs and marked
+    # the two outer stubs as is_outline=True, so passing outline_elements=None
+    # lets add_seam_allowance() pick up the correct polygon automatically.
+    part.add_seam_allowance(distance=SA)
 
     part.add_precision_points(pts["bust_point"])
     part.append(Segment(dart.tip, pts["bust_point"]), style=_AUX)
