@@ -117,10 +117,24 @@ class PatternPart:
         return elem
 
     def extend(self, elements: list[PatternElement]) -> None:
-        """Append multiple PatternElements, stamping ``is_construction`` from this part."""
+        """Append multiple :class:`~sewpat.element.PatternElement` objects, stamping
+        ``is_construction`` from this part.
+
+        When a :class:`PatternElement` wraps a :class:`~sewpat.geometry.Dart`
+        as its geometry, it is dispatched to :meth:`add_dart` using the
+        element's ``style`` as ``stitch_style``; all other dart options keep
+        their defaults.  Use :meth:`add_dart` directly when you need full
+        control over fold style, notches, etc.
+
+        All other :class:`PatternElement` objects are appended as-is after
+        stamping ``is_construction``.
+        """
         for elem in elements:
-            elem.is_construction = self.is_construction
-        self.elements.extend(elements)
+            if isinstance(elem.geometry, Dart):
+                self.add_dart(elem.geometry, stitch_style=elem.style)
+            else:
+                elem.is_construction = self.is_construction
+                self.elements.append(elem)
 
     def _outline_polygon(self) -> _sg.Polygon | None:
         """Build a Shapely Polygon from the ``is_outline`` elements of this part."""
@@ -577,8 +591,8 @@ class PatternPart:
         dart: Dart,
         *,
         stitch_style: StyleOptions | None = None,
-        fold_style: StyleOptions | None = None,
-        precision_style: StyleOptions | None = None,
+        fold_style: StyleOptions = STYLE_DART_FOLD,
+        precision_style: StyleOptions = STYLE_PRECISION_POINT,
         notches: bool = True,
         precision_tip: bool = True,
         notch_kwargs: dict | None = None,

@@ -39,6 +39,7 @@ class TopGrid:
         center_back: Vertical guide along the back centre.
         hip_adj: Vertical guide for the hip adjustment (BeckenAdjustment).
         neck: Vertical guide at the neck position
+        dart_back: Vertical guide at the back dart position.
         sleeve_back: Vertical guide at the back sleeve position.
         side_back: Vertical guide at the back side-seam position.
         side_front: Vertical guide at the front side-seam position.
@@ -61,6 +62,7 @@ class TopGrid:
     center_back: Segment
     hip_adj: Segment
     neck: Segment
+    dart_back: Segment
     sleeve_back: Segment
     side_back: Segment
     side_front: Segment
@@ -105,6 +107,7 @@ class TopGrid:
                 ("Center Back",    0),
                 ("Hip Adjustment", hip_adj),
                 ("Neck",           0 + meas.HlB),
+                ("Dart Back",      hip_adj + meas.RüB / 2),
                 ("Sleeve Back",    hip_adj + meas.RüB),
                 ("Side Back",      hip_adj + meas.RüB + meas.ArD * 2 / 3),
                 ("Side Front",     hip_adj + meas.RüB + meas.ArD * 2 / 3 + config.margin),
@@ -131,6 +134,7 @@ class TopGrid:
             hip_adj=seg("Hip Adjustment"),
             neck=seg("Neck"),
             sleeve_back=seg("Sleeve Back"),
+            dart_back=seg("Dart Back"),
             side_back=seg("Side Back"),
             side_front=seg("Side Front"),
             sleeve_front=seg("Sleeve Front"),

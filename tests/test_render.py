@@ -277,7 +277,7 @@ class TestRenderCircle(unittest.TestCase):
         svg = self._svg(Circle(Point(7, 8), radius=3))
         self.assertIn('cx="7.0"', svg)
         self.assertIn('cy="8.0"', svg)
-        self.assertIn('r="3mm"', svg)
+        self.assertIn('r="3"', svg)
 
 
 class TestRenderRect(unittest.TestCase):

@@ -3,6 +3,7 @@
 from .geometry import (
     Circle,
     CubicBezier,
+    Dart,
     InfoBox,
     Point,
     Rect,
@@ -30,7 +31,7 @@ class PatternElement:
 
     def __init__(
         self,
-        geometry: Segment | Rect | Circle | Triangle | CubicBezier | Point | InfoBox,
+        geometry: Segment | Rect | Circle | Triangle | CubicBezier | Point | InfoBox | Dart,
         style: StyleOptions | None = None,
         name: str | None = None,
         role: str | None = None,
