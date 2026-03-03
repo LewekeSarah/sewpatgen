@@ -83,6 +83,75 @@ class TestPoint(unittest.TestCase):
         self.assertAlmostEqual(rotated.x, 1, places=10)
         self.assertAlmostEqual(rotated.y, 2, places=10)
 
+    def test_add(self):
+        """Point + Point offsets by the second point as a displacement vector."""
+        a = Point(1, 2)
+        b = Point(3, 4)
+        result = a + b
+        self.assertAlmostEqual(result.x, 4)
+        self.assertAlmostEqual(result.y, 6)
+        # Original unchanged
+        self.assertAlmostEqual(a.x, 1)
+
+    def test_sub(self):
+        """Point - Point returns the displacement vector as a Point."""
+        a = Point(5, 7)
+        b = Point(2, 3)
+        result = a - b
+        self.assertAlmostEqual(result.x, 3)
+        self.assertAlmostEqual(result.y, 4)
+
+    def test_mul_scalar(self):
+        """Point * scalar scales the position vector."""
+        p = Point(3, 4)
+        self.assertAlmostEqual((p * 2).x, 6)
+        self.assertAlmostEqual((p * 2).y, 8)
+        self.assertAlmostEqual((p * 0.5).x, 1.5)
+
+    def test_rmul_scalar(self):
+        """scalar * Point is equivalent to Point * scalar."""
+        p = Point(3, 4)
+        result = 2.0 * p
+        self.assertAlmostEqual(result.x, 6)
+        self.assertAlmostEqual(result.y, 8)
+
+    def test_neg(self):
+        """-Point negates both coordinates."""
+        p = Point(3, -4)
+        result = -p
+        self.assertAlmostEqual(result.x, -3)
+        self.assertAlmostEqual(result.y, 4)
+
+    def test_midpoint_via_arithmetic(self):
+        """(a + b) * 0.5 gives the midpoint."""
+        a = Point(0, 0)
+        b = Point(4, 6)
+        mid = (a + b) * 0.5
+        self.assertAlmostEqual(mid.x, 2)
+        self.assertAlmostEqual(mid.y, 3)
+
+    def test_add_non_point_returns_not_implemented(self):
+        """Adding a non-Point returns NotImplemented (no TypeError from Point itself)."""
+        p = Point(1, 2)
+        result = p.__add__(42)
+        self.assertIs(result, NotImplemented)
+
+    def test_sub_non_point_returns_not_implemented(self):
+        p = Point(1, 2)
+        self.assertIs(p.__sub__("x"), NotImplemented)
+
+    def test_mul_non_scalar_returns_not_implemented(self):
+        p = Point(1, 2)
+        self.assertIs(p.__mul__(Point(1, 1)), NotImplemented)
+
+    def test_immutability_preserved(self):
+        """Arithmetic operators always return new Points; originals are unchanged."""
+        p = Point(1, 2)
+        _ = p + Point(10, 10)
+        _ = p * 5
+        self.assertAlmostEqual(p.x, 1)
+        self.assertAlmostEqual(p.y, 2)
+
 
 class TestPointMoveTowards(unittest.TestCase):
     """Tests for Point.move_towards() across all supported curve types."""

@@ -27,8 +27,8 @@ from sewpat import (
     STYLE_DART_FOLD,
     STYLE_DART_STITCH,
     STYLE_FOLD,
+    STYLE_PRECISION_POINT,
     STYLE_STITCH,
-    STYLE_SEAM_ALLOWANCE,
     Dart,
     DartType,
     Pattern,
@@ -72,7 +72,7 @@ _FOLD        = _scaled(STYLE_FOLD)
 _STITCH      = _scaled(STYLE_STITCH)
 _DART_STITCH = _scaled(STYLE_DART_STITCH)
 _DART_FOLD   = _scaled(STYLE_DART_FOLD)
-_DART_PP     = _scaled(STYLE_SEAM_ALLOWANCE)
+_PRECISION   = _scaled(STYLE_PRECISION_POINT)
 _GRAINLINE   = _scaled(STYLE_GRAINLINE)
 _AUX         = _scaled(STYLE_CONSTRUCTION_GRID)
 _REF_STYLE   = StyleOptions(stroke_color="#bbbbbb", stroke_width=0.15, dash_array=[3.0, 3.0])
@@ -133,7 +133,7 @@ def _build_block(name: str) -> tuple[Pattern, dict[str, Point]]:
         "waist_side":    intersect(g_waist,    g_side)[0],
         "hem_cf":        intersect(g_hem,       g_cf)[0],
         "hem_side":      intersect(g_hem,       g_side)[0],
-        "bust_point":    ANCHOR.translate(BUST_X, BUST_Y),
+        "bust_point":    ANCHOR + Point(BUST_X, BUST_Y),
     }
     return pattern, pts
 
@@ -202,7 +202,7 @@ def example_02_outer_reference_point() -> None:
         dart_type=DartType.TRIANGLE, name="Bustnaht",
     )
     part.add_dart(dart, stitch_style=_DART_STITCH, fold_style=_DART_FOLD,
-                  precision_style=_DART_PP, notches=True, precision_tip=True)
+                  precision_style=_PRECISION, notches=True, precision_tip=True)
     part.append(Segment(dart.center, pts["bust_point"]), style=_AUX)
     part.add_precision_points(pts["bust_point"])
 
@@ -210,8 +210,8 @@ def example_02_outer_reference_point() -> None:
         header="Vorderteil",
         notes=["Bustnaht-Abnäher", "Referenz: Bustpunkt", "Kurzfall: 25 mm", "Breite: 28 mm"],
     )
-    part.add_grainline(ANCHOR.translate(10 * MM, 10 * MM),
-                       ANCHOR.translate(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
+    part.add_grainline(ANCHOR + Point(10 * MM, 10 * MM),
+                       ANCHOR + Point(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
     export_pattern_svg_mm(pattern, filename=str(OUT_DIR / "02_outer_dart_reference_point.svg"),
                           width_mm=_A4_W, height_mm=_A4_H)
     print("✓  02_outer_dart_reference_point.svg")
@@ -237,8 +237,8 @@ def example_03_inner_dart_rhombus() -> None:
     )
     part.add_dart(dart, stitch_style=_DART_STITCH, notches=True, precision_tip=True)
 
-    part.add_grainline(ANCHOR.translate(10 * MM, 10 * MM),
-                       ANCHOR.translate(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
+    part.add_grainline(ANCHOR + Point(10 * MM, 10 * MM),
+                       ANCHOR + Point(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
     export_pattern_svg_mm(pattern, filename=str(OUT_DIR / "03_inner_dart_rhombus.svg"),
                           width_mm=_A4_W, height_mm=_A4_H)
     print("✓  03_inner_dart_rhombus.svg")
@@ -276,26 +276,23 @@ def example_04_dart_split() -> None:
         notes=["Ursprünglicher Abnäher: 36 mm", "→ aufgeteilt in 2 × 18 mm",
                "(grau = Original als Referenz)"],
     )
-    part.add_grainline(ANCHOR.translate(10 * MM, 10 * MM),
-                       ANCHOR.translate(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
+    part.add_grainline(ANCHOR + Point(10 * MM, 10 * MM),
+                       ANCHOR + Point(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
     export_pattern_svg_mm(pattern, filename=str(OUT_DIR / "04_dart_split.svg"),
                           width_mm=_A4_W, height_mm=_A4_H)
     print("✓  04_dart_split.svg")
 
 # ---------------------------------------------------------------------------
-# README maintenance — embed SVGs as base64 data URIs
+# README — embed SVGs as inline base64 data URIs
 # ---------------------------------------------------------------------------
 
 def embed_svgs_in_readme() -> None:
-    """Replace every ``![…](…)`` image tag in README.md with a fresh inline
-    base64 data URI read from the corresponding SVG file on disk.
+    """Embed the four example SVGs as base64 data URIs into README.md.
 
-    Works whether the README currently contains plain filenames *or* stale
-    data URIs from a previous run — the replacement is always positional
-    (first image tag ↔ first SVG file in *_SVG_ORDER*).
-
-    The SVG files themselves are kept on disk as the canonical source;
-    this function is called automatically after every SVG regeneration.
+    Each ``![alt](filename.svg)`` tag is replaced with an inline
+    ``![alt](data:image/svg+xml;base64,…)`` tag so the images display
+    in JetBrains Markdown preview (and other viewers that block relative
+    file references but allow data URIs).
     """
     import base64
     import re
@@ -312,8 +309,7 @@ def embed_svgs_in_readme() -> None:
         return
     text = readme.read_text(encoding="utf-8")
 
-    # Match every ![alt](anything) tag — captures prefix, uri, and suffix separately
-    tag_re = re.compile(r"(!\[[^\]]*\]\()([^)]+)(\))")
+    tag_re = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
     matches = list(tag_re.finditer(text))
 
     result = text
@@ -326,14 +322,14 @@ def embed_svgs_in_readme() -> None:
         if not svg_path.exists():
             continue
         b64 = base64.b64encode(svg_path.read_bytes()).decode()
-        new_tag = m.group(1) + "data:image/svg+xml;base64," + b64 + m.group(3)
+        new_tag = f"![{m.group(1)}](data:image/svg+xml;base64,{b64})"
         start, end = m.start() + offset, m.end() + offset
         result = result[:start] + new_tag + result[end:]
         offset += len(new_tag) - (end - start)
         embedded += 1
 
     readme.write_text(result, encoding="utf-8")
-    print(f"↺  README.md updated — {embedded} SVG(s) embedded as data URIs")
+    print(f"↺  README.md — {embedded} SVG(s) embedded as data URIs")
 
 
 # ---------------------------------------------------------------------------
@@ -346,6 +342,5 @@ if __name__ == "__main__":
     example_02_outer_reference_point()
     example_03_inner_dart_rhombus()
     example_04_dart_split()
-    print(f"\nAll SVGs written to: {OUT_DIR.resolve()}")
-    print()
+    print(f"\nAll SVGs written to: {OUT_DIR.resolve()}\n")
     embed_svgs_in_readme()

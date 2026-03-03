@@ -268,7 +268,7 @@ class PatternPart:
             return None
         return self.append(
             InfoBox(
-                position=pos.translate(0, 3 * CM),
+                position=pos + Point(0, 3 * CM),
                 header=header if header is not None else self.name,
                 notes=notes,
             )
@@ -333,21 +333,21 @@ class PatternPart:
             return min(sa_geoms, key=lambda g: sp.distance(geom_to_shapely(g)))
 
         def _place_symbol(notch_pt: Point, along, normal, symbol, is_sa: bool) -> list:
-            ax, ay = float(along[0]), float(along[1])
-            nx, ny = float(normal[0]), float(normal[1])
+            along_pt = Point(*along)
+            normal_pt = Point(*normal)
             offsets = (
                 [0.0] if not is_back else [-(half_w + gap / 2), +(half_w + gap / 2)]
             )
             created = []
             for offset in offsets:
-                centre = notch_pt.translate(offset * ax, offset * ay)
-                tip = centre.translate(nx * length, ny * length)
+                centre = notch_pt + along_pt * offset
+                tip = centre + normal_pt * length
                 if symbol == "Triangle":
-                    bl = centre.translate(-half_w * ax, -half_w * ay)
-                    br = centre.translate(half_w * ax, half_w * ay)
+                    bl = centre - along_pt * half_w
+                    br = centre + along_pt * half_w
                 else:
-                    bl = centre.translate(-half_w / 5 * ax, -half_w / 5 * ay)
-                    br = centre.translate(half_w / 5 * ax, half_w / 5 * ay)
+                    bl = centre - along_pt * (half_w / 5)
+                    br = centre + along_pt * (half_w / 5)
                 elem = self.append(Triangle(bl, br, tip))
                 elem.is_seam_allowance = is_sa
                 created.append(elem)
@@ -533,7 +533,7 @@ class PatternPart:
                 else:  # bevel
                     _ea = geom_end(ga)
                     _sb = geom_start(gb)
-                    corner = Point(*(0.5 * (_ea.coords + _sb.coords)))
+                    corner = (_ea + _sb) * 0.5
                     offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), corner)
                     offset_groups[j][0] = with_endpoints(gb, corner, geom_end(gb))
 
@@ -623,11 +623,10 @@ class PatternPart:
 
             # Centre notch at the roof peak
             if notches:
-                mouth_edge = Segment(dart.leg_a, dart.leg_b).translate(
-                    roof.x - dart.center.x, roof.y - dart.center.y
-                )
+                delta = dart.roof - dart.center
+                mouth_edge = Segment(dart.leg_a + delta, dart.leg_b + delta)
                 before = len(self.elements)
-                self.add_notches(roof, seam_edge=mouth_edge, **_nkw)
+                self.add_notches(roof, seam_edge=mouth_edge, **_nkw, symbol="")
                 for e in self.elements[before:]:
                     e.role = "dart_notch"
                     created.append(e)
@@ -639,7 +638,7 @@ class PatternPart:
                     _add(e)
                 if dart.name:
                     _add(PatternElement(
-                        InfoBox(Point(dart.tip.x, dart.tip.y - 14 * MM), header=dart.name),
+                        InfoBox(dart.tip - Point(0, 14 * MM), header=dart.name),
                         role="dart_tip",
                     ))
 
@@ -672,7 +671,7 @@ class PatternPart:
                         _add(e)
                 if dart.name:
                     _add(PatternElement(
-                        InfoBox(Point(dart.tip.x, dart.tip.y - 14 * MM), header=dart.name),
+                        InfoBox(dart.tip - Point(0, 14 * MM), header=dart.name),
                         role="dart_tip",
                     ))
 

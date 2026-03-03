@@ -100,11 +100,37 @@ class Point:
         else:
             return float(np.linalg.norm(self.coords - other))
 
-    def translate(self, dx: float, dy: float) -> Point:
+    def translate(self, dx: float, dy: float) -> "Point":
         """Return a copy translated by (dx, dy)."""
-        return Point(*(self.coords + np.array([dx, dy])))
+        return self + Point(dx, dy)
 
-    def rotate(self, center: Point, angle_rad: float) -> Point:
+    def __add__(self, other: "Point") -> "Point":
+        """Offset by *other* as a displacement vector. Returns a new Point."""
+        if not isinstance(other, Point):
+            return NotImplemented
+        return Point(*(self.coords + other.coords))
+
+    def __sub__(self, other: "Point") -> "Point":
+        """Return the difference as a new Point (vector from *other* to *self*)."""
+        if not isinstance(other, Point):
+            return NotImplemented
+        return Point(*(self.coords - other.coords))
+
+    def __mul__(self, scalar: float) -> "Point":
+        """Scale the position vector by *scalar*."""
+        if not isinstance(scalar, (int, float)):
+            return NotImplemented
+        return Point(*(self.coords * scalar))
+
+    def __rmul__(self, scalar: float) -> "Point":
+        """Scale the position vector by *scalar* (reflected)."""
+        return self.__mul__(scalar)
+
+    def __neg__(self) -> "Point":
+        """Return the negated point (-x, -y)."""
+        return Point(*(-self.coords))
+
+    def rotate(self, center: "Point", angle_rad: float) -> "Point":
         """Return a copy rotated by *angle_rad* around *center* (counter-clockwise)."""
         cos_a, sin_a = math.cos(angle_rad), math.sin(angle_rad)
         rot = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
@@ -189,13 +215,13 @@ class Segment:
     @property
     def midpoint(self) -> Point:
         """Midpoint of the segment."""
-        return Point(*(0.5 * (self.p1.coords + self.p2.coords)))
+        return (self.p1 + self.p2) * 0.5
 
     def point_at_t(self, t: float) -> Point:
         """Return the point at parameter *t* ∈ [0, 1] (0 = p1, 1 = p2)."""
         if not (0 <= t <= 1):
             raise ValueError(f"{t = } expected in [0, 1]")
-        return Point(*((1.0 - t) * self.p1.coords + t * self.p2.coords))
+        return self.p1 * (1.0 - t) + self.p2 * t
 
     def point_perpendicular(
         self,
@@ -226,39 +252,16 @@ class Segment:
         return Point(*(base + self.unit_normal * distance))
 
     def project_point(self, point: Point) -> Point:
-        """Return the orthogonal projection of *point* onto this segment's line.
-
-        The result is the closest point on the infinite line through p1 and p2.
-        It is not clamped to the segment endpoints.
-
-        Args:
-            point: The point to project.
-
-        Returns:
-            Point: The foot of the perpendicular from *point* to the segment line.
-        """
+        """Return the orthogonal projection of *point* onto this segment's line."""
         p1 = self.p1.coords
         d = self.p2.coords - p1
         t = float(np.dot(point.coords - p1, d) / np.dot(d, d))
         return Point(*(p1 + t * d))
 
     def reflect_point(self, point: Point) -> Point:
-        """Return the mirror image of *point* reflected across this segment's line.
-
-        This is the standard point reflection: the result lies on the opposite
-        side of the line at the same perpendicular distance.  Computed as
-        ``2 * foot - point``, where *foot* is the orthogonal projection of
-        *point* onto the line.
-
-        Args:
-            point: The point to reflect.
-
-        Returns:
-            Point: The reflected point.
-        """
+        """Return the mirror image of *point* reflected across this segment's line."""
         foot = self.project_point(point)
-        mirror = 2.0 * foot.coords - point.coords
-        return Point(float(mirror[0]), float(mirror[1]))
+        return foot * 2.0 - point
 
     def contains_point(self, point: Point, tolerance: float = 1e-9) -> bool:
         """Return True if *point* lies on the segment within *tolerance* mm (uses Shapely GEOS)."""
@@ -298,8 +301,8 @@ class Segment:
             offset_vec = normal * abs(distance)
         else:
             offset_vec = normal * distance
-        new_p1 = Point(*(self.p1.coords + offset_vec))
-        new_p2 = Point(*(self.p2.coords + offset_vec))
+        new_p1 = self.p1 + Point(*offset_vec)
+        new_p2 = self.p2 + Point(*offset_vec)
         return Segment(new_p1, new_p2, name=self.name)
 
 
@@ -701,7 +704,9 @@ class Circle:
         perp = np.array([-direction[1], direction[0]])
         if h < 1e-14:
             return [Point(*mid)]
-        return [Point(*(mid + h * perp)), Point(*(mid - h * perp))]
+        mid_pt = Point(*mid)
+        perp_pt = Point(*perp)
+        return [mid_pt + perp_pt * h, mid_pt - perp_pt * h]
 
 
 def _intersect_linear_linear(
@@ -1020,7 +1025,7 @@ class CubicBezier:
     def offset_adaptive(
         self,
         distance: float,
-        center: "Point | None" = None,
+        center: Point | None = None,
         eps: float = 0.1,
         _depth: int = 0,
         _max_depth: int = 8,
@@ -1042,7 +1047,7 @@ class CubicBezier:
             d = distance
 
         # Hodograph approximation for this segment.
-        def _shifted(pt: "Point", t: float) -> "Point":
+        def _shifted(pt: Point, t: float) -> Point:
             n = self.normal_at_t(t)
             return Point(pt.x + d * n[0], pt.y + d * n[1])
 
@@ -1314,7 +1319,7 @@ def miter_corner(
     ta = edge_tangent(ga, at_end=True)
     tb = edge_tangent(gb, at_end=False)
 
-    bevel_mid = Point(*(0.5 * (end_a.coords + start_b.coords)))
+    bevel_mid = (end_a + start_b) * 0.5
 
     pt = _intersect_lines(
         end_a.coords,
@@ -1355,7 +1360,7 @@ def round_corner(
 
     end_a = geom_end(ga)
     start_b = geom_start(gb)
-    bevel_mid = Point(*(0.5 * (end_a.coords + start_b.coords)))
+    bevel_mid = (end_a + start_b) * 0.5
 
     ta = edge_tangent(ga, at_end=True)
     tb = edge_tangent(gb, at_end=False)
@@ -1401,8 +1406,8 @@ def round_corner(
     handle = k * r
 
     # Control points along the tangent directions at each endpoint.
-    cp1 = Point(*(end_a.coords + handle * ta))
-    cp2 = Point(*(start_b.coords - handle * tb))
+    cp1 = end_a   + Point(*(handle * ta))
+    cp2 = start_b - Point(*(handle * tb))
 
     return CubicBezier(end_a, cp1, cp2, start_b)
 
@@ -1609,8 +1614,8 @@ class Dart:
             raise ValueError("tip and center must be distinct")
         perp = fold_seg.unit_normal   # ⊥ to fold line, already unit-length
         half = width / 2.0
-        leg_a = center.translate(-half * float(perp[0]), -half * float(perp[1]))
-        leg_b = center.translate(+half * float(perp[0]), +half * float(perp[1]))
+        leg_a = center - Point(*perp) * half
+        leg_b = center + Point(*perp) * half
         return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
                    dart_type=dart_type, name=name)
 
@@ -1666,7 +1671,7 @@ class Dart:
         normal: np.ndarray = (
             geom.normal_at_t(t) if isinstance(geom, CubicBezier) else geom.unit_normal
         )
-        tip = center.translate(depth * float(normal[0]), depth * float(normal[1]))
+        tip = center + Point(*normal) * depth
         leg_a = center.move_towards(geom, -width / 2.0)
         leg_b = center.move_towards(geom, +width / 2.0)
         return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
@@ -1700,22 +1705,18 @@ class Dart:
             # Project point onto the infinite direction via dot product.
             origin: Point = geom.origin if isinstance(geom, Ray) else geom.point
             s = float(np.dot(point.coords - origin.coords, geom.unit_direction))
-            center = origin.translate(
-                s * float(geom.unit_direction[0]),
-                s * float(geom.unit_direction[1]),
-            )
+            center = origin + Point(*geom.unit_direction) * s
+            normal: np.ndarray = geom.unit_normal
         else:
-            # Segment or CubicBezier — find t via Shapely projection, then build.
+            # Segment or CubicBezier — find t via Shapely projection.
             t = float(np.clip(
                 geom_to_shapely(geom).project(_sg.Point(point.x, point.y), normalized=True),
                 0.0, 1.0,
             ))
             center = geom.point_at_t(t)
+            normal = geom.normal_at_t(t) if isinstance(geom, CubicBezier) else geom.unit_normal
 
-        normal: np.ndarray = (
-                geom.normal_at_t(t) if isinstance(geom, CubicBezier) else geom.unit_normal
-            )
-        tip = center.translate(depth * float(normal[0]), depth * float(normal[1]))
+        tip = center + Point(*normal) * depth
         leg_a = center.move_towards(geom, -width / 2.0)
         leg_b = center.move_towards(geom, +width / 2.0)
         return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
@@ -1857,8 +1858,8 @@ class Dart:
         db = np.array(self.leg_b.coords) - np.array(self.tip.coords)
         sign = 1.0 if float(da[0] * db[1] - da[1] * db[0]) >= 0 else -1.0
         split_leg = self.leg_a.rotate(self.tip, sign * split_angle)
-        mid_a = Point(*(0.5 * (np.array(self.leg_a.coords) + np.array(split_leg.coords))))
-        mid_b = Point(*(0.5 * (np.array(split_leg.coords) + np.array(self.leg_b.coords))))
+        mid_a = (self.leg_a + split_leg) * 0.5
+        mid_b = (split_leg + self.leg_b) * 0.5
         dart_a = Dart(
             leg_a=self.leg_a, leg_b=split_leg, center=mid_a, tip=self.tip,
             dart_type=self.dart_type,
