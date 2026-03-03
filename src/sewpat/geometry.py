@@ -176,6 +176,44 @@ class Segment:
         self.p2 = p2
         self.name = name
 
+    @classmethod
+    def from_direction(
+        cls,
+        start: Point,
+        through: Point,
+        length: float,
+        name: str | None = None,
+    ) -> "Segment":
+        """Create a segment starting at *start*, pointing towards *through*, with given *length*.
+
+        The direction is determined by the vector from *start* to *through*;
+        the actual distance between them does not matter.
+
+        Args:
+            start:   Origin of the new segment.
+            through: Any point that defines the direction (need not be the endpoint).
+            length:  Desired length of the resulting segment in mm.
+            name:    Optional label.
+
+        Returns:
+            A :class:`Segment` of exactly *length* mm from *start* in the
+            direction of *through*.
+
+        Raises:
+            ValueError: If *start* and *through* are the same point.
+
+        Example::
+
+            # Shoulder seam 13 cm long, starting at pt_neck towards pt_arm
+            seg_shoulder = Segment.from_direction(pt_neck, pt_arm, 13 * CM)
+        """
+        d = through.coords - start.coords
+        norm = float(np.linalg.norm(d))
+        if norm == 0.0:
+            raise ValueError("'start' and 'through' must be different points.")
+        end_coords = start.coords + (d / norm) * length
+        return cls(start, Point(*end_coords), name=name)
+
     def __str__(self) -> str:
         if self.name:
             return f"Segment(name={self.name}; p1={self.p1}, p2={self.p2})"

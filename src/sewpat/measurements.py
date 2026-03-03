@@ -80,6 +80,7 @@ class ModelConfig:
     ZuvHoB: float | None = None
     SaW: float | None = None  # Saumweite
     seam_allowance: float = 1 * CM  # Nahtzugabe
+    ZuBrA: float | None = None  # Zugabe Brustpunktabstand
 
 
 def make_blouse_measurements(

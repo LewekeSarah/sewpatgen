@@ -11,6 +11,7 @@ This module owns:
 """
 
 import copy
+from dataclasses import dataclass
 
 import shapely.geometry as _sg
 
@@ -52,6 +53,12 @@ from .style import (
     StyleOptions,
 )
 from .units import CM, MM
+
+
+@dataclass
+class PatternConfig:
+    anchor: Point = Point(5 * CM, 5 * CM, "anchor")
+    margin: float = 10 * CM
 
 
 class DartResult:
