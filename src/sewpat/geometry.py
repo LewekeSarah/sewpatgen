@@ -1884,10 +1884,16 @@ class Dart:
     def split(self, ratio: float = 0.5) -> "tuple[Dart, Dart]":
         """Split into two sub-darts sharing the same tip.
 
-        The intake angle is divided *ratio* : (1 − *ratio*).  The
-        ``dart_type`` of both sub-darts matches the original.  When the
-        parent dart has a name, the sub-darts are named
-        ``"<name> A"`` and ``"<name> B"`` respectively; otherwise ``None``.
+        The intake angle is divided *ratio* : (1 − *ratio*).
+
+        **Preserved on both sub-darts — regardless of** ``dart_type``:
+
+        * ``dart_type`` — both sub-darts have the same type as the parent
+          (``TRIANGLE`` *or* ``RHOMBUS``).
+        * Name suffixes — when the parent dart has a name, the sub-darts are
+          named ``"<name> A"`` and ``"<name> B"`` respectively; when the
+          parent is unnamed both sub-darts receive ``None``.  This behaviour
+          is identical for ``TRIANGLE`` and ``RHOMBUS`` darts.
 
         Args:
             ratio: Fraction of the intake angle in the first sub-dart ∈ (0, 1).

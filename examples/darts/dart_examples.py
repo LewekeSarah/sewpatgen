@@ -459,6 +459,84 @@ def example_06_curved_dart() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Example 7 — Dart with seam allowance
+# ---------------------------------------------------------------------------
+
+def example_07_dart_with_seam_allowance() -> None:
+    """Bust dart on a bodice-front piece with full seam allowance.
+
+    Real patterns are cut with seam allowance (Nahtzugabe).  This example
+    shows how ``PatternPart.add_seam_allowance()`` works alongside a dart:
+
+    * **10 mm** SA on shoulder, side seam and hem (stitch lines).
+    * **0 mm** SA on the centre-front edge (fold / Fadenlauf — no seam here).
+    * The dart itself sits on the side seam and is rendered with notches
+      and a precision tip marker as usual.
+
+    The dashed outer rectangle is the cutting line; the inner solid rectangle
+    is the sewing line.  Sewers can see exactly where to place notches and
+    how the SA wraps around the dart legs.
+    """
+    pattern, pts = _build_block("Beispiel 7 – Bustnaht-Abnäher mit Nahtzugabe")
+    part = PatternPart("Vorderteil")
+    pattern.add_part(part)
+
+    SA = 10 * MM   # standard seam allowance
+
+    # ── Outline: CF with seam_allowance=0 (fold, no seam), rest with 10 mm ──
+    _FOLD_SA  = StyleOptions(
+        stroke_color=_FOLD.stroke_color,
+        stroke_width=_FOLD.stroke_width,
+        dash_array=_FOLD.dash_array,
+        seam_allowance=0.0,          # no SA on fold edge
+    )
+    _SA_STITCH = StyleOptions(
+        stroke_color=_STITCH.stroke_color,
+        stroke_width=_STITCH.stroke_width,
+        dash_array=_STITCH.dash_array,
+        seam_allowance=SA,
+    )
+
+    cf   = part.append(Segment(pts["hem_cf"],        pts["shoulder_cf"]),   style=_FOLD_SA,  is_outline=True)
+    shldr= part.append(Segment(pts["shoulder_cf"],   pts["shoulder_side"]), style=_SA_STITCH, is_outline=True)
+    side = part.append(Segment(pts["shoulder_side"], pts["hem_side"]),       style=_SA_STITCH, is_outline=True)
+    hem  = part.append(Segment(pts["hem_side"],       pts["hem_cf"]),        style=_SA_STITCH, is_outline=True)
+
+    # ── Dart ─────────────────────────────────────────────────────────────────
+    dart = Dart.from_edge_free_tip(
+        side, t=0.40, width=26 * MM,
+        reference_point=pts["bust_point"], tip_shortfall=20 * MM,
+        dart_type=DartType.TRIANGLE, name="Bustnaht",
+    )
+    part.add_dart(dart, stitch_style=_DART_STITCH, fold_style=_DART_FOLD,
+                  notches=True, precision_tip=True)
+
+    # ── Seam allowance ───────────────────────────────────────────────────────
+    part.add_seam_allowance(
+        distance=SA,
+        outline_elements=[cf, shldr, side, hem],
+    )
+
+    part.add_precision_points(pts["bust_point"])
+    part.append(Segment(dart.tip, pts["bust_point"]), style=_AUX)
+
+    part.add_info_box(
+        header="Vorderteil",
+        notes=[
+            "Bustnaht-Abnäher mit Nahtzugabe",
+            f"Nahtzugabe: {SA / MM:.0f} mm (Seiten-/Schulter-/Saum)",
+            "Fadenlauf (CF): keine Nahtzugabe",
+            f"Einzug: {dart.intake_angle_deg:.1f}°  |  Tiefe: {dart.depth / MM:.0f} mm",
+        ],
+    )
+    part.add_grainline(ANCHOR + Point(10 * MM, 10 * MM),
+                       ANCHOR + Point(10 * MM, PIECE_H - 10 * MM), style=_GRAINLINE)
+    export_pattern_svg_mm(pattern, filename=str(OUT_DIR / "07_dart_seam_allowance.svg"),
+                          width_mm=_A4_W, height_mm=_A4_H)
+    print("✓  07_dart_seam_allowance.svg")
+
+
+# ---------------------------------------------------------------------------
 # README — embed SVGs as inline base64 data URIs
 # ---------------------------------------------------------------------------
 
@@ -480,6 +558,7 @@ def embed_svgs_in_readme() -> None:
         "04_dart_split.svg",
         "05_dart_transfer.svg",
         "06_curved_dart.svg",
+        "07_dart_seam_allowance.svg",
     ]
 
     readme = OUT_DIR / "README.md"
@@ -522,5 +601,6 @@ if __name__ == "__main__":
     example_04_dart_split()
     example_05_dart_transfer()
     example_06_curved_dart()
+    example_07_dart_with_seam_allowance()
     print(f"\nAll SVGs written to: {OUT_DIR.resolve()}\n")
     embed_svgs_in_readme()

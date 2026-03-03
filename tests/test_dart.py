@@ -197,6 +197,23 @@ class TestDartSplit:
         assert a.dart_type is DartType.RHOMBUS
         assert b.dart_type is DartType.RHOMBUS
 
+    def test_split_rhombus_named_suffixes(self) -> None:
+        """RHOMBUS dart with a name must receive ' A' / ' B' suffixes, same as
+        TRIANGLE — dart_type must not suppress the name suffix logic."""
+        d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                 dart_type=DartType.RHOMBUS, name="Raute")
+        a, b = d.split(0.5)
+        assert a.name == "Raute A"
+        assert b.name == "Raute B"
+
+    def test_split_rhombus_unnamed_no_suffix(self) -> None:
+        """Unnamed RHOMBUS dart must produce None names after split."""
+        d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                 dart_type=DartType.RHOMBUS)
+        a, b = d.split(0.5)
+        assert a.name is None
+        assert b.name is None
+
     def test_split_named_suffixes(self) -> None:
         d = _simple_dart()  # name="Bustnaht"
         a, b = d.split(0.5)
