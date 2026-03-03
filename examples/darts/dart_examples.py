@@ -23,8 +23,9 @@ Usage (run from repo root):
 
 from pathlib import Path
 
+import numpy as np
+
 from sewpat import (
-    CM,
     MM,
     STYLE_DART_FOLD,
     STYLE_DART_STITCH,
@@ -40,11 +41,9 @@ from sewpat import (
     Segment,
 )
 from sewpat.geometry import CubicBezier, intersect
-import numpy as np
 from sewpat.pattern import ConstructionGrid
 from sewpat.render import export_pattern_svg_mm
 from sewpat.style import (
-    STYLE_CENTER_LINE,
     STYLE_CONSTRUCTION_GRID,
     STYLE_GRAINLINE,
     StyleOptions,
