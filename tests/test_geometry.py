@@ -83,6 +83,214 @@ class TestPoint(unittest.TestCase):
         self.assertAlmostEqual(rotated.x, 1, places=10)
         self.assertAlmostEqual(rotated.y, 2, places=10)
 
+    def test_add(self):
+        """Point + Point offsets by the second point as a displacement vector."""
+        a = Point(1, 2)
+        b = Point(3, 4)
+        result = a + b
+        self.assertAlmostEqual(result.x, 4)
+        self.assertAlmostEqual(result.y, 6)
+        # Original unchanged
+        self.assertAlmostEqual(a.x, 1)
+
+    def test_sub(self):
+        """Point - Point returns the displacement vector as a Point."""
+        a = Point(5, 7)
+        b = Point(2, 3)
+        result = a - b
+        self.assertAlmostEqual(result.x, 3)
+        self.assertAlmostEqual(result.y, 4)
+
+    def test_mul_scalar(self):
+        """Point * scalar scales the position vector."""
+        p = Point(3, 4)
+        self.assertAlmostEqual((p * 2).x, 6)
+        self.assertAlmostEqual((p * 2).y, 8)
+        self.assertAlmostEqual((p * 0.5).x, 1.5)
+
+    def test_rmul_scalar(self):
+        """scalar * Point is equivalent to Point * scalar."""
+        p = Point(3, 4)
+        result = 2.0 * p
+        self.assertAlmostEqual(result.x, 6)
+        self.assertAlmostEqual(result.y, 8)
+
+    def test_neg(self):
+        """-Point negates both coordinates."""
+        p = Point(3, -4)
+        result = -p
+        self.assertAlmostEqual(result.x, -3)
+        self.assertAlmostEqual(result.y, 4)
+
+    def test_midpoint_via_arithmetic(self):
+        """(a + b) * 0.5 gives the midpoint."""
+        a = Point(0, 0)
+        b = Point(4, 6)
+        mid = (a + b) * 0.5
+        self.assertAlmostEqual(mid.x, 2)
+        self.assertAlmostEqual(mid.y, 3)
+
+    def test_add_non_point_returns_not_implemented(self):
+        """Adding a non-Point returns NotImplemented (no TypeError from Point itself)."""
+        p = Point(1, 2)
+        result = p.__add__(42)
+        self.assertIs(result, NotImplemented)
+
+    def test_sub_non_point_returns_not_implemented(self):
+        p = Point(1, 2)
+        self.assertIs(p.__sub__("x"), NotImplemented)
+
+    def test_mul_non_scalar_returns_not_implemented(self):
+        p = Point(1, 2)
+        self.assertIs(p.__mul__(Point(1, 1)), NotImplemented)
+
+    def test_immutability_preserved(self):
+        """Arithmetic operators always return new Points; originals are unchanged."""
+        p = Point(1, 2)
+        _ = p + Point(10, 10)
+        _ = p * 5
+        self.assertAlmostEqual(p.x, 1)
+        self.assertAlmostEqual(p.y, 2)
+
+
+class TestPointMoveTowards(unittest.TestCase):
+    """Tests for Point.move_towards() across all supported curve types."""
+
+    # ------------------------------------------------------------------
+    # Segment
+    # ------------------------------------------------------------------
+
+    def test_segment_forward(self):
+        """Moving forward along a horizontal segment gives the correct x position."""
+        seg = Segment(Point(0, 0), Point(100, 0))
+        p = Point(30, 0)
+        result = p.move_towards(seg, 20)
+        self.assertAlmostEqual(result.x, 50.0, places=6)
+        self.assertAlmostEqual(result.y, 0.0, places=6)
+
+    def test_segment_backward(self):
+        """A negative arc_length moves backward along the segment."""
+        seg = Segment(Point(0, 0), Point(100, 0))
+        p = Point(50, 0)
+        result = p.move_towards(seg, -10)
+        self.assertAlmostEqual(result.x, 40.0, places=6)
+
+    def test_segment_diagonal(self):
+        """Works correctly on a diagonal segment."""
+        seg = Segment(Point(0, 0), Point(30, 40))  # length = 50
+        p = seg.point_at_t(0.5)  # at arc-length 25
+        result = p.move_towards(seg, 10)
+        self.assertAlmostEqual(result.distance_to(p), 10.0, places=5)
+
+    def test_segment_out_of_range_raises(self):
+        """Moving beyond the segment end raises ValueError."""
+        seg = Segment(Point(0, 0), Point(10, 0))
+        p = Point(8, 0)
+        with self.assertRaises(ValueError):
+            p.move_towards(seg, 5)  # would land at 13, beyond length 10
+
+    # ------------------------------------------------------------------
+    # CubicBezier
+    # ------------------------------------------------------------------
+
+    def test_bezier_forward(self):
+        """Moving forward along a straight Bezier (degenerate line) is accurate."""
+        # Straight Bezier from (0,0) to (100,0) — arc-length == chord length
+        bez = CubicBezier(Point(0, 0), Point(33, 0), Point(66, 0), Point(100, 0))
+        p = bez.point_at_t(0.3)  # ≈ 30 mm along
+        result = p.move_towards(bez, 20)
+        # Should land near x=50; allow 0.5 mm tolerance for round-trip arc-length accumulation
+        self.assertAlmostEqual(result.x, 50.0, places=0)
+        self.assertAlmostEqual(result.y, 0.0, places=3)
+
+    def test_bezier_displacement_magnitude(self):
+        """Displacement along a curved Bezier equals the requested arc length."""
+        bez = CubicBezier(Point(0, 0), Point(10, 40), Point(30, 40), Point(40, 0))
+        p = bez.point_at_t(0.2)
+        result = p.move_towards(bez, 5.0)
+        # The result should be strictly further along the curve
+        self.assertGreater(result.distance_to(p), 0.0)
+
+    # ------------------------------------------------------------------
+    # Ray
+    # ------------------------------------------------------------------
+
+    def test_ray_forward(self):
+        """Moving along a ray advances by the exact distance."""
+        ray = Ray(Point(0, 0), (1, 0))
+        p = Point(30, 0)
+        result = p.move_towards(ray, 15)
+        self.assertAlmostEqual(result.x, 45.0, places=6)
+        self.assertAlmostEqual(result.y, 0.0, places=6)
+
+    def test_ray_backward(self):
+        """Negative arc_length moves backward along the ray."""
+        ray = Ray(Point(0, 0), (0, 1))
+        p = Point(0, 50)
+        result = p.move_towards(ray, -20)
+        self.assertAlmostEqual(result.y, 30.0, places=6)
+
+    # ------------------------------------------------------------------
+    # Line
+    # ------------------------------------------------------------------
+
+    def test_line_forward(self):
+        """Moving along an infinite line works in both directions."""
+        from sewpat.geometry import Line
+        line = Line(Point(0, 0), (1, 0))
+        p = Point(10, 0)
+        result = p.move_towards(line, 25)
+        self.assertAlmostEqual(result.x, 35.0, places=6)
+
+    def test_line_backward(self):
+        """Negative arc_length on a Line moves in the opposite direction."""
+        from sewpat.geometry import Line
+        line = Line(Point(0, 0), (1, 0))
+        p = Point(10, 0)
+        result = p.move_towards(line, -10)
+        self.assertAlmostEqual(result.x, 0.0, places=6)
+
+    # ------------------------------------------------------------------
+    # Circle
+    # ------------------------------------------------------------------
+
+    def test_circle_ccw(self):
+        """Moving CCW along a circle by π*r (half circumference) reaches the antipode."""
+        c = Circle(Point(0, 0), 10)
+        p = c.point_at_angle(0)  # (10, 0)
+        half_circ = math.pi * 10
+        result = p.move_towards(c, half_circ)
+        self.assertAlmostEqual(result.x, -10.0, places=5)
+        self.assertAlmostEqual(result.y, 0.0, places=5)
+
+    def test_circle_full_revolution(self):
+        """Moving a full circumference returns to the starting point."""
+        c = Circle(Point(0, 0), 10)
+        p = c.point_at_angle(math.pi / 4)
+        full = 2 * math.pi * 10
+        result = p.move_towards(c, full)
+        self.assertAlmostEqual(result.x, p.x, places=5)
+        self.assertAlmostEqual(result.y, p.y, places=5)
+
+    def test_circle_cw_negative(self):
+        """Negative arc_length moves clockwise."""
+        c = Circle(Point(0, 0), 10)
+        p = c.point_at_angle(math.pi / 2)  # (0, 10)
+        quarter = math.pi / 2 * 10
+        result = p.move_towards(c, -quarter)
+        self.assertAlmostEqual(result.x, 10.0, places=5)
+        self.assertAlmostEqual(result.y, 0.0, places=5)
+
+    # ------------------------------------------------------------------
+    # TypeError for unsupported types
+    # ------------------------------------------------------------------
+
+    def test_unsupported_type_raises(self):
+        """Passing an unsupported type raises TypeError."""
+        p = Point(0, 0)
+        with self.assertRaises(TypeError):
+            p.move_towards("not a curve", 10)  # type: ignore[arg-type]
+
 
 class TestSegment(unittest.TestCase):
     """Test cases for the Segment class.
@@ -848,6 +1056,75 @@ class TestCubicBezierNewMethods(unittest.TestCase):
         self.assertIsInstance(right, CubicBezier)
 
 
+class TestCubicBezierSplitAtPoints(unittest.TestCase):
+    """Tests for CubicBezier.split_at_points()."""
+
+    @staticmethod
+    def _curve():
+        return CubicBezier(
+            p0=Point(10, 10),
+            p1=Point(20, 0),
+            p2=Point(30, 20),
+            p3=Point(40, 10),
+        )
+
+    def test_split_at_one_point_gives_two_curves(self):
+        b = self._curve()
+        subs = b.split_at_points([b.point_at_t(0.5)])
+        self.assertEqual(len(subs), 2)
+        for s in subs:
+            self.assertIsInstance(s, CubicBezier)
+
+    def test_split_at_two_points_gives_three_curves(self):
+        b = self._curve()
+        subs = b.split_at_points([b.point_at_t(0.25), b.point_at_t(0.75)])
+        self.assertEqual(len(subs), 3)
+
+    def test_split_at_points_lengths_sum_to_original(self):
+        b = self._curve()
+        subs = b.split_at_points([b.point_at_t(0.3), b.point_at_t(0.7)])
+        total = sum(s.length for s in subs)
+        self.assertAlmostEqual(total, b.length, places=4)
+
+    def test_split_at_points_chain_is_continuous(self):
+        """End of each sub-curve must equal the start of the next."""
+        b = self._curve()
+        subs = b.split_at_points([b.point_at_t(0.2), b.point_at_t(0.6), b.point_at_t(0.9)])
+        for a, c in zip(subs, subs[1:]):
+            self.assertAlmostEqual(a.p3.x, c.p0.x, places=6)
+            self.assertAlmostEqual(a.p3.y, c.p0.y, places=6)
+
+    def test_split_at_points_unsorted_input_same_result(self):
+        """Points in reverse order must produce the same sub-lengths."""
+        b = self._curve()
+        pa, pb = b.point_at_t(0.3), b.point_at_t(0.7)
+        forward  = b.split_at_points([pa, pb])
+        backward = b.split_at_points([pb, pa])
+        self.assertEqual(len(forward), len(backward))
+        for a, c in zip(forward, backward):
+            self.assertAlmostEqual(a.length, c.length, places=4)
+
+    def test_split_at_endpoint_produces_no_degenerate_stub(self):
+        """A point coinciding with p0 must be dropped (only one real split left)."""
+        b = self._curve()
+        subs = b.split_at_points([b.p0, b.point_at_t(0.5)])
+        self.assertEqual(len(subs), 2)
+
+    def test_split_at_points_all_near_endpoints_returns_original(self):
+        """When all points are at endpoints, return the original curve."""
+        b = self._curve()
+        subs = b.split_at_points([b.p0, b.p3])
+        self.assertEqual(len(subs), 1)
+        self.assertAlmostEqual(subs[0].length, b.length, places=4)
+
+    def test_split_preserves_start_and_end(self):
+        """First sub-curve starts at p0; last ends at p3."""
+        b = self._curve()
+        subs = b.split_at_points([b.point_at_t(0.4)])
+        self.assertAlmostEqual(subs[0].p0.x, b.p0.x, places=8)
+        self.assertAlmostEqual(subs[-1].p3.x, b.p3.x, places=8)
+
+
 class TestSegmentNewMethods(unittest.TestCase):
     """Tests for Segment.point_at_length() and Segment.bounding_box()."""
 
@@ -906,6 +1183,96 @@ class TestSegmentNewMethods(unittest.TestCase):
         s = Segment(Point(0, 5), Point(10, 5))
         mn, mx = s.bounding_box()
         self.assertAlmostEqual(mn.y, mx.y)  # zero height
+
+    # ── split ────────────────────────────────────────────────────────────────
+
+    def test_split_returns_two_segments(self):
+        left, right = self._seg().split(0.5)
+        self.assertIsInstance(left, Segment)
+        self.assertIsInstance(right, Segment)
+
+    def test_split_midpoint_at_half(self):
+        left, right = self._seg().split(0.5)
+        # left ends / right starts at midpoint (15, 20)
+        self.assertAlmostEqual(left.p2.x, 15.0)
+        self.assertAlmostEqual(left.p2.y, 20.0)
+        self.assertAlmostEqual(right.p1.x, 15.0)
+        self.assertAlmostEqual(right.p1.y, 20.0)
+
+    def test_split_lengths_sum_to_original(self):
+        s = self._seg()
+        left, right = s.split(0.4)
+        self.assertAlmostEqual(left.length + right.length, s.length, places=6)
+
+    def test_split_preserves_endpoints(self):
+        s = self._seg()
+        left, right = s.split(0.3)
+        self.assertAlmostEqual(left.p1.x, s.p1.x)
+        self.assertAlmostEqual(right.p2.x, s.p2.x)
+        self.assertAlmostEqual(right.p2.y, s.p2.y)
+
+    def test_split_invalid_t_zero_raises(self):
+        with self.assertRaises(ValueError):
+            self._seg().split(0.0)
+
+    def test_split_invalid_t_one_raises(self):
+        with self.assertRaises(ValueError):
+            self._seg().split(1.0)
+
+    # ── split_at_points ──────────────────────────────────────────────────────
+
+    def test_split_at_one_point_gives_two_segments(self):
+        s = self._seg()
+        mid = s.point_at_t(0.5)
+        subs = s.split_at_points([mid])
+        self.assertEqual(len(subs), 2)
+
+    def test_split_at_two_points_gives_three_segments(self):
+        s = self._seg()
+        pa = s.point_at_t(0.25)
+        pb = s.point_at_t(0.75)
+        subs = s.split_at_points([pa, pb])
+        self.assertEqual(len(subs), 3)
+
+    def test_split_at_points_lengths_sum_to_original(self):
+        s = self._seg()
+        pa = s.point_at_t(0.3)
+        pb = s.point_at_t(0.7)
+        subs = s.split_at_points([pa, pb])
+        total = sum(seg.length for seg in subs)
+        self.assertAlmostEqual(total, s.length, places=6)
+
+    def test_split_at_points_chain_is_continuous(self):
+        """End of each sub-segment must equal start of the next."""
+        s = self._seg()
+        subs = s.split_at_points([s.point_at_t(0.2), s.point_at_t(0.6), s.point_at_t(0.9)])
+        for a, b in zip(subs, subs[1:]):
+            self.assertAlmostEqual(a.p2.x, b.p1.x, places=6)
+            self.assertAlmostEqual(a.p2.y, b.p1.y, places=6)
+
+    def test_split_at_points_unsorted_input_same_result(self):
+        """Points given in reverse order must produce the same splits."""
+        s = self._seg()
+        pa, pb = s.point_at_t(0.3), s.point_at_t(0.7)
+        forward = s.split_at_points([pa, pb])
+        backward = s.split_at_points([pb, pa])
+        self.assertEqual(len(forward), len(backward))
+        for a, b in zip(forward, backward):
+            self.assertAlmostEqual(a.length, b.length, places=6)
+
+    def test_split_at_endpoint_produces_no_degenerate_stub(self):
+        """A point coinciding with p1 or p2 must be silently dropped."""
+        s = self._seg()
+        subs = s.split_at_points([s.p1, s.point_at_t(0.5)])
+        # p1 is within tolerance of endpoint → only one split point remains
+        self.assertEqual(len(subs), 2)
+
+    def test_split_at_points_all_near_endpoints_returns_original(self):
+        """When all points collapse onto endpoints, return the original segment."""
+        s = self._seg()
+        subs = s.split_at_points([s.p1, s.p2])
+        self.assertEqual(len(subs), 1)
+        self.assertAlmostEqual(subs[0].length, s.length, places=6)
 
 
 class TestCubicBezierConsistencyMethods(unittest.TestCase):
@@ -1163,6 +1530,74 @@ class TestRoundCorner(unittest.TestCase):
         # cp1 must be east of p0 (same y), cp2 must be north of p3 (same x)
         self.assertAlmostEqual(arc.p1.y, arc.p0.y, places=6)  # tangent along +x
         self.assertAlmostEqual(arc.p2.x, arc.p3.x, places=6)  # tangent along -y
+
+
+class TestDartRoof(unittest.TestCase):
+    """Tests for Dart.dart_roof (Abnäherdach)."""
+
+    def _make_symmetric_dart(self, width=40.0, depth=80.0):
+        """Helper: symmetric dart centered at origin on the x-axis."""
+        from sewpat.geometry import Dart, Point
+        center = Point(0.0, 0.0)
+        leg_a = Point(-width / 2, 0.0)
+        leg_b = Point(+width / 2, 0.0)
+        tip = Point(0.0, -depth)           # tip below the seam line
+        return Dart(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip)
+
+    def test_dart_roof_returns_dart_roof_instance(self):
+        dart = self._make_symmetric_dart()
+        roof = dart.roof
+        self.assertIsInstance(roof, Point)
+
+    def test_roof_points_above_original_legs(self):
+        """Roof points must protrude *away* from the tip (outward past the seam).
+
+        For a dart where the tip is below the seam (y < 0), the Abnäherdach
+        crown protrudes above the seam (y > 0) so that after sewing the edge
+        lies flush.
+        """
+        dart = self._make_symmetric_dart(width=40.0, depth=80.0)
+        roof = dart.roof
+        # tip is at y=-80; seam is at y=0; roof points should be at y > 0
+        self.assertGreater(roof.y, dart.center.y)
+
+    def test_roof_height_formula(self):
+        """Verify the right-triangle formula: h = half_width * cos(α) / sin(α).
+
+        For a symmetric dart: α = angle between stitch leg and seam edge.
+        stitch = tip - leg_a = (half_w, depth), so:
+          cos(α) = half_w / |stitch|,  sin(α) = depth / |stitch|
+          h = (half_w * cos(α)) / sin(α) = half_w² / depth
+        """
+        import math
+        width, depth = 40.0, 80.0
+        dart = self._make_symmetric_dart(width=width, depth=depth)
+        roof_height = np.linalg.norm(dart.roof.coords - dart.center.coords)
+
+        self.assertAlmostEqual(float(math.tan(dart.intake_angle)*(dart.width / 2)), roof_height, places=5)
+
+    def test_zero_width_dart_no_roof_displacement(self):
+        """A dart with zero-length seam has no roof displacement."""
+        from sewpat.geometry import Dart, Point
+        tip = Point(0.0, -50.0)
+        center = Point(0.0, 0.0)
+        dart = Dart(leg_a=center, leg_b=center, center=center, tip=tip)
+        roof = dart.roof
+        self.assertAlmostEqual(roof.x, dart.center.x, places=6)
+        self.assertAlmostEqual(roof.y, dart.center.y, places=6)
+
+    def test_roof_rise_increases_with_wider_dart(self):
+        """A wider dart (larger intake angle) should produce a larger roof rise.
+
+        The roof rise is how far the V-peak protrudes beyond the seam line,
+        away from the tip.  A wider intake angle creates a larger V.
+        """
+        dart_narrow = self._make_symmetric_dart(width=20.0, depth=80.0)
+        dart_wide = self._make_symmetric_dart(width=60.0, depth=80.0)
+        # For this setup tip is at y=-80, seam at y=0; roof is at y > 0
+        rise_narrow = np.linalg.norm(dart_narrow.roof.coords - dart_narrow.center.coords)
+        rise_wide = np.linalg.norm(dart_wide.roof.coords - dart_wide.center.coords)
+        self.assertGreater(rise_wide, rise_narrow)
 
 
 if __name__ == "__main__":

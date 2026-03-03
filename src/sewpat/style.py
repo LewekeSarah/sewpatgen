@@ -202,3 +202,24 @@ STYLE_CONSTRUCTION_GRID = StyleOptions(
     dash_array=[3.0, 2.0],
 )
 
+# Dart Stitching Lines — dashed lines running from the dart legs to the tip.
+# Drawn inside the seam allowance; show the sewing path for a dart (Abnäher).
+STYLE_DART_STITCH = StyleOptions(
+    stroke_color="black",
+    stroke_width=DEFAULT_STROKE_WIDTH,
+    dash_array=[5.0, 2.0],
+    seam_allowance=0.0
+)
+
+# Dart Fold / Crease Line — long-dash–dot centre line of a dart.
+# Marks the fold axis from the mouth midpoint to the tip.
+STYLE_DART_FOLD = StyleOptions(
+    stroke_color="black",
+    stroke_width=DEFAULT_STROKE_WIDTH,
+    dash_array=[10.0, 2.0, 2.0, 2.0],
+)
+
+STYLE_PRECISION_POINT = StyleOptions(
+    stroke_color="grey",
+    stroke_width=DEFAULT_STROKE_WIDTH_GRAIN,
+)

@@ -22,7 +22,7 @@ from sewpat.geometry import (
     Segment,
     Triangle,
 )
-from sewpat.part import Pattern, PatternPart
+from sewpat.pattern import Pattern, PatternPart
 from sewpat.render import (
     _build_svg,
     _resolve_styles,

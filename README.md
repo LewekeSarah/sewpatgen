@@ -1,72 +1,98 @@
 # SewPatGen
 
-A Python library for automatically creating sewing patterns based on 2D CAD primitives.
-Sewing patterns are exported to vector graphics for customization in editors like Inkscape.
+A Python library for automatically generating sewing patterns based on 2D CAD primitives.
+Patterns are exported as SVG vector files, ready for customisation in Inkscape or any
+vector editor.
 
 ## Features
 
-- Generate patterns for female clothes: Blouse
+- **2D geometry engine** — `Point`, `Segment`, `Ray`, `Line`, `CubicBezier`, `Circle`, `Rect`
+- **Dart support** — `Dart` geometry with triangle and rhombus types, factory methods,
+  split, rotate (pivot method) and full `PatternPart.add_dart()` integration
+- **Pattern structure** — `PatternPart`, `Pattern`, `ConstructionGrid`, seam allowance
+- **SVG export** — clean, print-ready vector output via `export_pattern_svg_mm()`
+- **Garment examples** — blouse bodice, boy's shorts, drawstring pouch, dart showcases
+
+## Requirements
+
+- Python ≥ 3.14
+- [uv](https://docs.astral.sh/uv/) package manager
 
 ## Installation
 
-### Requirements
-
-- Python 3.8 or higher
-- NumPy 1.24.0 or higher
-- uv package manager (recommended)
-
-### Setting Up with UV
-
 ```bash
-# Install uv if not already installed
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
 # Clone the repository
-git clone https://github.com/yourusername/sewpat.git
-cd sewpat
+git clone https://github.com/sarahleweke/sewpatgen.git
+cd sewpatgen
 
-# Install the package in development mode
+# Install all dependencies (including dev extras)
 uv sync --extra dev
 ```
 
-## Usage Examples
-
-### Basic Geometric Operations
+## Quick Start
 
 ```python
-from sewpat.src.geometry import Point, Line, Circle
-import numpy as np
+from sewpat import (
+    CM, MM, Dart, DartType, Pattern, PatternPart,
+    Point, Segment, STYLE_DART_STITCH, STYLE_DART_FOLD,
+)
+from sewpat.render import export_pattern_svg_mm
 
-# Create a line between two points
-p1 = Point(0, 0)
-p2 = Point(10, 10)
-line = Line(p1, p2)
+# Build a simple bodice-front piece
+part = PatternPart("Vorderteil")
+o  = Point(0,   0)
+tl = Point(0,   200)
+tr = Point(120, 200)
+br = Point(120, 0)
+side = part.append(Segment(tr, br), is_outline=True)
+part.append(Segment(o, tl),  is_outline=True)
+part.append(Segment(tl, tr), is_outline=True)
+part.append(Segment(br, o),  is_outline=True)
 
-# Calculate the length and midpoint of the line
-print(f"Line length: {line.length}")  # 14.142135623730951
-print(f"Line midpoint: {line.midpoint}")  # Point(5.0, 5.0)
+# Place a waist dart on the side seam
+dart = Dart.from_edge_at_t(
+    side, t=0.3, width=22 * MM, depth=80 * MM,
+    dart_type=DartType.TRIANGLE, name="Seitennaht",
+)
+part.add_dart(dart, stitch_style=STYLE_DART_STITCH,
+              fold_style=STYLE_DART_FOLD, notches=True, precision_tip=True)
 
-# Access the underlying NumPy array
-print(f"Point coordinates as NumPy array: {p1.coords}")  # [0. 0.]
-
-# Create a ray with a NumPy direction vector
-from sewpat.src.geometry import Ray
-ray = Ray(Point(0, 0), np.array([1, 1]))
-
-# Create a circle and find intersections with the line
-circle = Circle(Point(5, 5), 3)
-intersections = circle.intersect_with(line)
-print(f"Number of intersections: {len(intersections)}")
-for i, point in enumerate(intersections):
-    print(f"Intersection {i+1}: {point}")
+pattern = Pattern("Schnittmuster")
+pattern.add_part(part)
+export_pattern_svg_mm(pattern, filename="bodice.svg", width_mm=210, height_mm=297)
 ```
 
-### Check out the Examples
+## Darts (Abnäher)
 
-For more detailed examples, see the `examples/geometry_example.py` file. Run it directly:
+The dart API supports the full professional workflow:
+
+| Factory method | Use case |
+|---|---|
+| `Dart.from_edge_at_t(edge, t, width, depth)` | Depth given in mm |
+| `Dart.from_edge_at_point(edge, point, width, depth)` | Anchor to a named landmark |
+| `Dart.from_edge_free_tip(edge, t, width, reference_point)` | Tip aimed at bust point |
+| `Dart.from_tip_center_width(tip, center, width)` | Explicit tip + mouth construction |
+| `Dart.from_tip_and_legs(tip, leg_a, leg_b)` | All four points known |
+
+Key properties: `width`, `depth`, `intake_angle`, `intake_angle_deg`, `fold_line`,
+`stitch_line_a/b`, `roof`, `mirror_tip`.
+
+Operations: `dart.split(ratio)`, `dart.rotate(pivot, angle_rad)`, `dart.translate(dx, dy)`.
+
+See [`examples/darts/`](examples/darts/) for five annotated SVG examples including
+dart splitting and the pivot-method dart transfer (Schwenkverfahren).
+
+## Examples
 
 ```bash
-python examples/geometry_example.py
+# Dart showcase (generates 5 SVGs)
+python examples/darts/dart_examples.py
+
+# Blouse bodice
+python examples/women/blouse.py
+
+# Drawstring pouch
+python examples/items/drawstring_pouch.py
 ```
 
 ## Development
@@ -77,29 +103,23 @@ python examples/geometry_example.py
 uv run pytest
 ```
 
-### Code Formatting
+### Formatting & Linting
 
 ```bash
-# Format code with black
-black src tests
+# Format with ruff
+uv run ruff format src tests
 
-# Sort imports with isort
-isort src tests
-```
-
-### Linting
-
-```bash
-flake8 src tests
+# Lint
+uv run ruff check src tests
 ```
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please open an issue or submit a pull request.
 
 1. Fork the project
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)

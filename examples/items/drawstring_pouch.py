@@ -13,7 +13,7 @@ from sewpat import (
 )
 from sewpat.geometry import Rect, intersect
 from sewpat.pages import DinA4
-from sewpat.part import ConstructionGrid
+from sewpat.pattern import ConstructionGrid
 from sewpat.render import export_pattern_svg_mm
 from sewpat.style import StyleOptions
 from sewpat.units import CM
