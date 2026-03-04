@@ -9,7 +9,9 @@ from sewpat import (
     STYLE_DEBUG_RED,
     CubicBezier,
     STYLE_DART_FOLD,
-    GarmentPart, DartType,
+    GarmentPart,
+    DartType,
+    STYLE_HEM
 )
 from sewpat.geometry import (
     Circle,
@@ -27,6 +29,7 @@ from sewpat.measurements import (
     ModelConfig,
     WaistDistribution,
     calculate_waist_distribution,
+    calculate_hip_distribution,
     make_blouse_measurements,
 )
 from sewpat.pages import DinA0
@@ -180,6 +183,19 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
         pt_waist_cb=pt6,
     )
 
+    # STEP Hip distribution (Fehlbetrag Hüftweite)
+    pt_hip_cf = intersect(grid.center_front, grid.hip)[0]
+    pt_hip_sf = intersect(grid.side_front,   grid.hip)[0]
+    pt_hip_sb = intersect(grid.side_back,    grid.hip)[0]
+    pt_hip_cb = pt8  # center-back hip point (with BeckenAdjustment)
+    hd = calculate_hip_distribution(
+        meas,
+        pt_hip_cf=pt_hip_cf,
+        pt_hip_sf=pt_hip_sf,
+        pt_hip_sb=pt_hip_sb,
+        pt_hip_cb=pt_hip_cb,
+    )
+
     # Raise side-seam waist points by SaEinzug (toward bust line, y decreases)
     pt_waist_sb_raised = intersect(grid.side_back, waist_offset)[0].translate(-wd.SaEinzug, 0)
     pt_waist_sf_raised = intersect(grid.side_front, waist_offset)[0].translate(wd.SaEinzug, 0)
@@ -208,6 +224,27 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
         dart_type=DartType.RHOMBUS,
         second_tip=pt19.translate(0, 12 * CM) # TODO don't hard-code
     ).set_name("Waist Dart Front")
+
+    side_back_offset = grid.side_back.offset(hd.Fehlbetrag)
+    side_front_offset = grid.side_front.offset(-hd.Fehlbetrag)
+    pt37 = intersect(grid.hip, side_back_offset)[0]
+    pt37_front = intersect(grid.hip, side_front_offset)[0]
+
+    side_back_curved = CubicBezier(
+                pt_waist_sb_raised,
+                intersect(grid.side_back, waist_offset)[0].translate(- hd.Fehlbetrag, 15 * CM),
+                pt37,
+                pt37,
+                name="Side Hip Curve Back",
+            )
+
+    side_front_curved = CubicBezier(
+            pt_waist_sf_raised,
+            intersect(grid.side_front, waist_offset)[0].translate(hd.Fehlbetrag, 15 * CM),
+            pt37_front,
+            pt37_front,
+            name="Side Hip Curve Front",
+        )
 
     if not (pt14.coords == pt7.translate((meas.BrW / 2 + 10 * CM), 0).coords).all():
         raise ValueError("BrW is plotted incorrect.")
@@ -245,20 +282,15 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
             waist_dart_back, style=STYLE_DART_FOLD
         ),
         PatternElement(waist_offset, is_construction=True),
-        PatternElement(CubicBezier(
-            pt_waist_sb_raised,
-            pt_waist_sb_raised,
-            intersect(grid.hip, grid.side_back)[0],
-            intersect(grid.hip, grid.side_back)[0],
-            name="Side Hip Curve Back",
-        ), is_outline=True, style=STYLE_STITCH),
+        PatternElement(side_back_curved, is_outline=True, style=STYLE_STITCH),
         PatternElement(
             Segment(
-                intersect(grid.hip, grid.side_back)[0],
-                intersect(grid.hip, grid.side_back)[0].translate(0, Segment(pt8, pt9).length),
+                pt37,
+                pt37.translate(0, Segment(pt8, pt9).length),
             ),
             style=STYLE_STITCH, is_outline=True
-        )
+        ),
+        PatternElement(Segment(intersect(grid.hem, side_back_offset)[0], pt9), style=STYLE_HEM, is_outline=True)
     ]
     block_back.extend(back_basic)
     block_back.add_notches(pt_hÄP, seam_edge=sleeve_back)
@@ -296,20 +328,15 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
         PatternElement(
             waist_dart_front, style=STYLE_DART_FOLD
         ),
-        PatternElement(CubicBezier(
-            pt_waist_sf_raised,
-            pt_waist_sf_raised,
-            intersect(grid.hip, grid.side_front)[0],
-            intersect(grid.hip, grid.side_front)[0],
-            name="Side Hip Curve Front",
-        ), is_outline=True, style=STYLE_STITCH),
+        PatternElement(side_front_curved, is_outline=True, style=STYLE_STITCH),
         PatternElement(
             Segment(
-                intersect(grid.hip, grid.side_front)[0],
-                intersect(grid.hip, grid.side_front)[0].translate(0, Segment(pt8, pt9).length),
+                pt37_front,
+                pt37_front.translate(0, Segment(pt8, pt9).length),
             ),
             style=STYLE_STITCH, is_outline=True
-        )
+        ),
+        PatternElement(Segment(intersect(grid.hem, side_front_offset)[0], intersect(grid.hem, grid.center_front)[0]), style=STYLE_HEM, is_outline=True)
     ]
     block_front.add_notches(pt_vÄP, seam_edge=sleeve_front)
     block_front.extend(front_basic)
@@ -336,6 +363,7 @@ if __name__ == "__main__":
         parts=grid_parts + pattern_parts,
         show_bezier_control_points=True,
         show_construction=True,
+        show_seam_allowance=True
     )
 
 # #marker_single  top_waisted_dart.pdf ./

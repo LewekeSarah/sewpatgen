@@ -124,6 +124,66 @@ class WaistDistribution:
     remainder: float
 
 
+@dataclass
+class HipDistribution:
+    """Result of the hip excess (Fehlbetrag) calculation.
+
+    All values are in the project's internal unit (mm).
+
+    Attributes:
+        vHüB:         Distance from center-front to side-seam at hip level.
+        hHüB:         Distance from side-seam to center-back at hip level.
+        HüB:          Total hip width on the pattern (= vHüB + hHüB).
+        Fehlbetrag:   Hip excess = HüB − HüW / 2.
+                      Positive → pattern is wider than the finished hip measurement
+                      (excess needs to be taken in or used for ease).
+                      Negative → pattern is narrower than the finished hip
+                      measurement (additional width required).
+    """
+
+    vHüB: float
+    hHüB: float
+    HüB: float
+    Fehlbetrag: float
+
+
+def calculate_hip_distribution(
+    meas: "BlouseMeasurements",
+    pt_hip_cf: "Point",
+    pt_hip_sf: "Point",
+    pt_hip_sb: "Point",
+    pt_hip_cb: "Point",
+) -> HipDistribution:
+    """Calculate the hip excess / shortfall (Fehlbetrag) at the hip line.
+
+    Measures the pattern distances at the hip line and computes the difference
+    from the finished hip measurement ``HüW``.
+
+    Args:
+        meas:       Blouse measurements (ease already included).
+        pt_hip_cf:  Intersection of center-front with hip line.
+        pt_hip_sf:  Intersection of side-front with hip line.
+        pt_hip_sb:  Intersection of side-back with hip line.
+        pt_hip_cb:  Intersection of center-back with hip line.
+
+    Returns:
+        :class:`HipDistribution` with all computed values.
+    """
+    from sewpat.geometry import Segment  # noqa: PLC0415
+
+    vHüB = Segment(pt_hip_cf, pt_hip_sf).length
+    hHüB = Segment(pt_hip_sb, pt_hip_cb).length
+    HüB = vHüB + hHüB
+    Fehlbetrag = HüB - meas.HüW / 2
+
+    return HipDistribution(
+        vHüB=vHüB,
+        hHüB=hHüB,
+        HüB=HüB,
+        Fehlbetrag=Fehlbetrag,
+    )
+
+
 def calculate_waist_distribution(
     meas: "BlouseMeasurements",
     pt_waist_cf: "Point",

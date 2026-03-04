@@ -21,9 +21,11 @@ from .geometry import (
 from .measurements import (
     Allowance,
     BlouseMeasurements,
+    HipDistribution,
     ModelConfig,
     TrouserMeasurements,
     WaistDistribution,
+    calculate_hip_distribution,
     calculate_waist_distribution,
     make_blouse_measurements,
     make_measurements_trouser,
