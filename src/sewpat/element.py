@@ -71,6 +71,75 @@ class PatternElement:
             return self.name
         return getattr(self.geometry, "name", None)
 
+    def split_at_dart(self, dart: "Dart") -> "list[PatternElement]":
+        """Split this element's geometry at both dart legs and return new elements.
+
+        This is the standard pattern-making operation of *removing the dart
+        mouth from a seam edge*: the section of the edge between
+        ``dart.leg_a`` and ``dart.leg_b`` is discarded, while the parts
+        outside the dart mouth become new :class:`PatternElement` objects
+        that inherit **all** properties of ``self`` — style, ``is_outline``,
+        ``is_construction``, ``is_seam_allowance``, ``role``, and ``name``.
+
+        Only :class:`~sewpat.geometry.Segment` and
+        :class:`~sewpat.geometry.CubicBezier` geometries support this
+        operation (they are the only types with ``split_at_points``).
+        All other geometry types raise :class:`TypeError`.
+
+        Use this together with :meth:`~sewpat.pattern.PatternPart.append_split_at_dart`
+        to append the outer segments directly onto a part::
+
+            sleeve_elem = PatternElement(
+                sleeve_back.set_name("Sleeve Back"),
+                style=STYLE_STITCH, is_outline=True,
+            )
+            block_back.append_split_at_dart(sleeve_elem, shoulder_dart_back)
+
+        Args:
+            dart: :class:`~sewpat.geometry.Dart` whose ``leg_a`` / ``leg_b``
+                define the mouth cut points.
+
+        Returns:
+            List of new :class:`PatternElement` objects for the sub-segments
+            that lie **outside** the dart mouth, in curve order.
+
+        Raises:
+            TypeError: When the geometry does not support ``split_at_points``
+                (e.g. :class:`~sewpat.geometry.Rect`,
+                :class:`~sewpat.geometry.Circle`).
+        """
+        import copy
+
+        geom = self.geometry
+        if not isinstance(geom, (Segment, CubicBezier)):
+            raise TypeError(
+                f"split_at_dart requires a Segment or CubicBezier geometry, "
+                f"got {type(geom).__name__!r}"
+            )
+
+        all_subs = geom.split_at_points([dart.leg_a, dart.leg_b])
+
+        # With two split points the dart mouth is the middle sub-segment (index 1).
+        # When a leg coincides with an endpoint fewer pieces are returned — keep all.
+        outer_subs = all_subs[:1] + all_subs[2:] if len(all_subs) >= 3 else all_subs
+
+        result: list[PatternElement] = []
+        for sub in outer_subs:
+            if geom.name and hasattr(sub, "set_name"):
+                sub = sub.set_name(geom.name)
+            child = PatternElement(
+                geometry=sub,
+                style=copy.copy(self.style),
+                name=self.name,
+                role=self.role,
+                is_outline=self.is_outline,
+                is_seam_allowance=self.is_seam_allowance,
+                is_construction=self.is_construction,
+            )
+            child.is_seam_notch = self.is_seam_notch
+            result.append(child)
+        return result
+
 
 class PrecisionPoint:
     """A two-circle precision mark placed at a single centre point.

@@ -166,19 +166,33 @@ class PatternPart(NamedAccessMixin):
         geometry: object,
         style: StyleOptions | None = None,
         is_outline: bool = False,
+        is_construction: bool = False,
     ) -> PatternElement:
         """Wrap *geometry* in a PatternElement, stamp ``is_construction``, and append it.
 
         The element's name is taken from ``geometry.name``; set it on the
         geometry object before calling (e.g. ``seg.set_name("Center Back")``).
-        Construction elements with no explicit style receive
-        :data:`~sewpat.style.STYLE_CONSTRUCTION_GRID` automatically.
+        Style defaulting (including the automatic ``STYLE_CONSTRUCTION_GRID``
+        for construction elements with no explicit style) is handled by
+        :class:`~sewpat.element.PatternElement` itself.
+
+        Args:
+            geometry: The shape to wrap.
+            style: Visual style.  Defaults to ``STYLE_CONSTRUCTION_GRID`` when
+                ``is_construction=True`` and no style is given, or plain
+                ``StyleOptions()`` otherwise — both via ``PatternElement``.
+            is_outline: Whether this element contributes to the seam-allowance
+                polygon.
+            is_construction: Mark as a drafting aid (hidden on final print).
+                Automatically ``True`` when the part itself is
+                ``is_construction=True``.
         """
+        construction = is_construction or self.is_construction
         elem = PatternElement(
             geometry=geometry,
             style=style,
             is_outline=is_outline,
-            is_construction=self.is_construction,
+            is_construction=construction,
         )
         self.elements.append(elem)
         return elem

@@ -1009,9 +1009,33 @@ class CubicBezier:
         return np.array([d.real, d.imag])
 
     def normal_at_t(self, t: float) -> np.ndarray:
-        """Unit normal at *t*: 90° counter-clockwise from the tangent (left of travel)."""
-        n = self._svg().normal(t)
-        return np.array([n.real, n.imag])
+        """Unit normal at *t*: 90° counter-clockwise from the tangent (left of travel).
+
+        Falls back to a nearby t when the tangent is degenerate at the exact
+        endpoint (e.g. when cp2 == p3 or cp1 == p0).
+        """
+        svg = self._svg()
+        try:
+            n = svg.normal(t)
+            return np.array([n.real, n.imag])
+        except ValueError:
+            # Degenerate endpoint — step slightly inward and retry.
+            eps = 1e-4
+            fallback_t = max(eps, t - eps) if t > 0.5 else min(1.0 - eps, t + eps)
+            try:
+                n = svg.normal(fallback_t)
+                return np.array([n.real, n.imag])
+            except ValueError:
+                # Last resort: finite-difference tangent from point_at_t.
+                dt = 1e-4
+                t0 = max(0.0, t - dt)
+                t1 = min(1.0, t + dt)
+                p0 = self.point_at_t(t0)
+                p1 = self.point_at_t(t1)
+                dx, dy = p1.x - p0.x, p1.y - p0.y
+                length = (dx**2 + dy**2) ** 0.5 or 1.0
+                # Rotate 90° CCW: (dx, dy) → (-dy, dx)
+                return np.array([-dy / length, dx / length])
 
     def point_at_length(self, arc_length: float) -> Point:
         """Return the point at *arc_length* mm from p0 (uses svgpathtools.ilength). Raises ValueError if out of range."""
@@ -1865,6 +1889,21 @@ class Dart:
         """Construct a dart from tip and the two explicit mouth endpoints.
 
         The mouth centre is the midpoint of *leg_a* and *leg_b*.
+
+        Use this factory when the dart legs are **pre-existing named points on
+        two separate seam segments** (e.g. the endpoints of two shoulder pieces
+        that already define the mouth) and no single source edge needs to be
+        split.  ``_edge_element`` is always ``None`` on the result, so
+        :meth:`~sewpat.pattern.PatternPart.add_dart` will *not* attempt an
+        in-place edge split — the outline is already correct without one.
+
+        If both legs lie on the **same continuous edge** and that edge should
+        be trimmed at the dart mouth, use one of the :meth:`from_edge_at_t`,
+        :meth:`from_edge_at_point`, or :meth:`from_edge_free_tip` factories
+        instead (they set ``_edge_element`` automatically).  If you need
+        asymmetric leg placement on a single edge *and* want the in-place
+        split, construct the dart directly via ``Dart(..., _edge_element=elem)``
+        after computing the leg points yourself.
 
         Args:
             second_tip: Explicit second apex for rhombus darts.  Defaults to
