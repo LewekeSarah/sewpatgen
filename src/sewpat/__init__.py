@@ -32,6 +32,7 @@ from .pattern import (
     ConstructionGrid,
     ConstructionGridPart,
     DartResult,
+    GarmentPart,
     OverlayPart,
     Pattern,
     PatternPart,
@@ -87,6 +88,7 @@ __all__ = [
     # Pattern
     "PatternPart",
     "Pattern",
+    "GarmentPart",
     "ConstructionGrid",
     "ConstructionGridPart",
     "Block",

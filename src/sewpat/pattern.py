@@ -12,6 +12,7 @@ This module owns:
 
 import copy
 from dataclasses import dataclass
+from enum import Enum
 
 import shapely.geometry as _sg
 
@@ -61,6 +62,27 @@ class PatternConfig:
     margin: float = 10 * CM
 
 
+class GarmentPart(str, Enum):
+    """Base enum for pattern-part names.
+
+    Subclass this in each garment module to define the parts of that pattern.
+    Because values are plain strings, they can be used anywhere a part name
+    string is expected — ``Pattern.get_part()``, the ``parts=`` argument of
+    the export functions, and ``PatternPart(name=…)`` — without any changes
+    to the rest of the library.
+
+    Example::
+
+        class Part(GarmentPart):
+            BLOCK_BACK  = "Block Back"
+            BLOCK_FRONT = "Block Front"
+            GRID        = "Grid"
+
+        block_back = PatternPart(name=Part.BLOCK_BACK)
+        export_pattern_svg_mm(pattern, parts=[Part.GRID, Part.BLOCK_BACK])
+    """
+
+
 class DartResult:
     """Return value of :meth:`PatternPart.add_dart`.
 
@@ -90,7 +112,43 @@ class DartResult:
         yield from self.elements
 
 
-class PatternPart:
+class NamedAccessMixin:
+    """Mixin that exposes named :class:`PatternElement` objects as attributes.
+
+    Allows snake_case attribute access to elements whose geometry carries a
+    matching ``name``.  The conversion rule is:
+
+    * underscores → spaces
+    * result is title-cased
+
+    So ``part.center_back`` resolves to the element named ``"Center Back"``.
+
+    This is the ad-hoc complement to the typed-dataclass approach used by
+    :class:`~sewpat.grids.TopGrid`: no boilerplate, IDE autocomplete via
+    :meth:`get_element` for known names, and a clean ``AttributeError`` when
+    the name is absent.
+
+    Only triggers for names that are not already real attributes, so existing
+    methods and properties are never shadowed.
+    """
+
+    elements: list[PatternElement]  # provided by PatternPart
+
+    def __getattr__(self, snake: str) -> PatternElement:
+        # Avoid infinite recursion for dunder / private attributes.
+        if snake.startswith("_"):
+            raise AttributeError(snake)
+        key = snake.replace("_", " ").title()
+        for e in self.elements:
+            if e.get_name() == key:
+                return e
+        raise AttributeError(
+            f"{type(self).__name__!r} has no element named {key!r} "
+            f"(looked up as {snake!r})"
+        )
+
+
+class PatternPart(NamedAccessMixin):
     """A collection of pattern elements forming one pattern piece."""
 
     def __init__(
@@ -107,14 +165,16 @@ class PatternPart:
         self,
         geometry: object,
         style: StyleOptions | None = None,
-        name: str | None = None,
         is_outline: bool = False,
     ) -> PatternElement:
-        """Wrap *geometry* in a PatternElement, stamp ``is_construction``, and append it."""
+        """Wrap *geometry* in a PatternElement, stamp ``is_construction``, and append it.
+
+        The element's name is taken from ``geometry.name``; set it on the
+        geometry object before calling (e.g. ``seg.set_name("Center Back")``).
+        """
         elem = PatternElement(
             geometry=geometry,
             style=style,
-            name=name,
             is_outline=is_outline,
             is_construction=self.is_construction,
         )
@@ -138,7 +198,7 @@ class PatternPart:
             if isinstance(elem.geometry, Dart):
                 self.add_dart(elem.geometry, stitch_style=elem.style)
             else:
-                elem.is_construction = self.is_construction
+                elem.is_construction = elem.is_construction or self.is_construction
                 self.elements.append(elem)
 
     def _outline_polygon(self) -> _sg.Polygon | None:
@@ -180,10 +240,12 @@ class PatternPart:
         return Point(minx, miny), Point(maxx, maxy)
 
     def get_element(self, name: str) -> PatternElement:
-        """Return the first :class:`PatternElement` whose effective name matches *name*.
+        """Return the first :class:`PatternElement` whose geometry carries *name*.
 
-        The effective name is determined by :meth:`PatternElement.get_name`, i.e.
-        the element's own ``name`` attribute takes priority over ``geometry.name``.
+        Prefer snake_case attribute access via :class:`NamedAccessMixin`
+        (e.g. ``part.center_back``) over calling this method directly.
+        Use this method when the name contains characters that cannot form a
+        valid Python identifier (e.g. spaces, slashes).
 
         Raises:
             KeyError: If no element with that name exists in this part.
@@ -770,11 +832,16 @@ class PatternPart:
         name: str | None = None,
         style: StyleOptions | None = None,
     ) -> PatternElement:
-        """Append a construction-grid line (never ``is_outline``; defaults to grid style)."""
+        """Append a construction-grid line (never ``is_outline``; defaults to grid style).
+
+        *name* is applied directly to *geometry* so it is the single source of
+        truth and can be retrieved via :meth:`~sewpat.pattern.PatternPart.get_element`.
+        """
+        if name is not None:
+            geometry = geometry.set_name(name)
         return self.append(
             geometry,
             style=style if style is not None else STYLE_CONSTRUCTION_GRID,
-            name=name,
         )
 
     def add_grid_notches(
@@ -922,6 +989,10 @@ class ConstructionGridPart(PatternPart):
     by default — they are only included when requested explicitly by name via
     the ``parts=`` argument of the export functions.
 
+    All elements appended to this part automatically receive
+    ``is_construction=True``, so they are hidden when ``show_construction=False``
+    is passed to the export functions.
+
     Prefer building instances via :class:`ConstructionGrid` rather than
     creating them directly.
     """
@@ -931,7 +1002,7 @@ class ConstructionGridPart(PatternPart):
         name: str = "Konstruktionsgitter",
         elements: list[PatternElement] | None = None,
     ) -> None:
-        super().__init__(name=name, elements=elements)
+        super().__init__(name=name, elements=elements, is_construction=True)
 
 
 class Block(PatternPart):

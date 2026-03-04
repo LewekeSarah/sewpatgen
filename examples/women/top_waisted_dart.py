@@ -10,6 +10,7 @@ from sewpat import (
     STYLE_CONSTRUCTION_GRID,
     CubicBezier,
     STYLE_DART_FOLD,
+    GarmentPart,
 )
 from sewpat.geometry import (
     Circle,
@@ -69,6 +70,13 @@ def make_balance() -> BalanceAdjustments:
     return BalanceAdjustments(VL=-0.9 * CM)
 
 
+class Part(GarmentPart):
+    """Pattern parts for the waisted top with darts."""
+    GRID        = "Grid"
+    BLOCK_BACK  = "Block Back"
+    BLOCK_FRONT = "Block Front"
+
+
 # -----------------------------------------------------------------------
 def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
 
@@ -84,9 +92,9 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     # -----------------------------------------------------------------------
     # Block — construction detail lines built on top of the grid
     # -----------------------------------------------------------------------
-    block_back = PatternPart(name="Block Back")
+    block_back = PatternPart(name=Part.BLOCK_BACK)
     pattern.add_part(block_back)
-    block_front = PatternPart(name="Block Front")
+    block_front = PatternPart(name=Part.BLOCK_FRONT)
     pattern.add_part(block_front)
 
     # STEP Grid Intersections
@@ -166,27 +174,32 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     # STEP Center Back, Neckline, and Shoulder
     back_basic = [
         PatternElement(
-            Segment(pt1, pt6), style=STYLE_STITCH, is_outline=True
-        ),  # Center Back
-        PatternElement(
-            Segment(pt6, pt9), style=STYLE_STITCH, is_outline=True
-        ),  # Center Back
-        PatternElement(
-            CubicBezier(pt1, pt1, pt17, shoulder_back.p1), style=STYLE_STITCH, is_outline=True
-        ),  # Neckline Back
-        PatternElement(
-            shoulder_back_orig, style=STYLE_CONSTRUCTION_GRID, is_outline=False
-        ),  # Shoulder Back
-        PatternElement(
-            shoulder_back, style=STYLE_STITCH, is_outline=True
+            Segment(pt1, pt6, name="Center Back"), style=STYLE_STITCH, is_outline=True
         ),
-        PatternElement(sleeve_back, style=STYLE_STITCH, is_outline=True),  # Sleeve Back
+        PatternElement(
+            Segment(pt6, pt9, name="Center Back Hem"), style=STYLE_STITCH, is_outline=True
+        ),
+        PatternElement(
+            CubicBezier(pt1, pt1, pt17, shoulder_back.p1, name="Neckline Back"),
+            style=STYLE_STITCH, is_outline=True
+        ),
+        PatternElement(
+            shoulder_back_orig.set_name("Shoulder Back Orig"),
+            style=STYLE_CONSTRUCTION_GRID, is_outline=False, is_construction=True
+        ),
+        PatternElement(
+            shoulder_back.set_name("Shoulder Back"), style=STYLE_STITCH, is_outline=True
+        ),
+        PatternElement(sleeve_back.set_name("Sleeve Back"), style=STYLE_STITCH, is_outline=True),
         PatternElement(
             Dart.from_tip_and_legs(
                 pt29, pt_HP, sleeve_back.point_along_from(pt_HP, 1.5 * CM)
-            )
-        ),  # Shoulder Dart Back
-        PatternElement(Segment(intersect(grid.waist, grid.side_back)[0], pt6), style=STYLE_DEBUG_RED)
+            ).set_name("Shoulder Dart Back")
+        ),
+        PatternElement(
+            Segment(intersect(grid.waist, grid.side_back)[0], pt6, name="Waist Back"),
+            style=STYLE_DEBUG_RED
+        ),
     ]
     block_back.extend(back_basic)
     block_back.add_notches(pt_hÄP, seam_edge=sleeve_back)
@@ -194,30 +207,38 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     # STEP Center Front, Neckline, and Shoulder
     front_basic = [
         PatternElement(
-            Segment(pt22, intersect(grid.center_front, grid.hem)[0]),
-            style=STYLE_STITCH,
-            is_outline=True,
-        ), # Center Front
+            Segment(pt22, intersect(grid.center_front, grid.hem)[0], name="Center Front"),
+            style=STYLE_STITCH, is_outline=True,
+        ),
         PatternElement(
-            CubicBezier(pt22, pt22, pt21.translate(-meas.HlB, meas.HlB), pt_sHlP_front),
-            style=STYLE_STITCH,
-            is_outline=True,
-        ), # Neckline Front
-        PatternElement(Segment(pt_SuP, pt25), style=STYLE_CONSTRUCTION_GRID, is_outline=True), # Shoulder Front
+            CubicBezier(pt22, pt22, pt21.translate(-meas.HlB, meas.HlB), pt_sHlP_front, name="Neckline Front"),
+            style=STYLE_STITCH, is_outline=True,
+        ),
         PatternElement(
-            Segment(pt_sHlP_front, pt26), style=STYLE_CONSTRUCTION_GRID, is_outline=True
-        ), # Shoulder Front with Dart
-        PatternElement(shoulder_front_long, style=STYLE_STITCH, is_outline=True), # Shoulder Front
+            Segment(pt_SuP, pt25, name="Shoulder Front Orig"),
+            style=STYLE_CONSTRUCTION_GRID, is_outline=False, is_construction=True
+        ),
         PatternElement(
-            shoulder_front_short, style=STYLE_STITCH, is_outline=True
-        ), # Shoulder Front with Dart
+            Segment(pt_sHlP_front, pt26, name="Shoulder Front Dart Orig"),
+            style=STYLE_CONSTRUCTION_GRID, is_outline=False, is_construction=True
+        ),
+        PatternElement(shoulder_front_long.set_name("Shoulder Front"), style=STYLE_STITCH, is_outline=True),
+        PatternElement(shoulder_front_short.set_name("Shoulder Front Dart"), style=STYLE_STITCH, is_outline=True),
         PatternElement(
-            Dart.from_tip_and_legs(pt_BrP, shoulder_front_short.p1, shoulder_front_long.p2),
-            style=STYLE_STITCH,
-            is_outline=True,
-        ), # Shoulder Dart Front
-        PatternElement(sleeve_front, style=STYLE_STITCH), # Sleeve Front
-        PatternElement(Segment(intersect(grid.waist, grid.center_front)[0], intersect(grid.waist, grid.side_front)[0]), style=STYLE_DEBUG_RED)
+            Dart.from_tip_and_legs(
+                pt_BrP, shoulder_front_short.p1, shoulder_front_long.p2
+            ).set_name("Shoulder Dart Front"),
+            style=STYLE_STITCH, is_outline=True,
+        ),
+        PatternElement(sleeve_front.set_name("Sleeve Front"), style=STYLE_STITCH),
+        PatternElement(
+            Segment(
+                intersect(grid.waist, grid.center_front)[0],
+                intersect(grid.waist, grid.side_front)[0],
+                name="Waist Front"
+            ),
+            style=STYLE_DEBUG_RED
+        ),
     ]
     block_front.add_notches(pt_vÄP, seam_edge=sleeve_front)
     block_front.extend(front_basic)
@@ -232,8 +253,8 @@ if __name__ == "__main__":
     model_config = make_model_config()
     pattern = make_blouse(measurements, model_config)
 
-    pattern_parts = ["Block Back", "Block Front"]
-    grid_parts = ["Grid"]
+    pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
+    grid_parts = [Part.GRID]
 
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
@@ -243,6 +264,7 @@ if __name__ == "__main__":
         filename=str(Path(__file__).parent / "top_waisted_dart_grid.svg"),
         parts=grid_parts + pattern_parts,
         show_bezier_control_points=True,
+        show_construction=False,
     )
 #
 #     # Clean version — construction grid not included

@@ -231,6 +231,11 @@ class Segment:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def set_name(self, name: str) -> "Segment":
+        """Set the name of this segment and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
+
     def translate(self, dx: float, dy: float) -> "Segment":
         """Return a copy translated by (dx, dy)."""
         return Segment(
@@ -672,6 +677,11 @@ class Rect:
             self.origin.translate(dx, dy), self.width, self.height, name=self.name
         )
 
+    def set_name(self, name: str) -> "Rect":
+        """Set the name of this rectangle and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
+
 
 class Triangle:
     """A triangle defined by three points.
@@ -710,6 +720,11 @@ class Triangle:
             self.p3.translate(dx, dy),
             name=self.name,
         )
+
+    def set_name(self, name: str) -> "Triangle":
+        """Set the name of this triangle and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
 
 
 class InfoBox:
@@ -819,6 +834,11 @@ class Circle:
     def translate(self, dx: float, dy: float) -> "Circle":
         """Return a copy translated by (dx, dy)."""
         return Circle(self.center.translate(dx, dy), self.radius, name=self.name)
+
+    def set_name(self, name: str) -> "Circle":
+        """Set the name of this circle and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
         """Return the point *arc_length* mm further along this circle from *point* (CCW positive)."""
@@ -931,6 +951,11 @@ class CubicBezier:
             self.p3.translate(dx, dy),
             name=self.name,
         )
+
+    def set_name(self, name: str) -> "CubicBezier":
+        """Set the name of this curve and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
 
     def point_at_t(self, t: float) -> Point:
         """Evaluate the Bezier curve at parameter t.
@@ -2094,6 +2119,11 @@ class Dart:
             stitch_curve_a=_translate_curve(self.stitch_curve_a),
             stitch_curve_b=_translate_curve(self.stitch_curve_b),
         )
+
+    def set_name(self, name: str) -> "Dart":
+        """Set the name of this dart and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
 
     def rotate(self, pivot: Point, angle_rad: float) -> "Dart":
         """Return a rotated copy (CCW around *pivot*).

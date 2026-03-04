@@ -41,31 +41,30 @@ class TestPatternElement(unittest.TestCase):
         p = Point(0, 0)
         elem = PatternElement(geometry=p)
         self.assertIsInstance(elem.style, StyleOptions)
-        self.assertIsNone(elem.name)
         self.assertIs(elem.geometry, p)
 
-    def test_creation_with_style_and_name(self):
-        """Explicit style and name are stored correctly."""
+    def test_creation_with_style_and_named_geometry(self):
+        """Style is stored correctly; name is read from geometry.name."""
         p = Point(1, 2)
         style = StyleOptions(stroke_color="red")
-        elem = PatternElement(geometry=p, style=style, name="my-point")
+        elem = PatternElement(geometry=p, style=style)
         self.assertIs(elem.style, style)
-        self.assertEqual(elem.name, "my-point")
+        self.assertIsNone(elem.get_name())  # Point has no name
 
-    def test_get_name_returns_element_name_over_geometry_name(self):
-        """Element name takes precedence over geometry name."""
-        seg = Segment(Point(0, 0), Point(1, 0), name="geo-name")
-        elem = PatternElement(geometry=seg, name="elem-name")
-        self.assertEqual(elem.get_name(), "elem-name")
-
-    def test_get_name_falls_back_to_geometry_name(self):
-        """get_name returns geometry.name when element has no own name."""
+    def test_get_name_from_geometry(self):
+        """get_name returns the name set on the geometry object."""
         seg = Segment(Point(0, 0), Point(1, 0), name="geo-name")
         elem = PatternElement(geometry=seg)
         self.assertEqual(elem.get_name(), "geo-name")
 
-    def test_get_name_none_when_both_absent(self):
-        """get_name returns None when neither element nor geometry has a name."""
+    def test_get_name_via_named_fluent(self):
+        """get_name works when name is set via the .set_name() fluent method."""
+        seg = Segment(Point(0, 0), Point(1, 0)).set_name("fluent-name")
+        elem = PatternElement(geometry=seg)
+        self.assertEqual(elem.get_name(), "fluent-name")
+
+    def test_get_name_none_when_absent(self):
+        """get_name returns None when geometry carries no name."""
         p = Point(0, 0)  # Point has no name attribute
         elem = PatternElement(geometry=p)
         self.assertIsNone(elem.get_name())
@@ -94,13 +93,13 @@ class TestPatternPartBasics(unittest.TestCase):
         self.assertIs(elem.geometry, p)
         self.assertEqual(len(part.elements), 1)
 
-    def test_append_with_style_and_name(self):
-        """append() passes style and name through to PatternElement."""
+    def test_append_with_style_and_named_geometry(self):
+        """append() passes style through; name comes from geometry.name."""
         part = PatternPart(name="Body")
         style = StyleOptions(stroke_color="blue")
-        elem = part.append(Point(0, 0), style=style, name="centre")
+        elem = part.append(Segment(Point(0, 0), Point(1, 0), name="centre"), style=style)
         self.assertIs(elem.style, style)
-        self.assertEqual(elem.name, "centre")
+        self.assertEqual(elem.get_name(), "centre")
 
     def test_extend(self):
         """extend() appends multiple PatternElements at once."""

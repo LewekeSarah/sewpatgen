@@ -385,13 +385,16 @@ def _render_elements(
     elements: list["PatternElement"],
     svg_nodes: list[str],
     show_bezier_control_points: bool,
-    show_points: bool,
+    show_construction: bool,
     styles: dict[str, StyleOptions] | None = None,
 ) -> None:
     """Render PatternElements into *svg_nodes* in-place.
 
     SA elements are collected and flushed as a single connected ``<path>`` at
     the end so ``stroke-linejoin`` applies at every corner.
+
+    Elements with ``is_construction=True`` are skipped when *show_construction*
+    is ``False``.
     """
     _TYPE_KEY = {
         Segment: "segment",
@@ -415,7 +418,7 @@ def _render_elements(
                 sa_style_dict = pat_elem.style.as_dict()
             continue
 
-        if not show_points and isinstance(element, Point):
+        if not show_construction and pat_elem.is_construction:
             continue
 
         # Resolve effective style: use the per-element style unless it is still
@@ -482,7 +485,7 @@ def _build_svg(
     width_mm: float,
     height_mm: float,
     margin_mm: float,
-    show_points: bool,
+    show_construction: bool,
     show_bezier_control_points: bool,
     show_seam_allowance: bool = True,
     styles: dict[str, StyleOptions] | None = None,
@@ -506,7 +509,7 @@ def _build_svg(
             visible,
             svg_nodes,
             show_bezier_control_points,
-            show_points,
+            show_construction,
             resolved,
         )
 
@@ -521,7 +524,7 @@ def export_pattern_part_svg_mm(
     height_mm: float = 297,
     margin_mm: float = 10,
     style_map: dict[str, StyleOptions] | None = None,
-    show_points: bool = True,
+    show_construction: bool = True,
     show_bezier_control_points: bool = False,
     show_seam_allowance: bool = True,
 ) -> None:
@@ -533,7 +536,8 @@ def export_pattern_part_svg_mm(
         width_mm / height_mm: Canvas size in mm.
         margin_mm: Canvas margin in mm.
         style_map: Element-type → StyleOptions overrides; unknown keys warn.
-        show_points: Render Point elements.
+        show_construction: Render elements flagged ``is_construction=True``.
+            Set to ``False`` for a clean print view without drafting aids.
         show_bezier_control_points: Render Bézier control-point handles.
         show_seam_allowance: Include SA offset lines (default True).
     """
@@ -544,7 +548,7 @@ def export_pattern_part_svg_mm(
         width_mm=width_mm,
         height_mm=height_mm,
         margin_mm=margin_mm,
-        show_points=show_points,
+        show_construction=show_construction,
         show_bezier_control_points=show_bezier_control_points,
         show_seam_allowance=show_seam_allowance,
         styles=styles,
@@ -560,7 +564,7 @@ def export_pattern_svg_mm(
     height_mm: float = 297,
     margin_mm: float = 10,
     style_map: dict[str, StyleOptions] | None = None,
-    show_points: bool = True,
+    show_construction: bool = True,
     show_bezier_control_points: bool = False,
     parts: list[str] | None = None,
     show_seam_allowance: bool = True,
@@ -573,7 +577,8 @@ def export_pattern_svg_mm(
         width_mm / height_mm: Canvas size in mm.
         margin_mm: Canvas margin in mm.
         style_map: Element-type → StyleOptions overrides; unknown keys warn.
-        show_points: Render Point elements.
+        show_construction: Render elements flagged ``is_construction=True``.
+            Set to ``False`` for a clean print view without drafting aids.
         show_bezier_control_points: Render Bézier control-point handles.
         parts: Part names to include.  When ``None``, all parts are rendered
             except :class:`ConstructionGridPart` and :class:`Block` — those
@@ -600,7 +605,7 @@ def export_pattern_svg_mm(
         width_mm=width_mm,
         height_mm=height_mm,
         margin_mm=margin_mm,
-        show_points=show_points,
+        show_construction=show_construction,
         show_bezier_control_points=show_bezier_control_points,
         show_seam_allowance=show_seam_allowance,
         styles=styles,

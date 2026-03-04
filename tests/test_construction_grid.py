@@ -66,7 +66,7 @@ class TestConstructionGridPart(unittest.TestCase):
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            show_points=False,
+            show_construction=False,
             show_bezier_control_points=False,
         )
         self.assertIn("<line ", svg)
@@ -80,7 +80,7 @@ class TestConstructionGridPart(unittest.TestCase):
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            show_points=False,
+            show_construction=False,
             show_bezier_control_points=False,
         )
         self.assertIn("<line ", svg)
@@ -97,7 +97,7 @@ class TestConstructionGridPart(unittest.TestCase):
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            show_points=False,
+            show_construction=False,
             show_bezier_control_points=False,
         )
         # Only the 10mm segment from part is in svg, not the 50mm diagonal

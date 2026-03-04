@@ -23,6 +23,7 @@ from sewpat.geometry import (
     Triangle,
 )
 from sewpat.pattern import Pattern, PatternPart
+from sewpat.element import PatternElement
 from sewpat.render import (
     _build_svg,
     _resolve_styles,
@@ -138,7 +139,7 @@ class TestBuildSvg(unittest.TestCase):
             width_mm=210,
             height_mm=297,
             margin_mm=10,
-            show_points=True,
+            show_construction=True,
             show_bezier_control_points=False,
         )
 
@@ -218,7 +219,7 @@ class TestRenderSegment(unittest.TestCase):
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            show_points=False,
+            show_construction=False,
             show_bezier_control_points=False,
         )
 
@@ -261,7 +262,7 @@ class TestRenderCircle(unittest.TestCase):
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            show_points=False,
+            show_construction=False,
             show_bezier_control_points=False,
         )
 
@@ -287,7 +288,7 @@ class TestRenderRect(unittest.TestCase):
             width_mm=200,
             height_mm=200,
             margin_mm=5,
-            show_points=False,
+            show_construction=False,
             show_bezier_control_points=False,
         )
 
@@ -320,7 +321,7 @@ class TestRenderRect(unittest.TestCase):
             width_mm=200,
             height_mm=200,
             margin_mm=5,
-            show_points=False,
+            show_construction=False,
             show_bezier_control_points=False,
         )
         # Extract all clipPath ids and confirm they are distinct
@@ -349,7 +350,7 @@ class TestRenderTriangle(unittest.TestCase):
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            show_points=False,
+            show_construction=False,
             show_bezier_control_points=False,
         )
 
@@ -364,33 +365,69 @@ class TestRenderTriangle(unittest.TestCase):
         self.assertIn('fill="black"', svg)
 
 
-class TestRenderPoint(unittest.TestCase):
+class TestRenderConstruction(unittest.TestCase):
+    """show_construction controls visibility of elements with is_construction=True."""
+
     @staticmethod
-    def _svg(point, show_points=True, style=None):
+    def _svg(show_construction: bool, is_construction: bool) -> str:
         part = PatternPart(name="p")
-        part.append(point, style=style)
+        elem = PatternElement(
+            Segment(Point(0, 0), Point(10, 0), name="aux"),
+            is_construction=is_construction,
+        )
+        part.elements.append(elem)
         return _build_svg(
             title="t",
             element_groups=[part.elements],
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            show_points=show_points,
+            show_construction=show_construction,
             show_bezier_control_points=False,
         )
 
-    def test_point_rendered_when_show_points_true(self):
-        svg = self._svg(Point(5, 5), show_points=True)
+    def test_construction_shown_when_flag_true(self):
+        svg = self._svg(show_construction=True, is_construction=True)
+        self.assertIn("aux", svg)
+
+    def test_construction_hidden_when_flag_false(self):
+        svg = self._svg(show_construction=False, is_construction=True)
+        self.assertNotIn("aux", svg)
+
+    def test_non_construction_always_shown(self):
+        """Elements without is_construction=True are never affected by the flag."""
+        svg = self._svg(show_construction=False, is_construction=False)
+        self.assertIn("aux", svg)
+
+    def test_point_always_rendered(self):
+        """Points are regular elements — rendered unless is_construction=True hides them."""
+        part = PatternPart(name="p")
+        part.elements.append(PatternElement(Point(5, 5)))
+        svg = _build_svg(
+            title="t",
+            element_groups=[part.elements],
+            width_mm=100,
+            height_mm=100,
+            margin_mm=5,
+            show_construction=False,
+            show_bezier_control_points=False,
+        )
         self.assertIn('cx="5.0"', svg)
 
-    def test_point_suppressed_when_show_points_false(self):
-        svg = self._svg(Point(5, 5), show_points=False)
-        self.assertNotIn('cx="5.0"', svg)
-
     def test_point_name_rendered(self):
-        pt = Point(3, 4, name="A")
-        svg = self._svg(pt, show_points=True)
+        part = PatternPart(name="p")
+        part.elements.append(PatternElement(Point(3, 4, name="A")))
+        svg = _build_svg(
+            title="t",
+            element_groups=[part.elements],
+            width_mm=100,
+            height_mm=100,
+            margin_mm=5,
+            show_construction=True,
+            show_bezier_control_points=False,
+        )
         self.assertIn(">A<", svg)
+
 
 
 class TestRenderInfoBox(unittest.TestCase):
@@ -404,7 +441,7 @@ class TestRenderInfoBox(unittest.TestCase):
             width_mm=200,
             height_mm=200,
             margin_mm=5,
-            show_points=False,
+            show_construction=False,
             show_bezier_control_points=False,
         )
 
@@ -443,7 +480,7 @@ class TestRenderCubicBezier(unittest.TestCase):
             width_mm=200,
             height_mm=200,
             margin_mm=5,
-            show_points=False,
+            show_construction=False,
             show_bezier_control_points=show_control,
         )
 
@@ -525,14 +562,31 @@ class TestExportPatternPartSvgMm(unittest.TestCase):
         self.assertIn('width="420mm"', content)
         self.assertIn('height="594mm"', content)
 
-    def test_show_points_false_suppresses_points(self):
+    def test_show_construction_false_hides_construction_elements(self):
         part = PatternPart(name="p")
-        part.append(Point(5, 5))
+        elem = PatternElement(
+            Segment(Point(0, 0), Point(10, 0), name="aux-line"),
+            is_construction=True,
+        )
+        part.elements.append(elem)
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
-        export_pattern_part_svg_mm(part, fname, show_points=False)
+        export_pattern_part_svg_mm(part, fname, show_construction=False)
         content = Path(fname).read_text()
-        self.assertNotIn('cx="5.0"', content)
+        self.assertNotIn("aux-line", content)
+
+    def test_show_construction_true_shows_construction_elements(self):
+        part = PatternPart(name="p")
+        elem = PatternElement(
+            Segment(Point(0, 0), Point(10, 0), name="aux-line"),
+            is_construction=True,
+        )
+        part.elements.append(elem)
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            fname = f.name
+        export_pattern_part_svg_mm(part, fname, show_construction=True)
+        content = Path(fname).read_text()
+        self.assertIn("aux-line", content)
 
     def test_show_bezier_control_points(self):
         part = PatternPart(name="p")
@@ -711,16 +765,19 @@ class TestExportPatternSvgMm(unittest.TestCase):
         content = Path(fname).read_text()
         self.assertIn('id="arrow"', content)
 
-    def test_show_points_false(self):
+    def test_show_construction_false_hides_construction_elements(self):
         pat = Pattern(name="pts")
         p = PatternPart(name="p")
-        p.append(Point(10, 10))
+        elem = PatternElement(
+            Segment(Point(0, 0), Point(10, 0), name="aux"), is_construction=True
+        )
+        p.elements.append(elem)
         pat.add_part(p)
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
-        export_pattern_svg_mm(pat, fname, show_points=False)
+        export_pattern_svg_mm(pat, fname, show_construction=False)
         content = Path(fname).read_text()
-        self.assertNotIn('cx="10.0"', content)
+        self.assertNotIn("aux", content)
 
 
 # ---------------------------------------------------------------------------
@@ -730,41 +787,40 @@ class TestExportPatternSvgMm(unittest.TestCase):
 
 class TestElementNameOverride(unittest.TestCase):
     @staticmethod
-    def _svg_for(geometry, elem_name=None, geom_name=None):
+    def _svg_for(geometry) -> str:
         """Render a single element and return the SVG string."""
-        if geom_name is not None and hasattr(geometry, "name"):
-            try:
-                geometry.name = geom_name
-            except AttributeError:
-                pass
         part = PatternPart(name="p")
-        part.append(geometry, name=elem_name)
+        part.append(geometry)
         return _build_svg(
             title="t",
             element_groups=[part.elements],
             width_mm=200,
             height_mm=200,
             margin_mm=5,
-            show_points=True,
+            show_construction=True,
             show_bezier_control_points=False,
         )
 
-    def test_element_name_overrides_geometry_name_on_segment(self):
-        seg = Segment(Point(0, 0), Point(10, 0), name="original")
-        svg = self._svg_for(seg, elem_name="override")
-        self.assertIn("override", svg)
-        self.assertNotIn("original", svg)
-
-    def test_geometry_name_used_when_no_override(self):
+    def test_geometry_name_appears_in_svg(self):
+        """The geometry name is used as the element label in the SVG."""
         seg = Segment(Point(0, 0), Point(10, 0), name="geo_name")
-        svg = self._svg_for(seg, elem_name=None)
+        svg = self._svg_for(seg)
         self.assertIn("geo_name", svg)
 
-    def test_geometry_name_restored_after_render(self):
-        """The geometry object's name must be unchanged after rendering."""
+    def test_set_name_updates_label_in_svg(self):
+        """Calling set_name() before rendering changes the label in the SVG."""
         seg = Segment(Point(0, 0), Point(10, 0), name="original")
-        self._svg_for(seg, elem_name="override")
-        self.assertEqual(seg.name, "original")
+        seg.set_name("updated")
+        svg = self._svg_for(seg)
+        self.assertIn("updated", svg)
+        self.assertNotIn("original", svg)
+
+    def test_no_name_renders_without_label(self):
+        """A geometry with no name produces no spurious label in the SVG."""
+        seg = Segment(Point(0, 0), Point(10, 0))
+        svg = self._svg_for(seg)
+        # Just verify it renders without error — no name label expected.
+        self.assertIn("<svg", svg)
 
 
 if __name__ == "__main__":
