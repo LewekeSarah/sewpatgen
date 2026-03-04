@@ -193,6 +193,7 @@ class PatternPart(NamedAccessMixin):
             style=style,
             is_outline=is_outline,
             is_construction=construction,
+            name=geometry.name
         )
         self.elements.append(elem)
         return elem
@@ -601,6 +602,17 @@ class PatternPart(NamedAccessMixin):
             and getattr(e.style, "seam_allowance", None) is not None
         }
 
+        # Per-element SA direction override: dart roof segments store the tip
+        # as _sa_center so the offset goes away from the tip (outward) rather
+        # than away from the part centroid, which can be wrong for inward-
+        # pointing geometry like shoulder dart roofs.
+        elem_center: dict[frozenset, "Point"] = {
+            _ep_key(e.geometry): e._sa_center
+            for e in outline_elements
+            if isinstance(e.geometry, (Segment, CubicBezier))
+            and getattr(e, "_sa_center", None) is not None
+        }
+
         _valid_cj = {"miter", "round", "bevel"}
         elem_cj: dict[frozenset, str] = {}
         for e in outline_elements:
@@ -619,10 +631,11 @@ class PatternPart(NamedAccessMixin):
         offset_groups: list[list[Segment | CubicBezier]] = []
         for g in chain_mixed:
             d = elem_sa.get(_ep_key(g), distance)
+            seg_center = elem_center.get(_ep_key(g), center)
             if d == 0.0:
                 offset_groups.append([g])  # fold line — keep in place
             else:
-                offset_groups.append(_offset_adaptive(g, d, center))
+                offset_groups.append(_offset_adaptive(g, d, seg_center))
 
         n = len(offset_groups)
         arc_inserts: list[tuple[int, CubicBezier]] = []
@@ -674,6 +687,54 @@ class PatternPart(NamedAccessMixin):
             elem.is_seam_allowance = True
             added_mixed.append(elem)
         return added_mixed
+
+    def append_split_at_dart(
+        self,
+        element: PatternElement,
+        dart: Dart,
+    ) -> "list[PatternElement]":
+        """Split *element* at both dart legs and append only the outer parts.
+
+        This is the standard pattern-making operation of *removing the dart
+        mouth from a seam edge*: the section of the edge between
+        ``dart.leg_a`` and ``dart.leg_b`` is discarded, while the parts
+        outside the dart mouth are appended to this part.
+
+        All properties of *element* — ``style``, ``is_outline``,
+        ``is_construction``, ``role``, ``name`` — are inherited by every
+        resulting sub-element.  There is no need to pass a style separately;
+        simply construct *element* as you would any other outline element and
+        hand it here instead of calling :meth:`append`::
+
+            sleeve_elem = PatternElement(
+                sleeve_back.set_name("Sleeve Back"),
+                style=STYLE_STITCH, is_outline=True,
+            )
+            block_back.append_split_at_dart(sleeve_elem, shoulder_dart_back)
+
+        The method delegates all splitting logic to
+        :meth:`PatternElement.split_at_dart`.
+
+        Args:
+            element: Source element whose geometry is split.  Must wrap a
+                :class:`~sewpat.geometry.Segment` or
+                :class:`~sewpat.geometry.CubicBezier`.
+            dart: :class:`~sewpat.geometry.Dart` whose ``leg_a`` / ``leg_b``
+                define the mouth cut points.
+
+        Returns:
+            The list of newly appended :class:`PatternElement` objects
+            (one or two, depending on where the legs fall).
+
+        Raises:
+            TypeError: Propagated from :meth:`PatternElement.split_at_dart`
+                when the geometry type does not support splitting.
+        """
+        children = element.split_at_dart(dart)
+        for child in children:
+            child.is_construction = child.is_construction or self.is_construction
+            self.elements.append(child)
+        return children
 
     def add_dart(
         self,
@@ -742,13 +803,19 @@ class PatternPart(NamedAccessMixin):
             # The middle sub-segment (between the two legs) is the dart mouth —
             # discard it; keep only the first and last sub-segments.
             outer_subs = all_subs[:1] + (all_subs[-1:] if len(all_subs) > 1 else [])
-            edge_elem.is_outline = False
+            # Replace the original edge element with the two outer stubs in-place.
+            # The original is removed entirely so it is neither rendered nor used
+            # as outline; the stubs inherit its name and style.
+            edge_name = edge_elem.get_name()
             idx = self.elements.index(edge_elem)
+            self.elements.pop(idx)
             for i, seg in enumerate(outer_subs):
+                if edge_name:
+                    seg = seg.set_name(edge_name)
                 stub = PatternElement(
-                    seg, style=src_style, is_outline=True, role="dart_edge_stub"
+                    seg, name=edge_name, style=src_style, is_outline=True, role="dart_edge_stub"
                 )
-                self.elements.insert(idx + 1 + i, stub)
+                self.elements.insert(idx + i, stub)
                 created.append(stub)
 
         def _add(elem: PatternElement) -> PatternElement:
@@ -764,9 +831,14 @@ class PatternPart(NamedAccessMixin):
             # Fold / crease line
             _add(PatternElement(dart.fold_line, style=_fold, role="dart_fold"))
 
-            # Abnäherdach roof outline — replaces the straight mouth edge
+            # Abnäherdach roof outline — part of the SA polygon.
+            # The offset must go away from the dart tip (outward across the
+            # mouth) rather than away from the part centroid, which fails for
+            # shoulder darts whose roof segments point inward.  We set
+            # _sa_center = dart.tip on each roof element; add_seam_allowance()
+            # uses this instead of the centroid for these segments only.
             roof = dart.roof
-            _add(
+            roof_a = _add(
                 PatternElement(
                     Segment(dart.leg_a, roof),
                     style=roof_style,
@@ -774,7 +846,8 @@ class PatternPart(NamedAccessMixin):
                     role="dart_roof",
                 )
             )
-            _add(
+            roof_a._sa_center = dart.tip
+            roof_b = _add(
                 PatternElement(
                     Segment(dart.leg_b, roof),
                     style=roof_style,
@@ -782,6 +855,7 @@ class PatternPart(NamedAccessMixin):
                     role="dart_roof",
                 )
             )
+            roof_b._sa_center = dart.tip
 
             # Centre notch at the roof peak
             if notches:

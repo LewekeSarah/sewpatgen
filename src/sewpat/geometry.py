@@ -1877,6 +1877,46 @@ class Dart:
         )
 
     @classmethod
+    def from_edge_at_legs(
+        cls,
+        edge: "object",
+        leg_a: Point,
+        leg_b: Point,
+        tip: Point,
+        dart_type: "DartType | str" = DartType.TRIANGLE,
+        name: str | None = None,
+    ) -> "Dart":
+        """Place a dart on *edge* with explicitly computed leg points.
+
+        Use this when both legs lie on the same edge but are placed
+        asymmetrically — for example one leg projected from a landmark and the
+        other a fixed arc-length further along the curve — so none of the
+        symmetric :meth:`from_edge_at_t` / :meth:`from_edge_at_point` factories
+        apply.  ``_edge_element`` is set automatically so
+        :meth:`~sewpat.pattern.PatternPart.add_dart` will split *edge* in-place
+        at the dart legs.
+
+        Args:
+            edge: ``PatternElement`` wrapping a ``Segment`` or ``CubicBezier``,
+                or the geometry object itself.  Must already be in the part
+                before :meth:`~sewpat.pattern.PatternPart.add_dart` is called.
+            leg_a: First mouth endpoint (already on *edge*).
+            leg_b: Second mouth endpoint (already on *edge*).
+            tip: Dart tip (apex).
+        """
+        _geom, edge_elem = _unwrap_edge(edge)
+        center = Segment(leg_a, leg_b).midpoint
+        return cls(
+            leg_a=leg_a,
+            leg_b=leg_b,
+            center=center,
+            tip=tip,
+            dart_type=dart_type,
+            name=name,
+            _edge_element=edge_elem,
+        )
+
+    @classmethod
     def from_tip_and_legs(
         cls,
         tip: Point,

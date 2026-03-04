@@ -64,6 +64,12 @@ class PatternElement:
         self.is_seam_allowance = is_seam_allowance
         self.is_seam_notch: bool = False
         self.is_construction: bool = is_construction
+        # Internal: outward-direction reference for SA offset computation.
+        # None → use the part centroid (default for all elements).
+        # Set to dart.tip by add_dart() for roof segments so the offset always
+        # goes away from the tip, which is the physically correct direction
+        # regardless of where the centroid is relative to the roof geometry.
+        self._sa_center: object | None = None
 
     def get_name(self) -> str | None:
         """Return the effective name (element name overrides geometry name)."""
