@@ -80,7 +80,7 @@ class TestConstructionGridPart(unittest.TestCase):
             width_mm=100,
             height_mm=100,
             margin_mm=5,
-            show_construction=False,
+            show_construction=True,
             show_bezier_control_points=False,
         )
         self.assertIn("<line ", svg)

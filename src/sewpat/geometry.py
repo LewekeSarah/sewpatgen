@@ -1803,6 +1803,14 @@ class Dart:
         self.dart_type: DartType = dart_type
         self.name = name
         self.second_tip: Point | None = second_tip
+        if second_tip is not None and dart_type is not DartType.RHOMBUS:
+            import warnings
+            warnings.warn(
+                f"second_tip is only used for rhombus darts, but dart_type is "
+                f"{dart_type!r}. The second_tip will be ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
         self.stitch_curve_a: "Segment | CubicBezier | None" = stitch_curve_a
         self.stitch_curve_b: "Segment | CubicBezier | None" = stitch_curve_b
         # Internal: the source PatternElement (carries edge style for roof rendering).
@@ -1820,6 +1828,7 @@ class Dart:
         width: float,
         dart_type: "DartType | str" = DartType.TRIANGLE,
         name: str | None = None,
+        second_tip: Point | None = None,
     ) -> "Dart":
         """Construct a dart from tip, mouth centre and width.
 
@@ -1839,6 +1848,7 @@ class Dart:
             center=center,
             tip=tip,
             dart_type=dart_type,
+            second_tip=second_tip,
             name=name,
         )
 

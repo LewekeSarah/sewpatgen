@@ -9,7 +9,7 @@ from sewpat import (
     STYLE_DEBUG_RED,
     CubicBezier,
     STYLE_DART_FOLD,
-    GarmentPart,
+    GarmentPart, DartType,
 )
 from sewpat.geometry import (
     Circle,
@@ -25,6 +25,8 @@ from sewpat.measurements import (
     Allowance,
     BlouseMeasurements,
     ModelConfig,
+    WaistDistribution,
+    calculate_waist_distribution,
     make_blouse_measurements,
 )
 from sewpat.pages import DinA0
@@ -101,7 +103,9 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     pt1 = config.anchor
     pt2 = pt1.translate(0, model.MoL)
     pt4 = pt1.translate(0, meas.RüL)
+    pt5 = intersect(grid.center_back, grid.hip)[0]
     pt6 = pt4.translate(model.BeckenAdjustment, 0)
+    pt8 = pt5.translate(model.BeckenAdjustment, 0)
     pt9 = pt2.translate(model.BeckenAdjustment, 0)
     pt7 = intersect(Segment(pt1, pt6), grid.chest)[0]
     pt10 = intersect(grid.sleeve_back, grid.chest)[0]
@@ -158,17 +162,53 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     )
 
     # Darts on the Back
-    pt27 = intersect(grid.waist, grid.sleeve_back)
-    pt28 = intersect(grid.waist, grid.dart_back)
+    pt27 = intersect(grid.waist, grid.sleeve_back)[0]
+    pt28 = intersect(grid.waist, grid.dart_back)[0]
     pt29 = intersect(grid.dart_back, shoulder_blade)[0]
 
 
-    # Waist Ausfallbetrag
-    waist_leng_aux = (
-        Segment(intersect(grid.waist, grid.center_front)[0], intersect(grid.waist, grid.side_front)[0]).length +
-        Segment(intersect(grid.waist, grid.side_back)[0], pt6).length
+    # STEP Waist dart distribution (Ausfallbetrag)
+    waist_offset = grid.waist.offset(-1 * CM).set_name("Waist Offset")  # TODO don't hard-code
+    pt_waist_cf = intersect(grid.center_front, grid.waist)[0]
+    pt_waist_sf = intersect(grid.side_front,   grid.waist)[0]
+    pt_waist_sb = intersect(grid.side_back,    grid.waist)[0]
+    wd: WaistDistribution = calculate_waist_distribution(
+        meas,
+        pt_waist_cf=pt_waist_cf,
+        pt_waist_sf=pt_waist_sf,
+        pt_waist_sb=pt_waist_sb,
+        pt_waist_cb=pt6,
     )
-    print(waist_leng_aux - meas.TaW / 2)
+
+    # Raise side-seam waist points by SaEinzug (toward bust line, y decreases)
+    pt_waist_sb_raised = intersect(grid.side_back, waist_offset)[0].translate(-wd.SaEinzug, 0)
+    pt_waist_sf_raised = intersect(grid.side_front, waist_offset)[0].translate(wd.SaEinzug, 0)
+
+    # Upper side seam drawn straight from raised waist point to bust line
+    side_seam_back_upper  = Segment(pt_waist_sb_raised, pt11, name="Side Seam Back Upper")
+    side_seam_front_upper = Segment(pt_waist_sf_raised, pt12, name="Side Seam Front Upper")
+
+    # Back waist dart  — mouth on waist line at dart_back position, tip upward
+    _DART_LENGTH_BACK  = 10 * CM
+    _DART_LENGTH_FRONT =  8 * CM
+    pt_back_dart_tip = pt28.translate(0, -_DART_LENGTH_BACK)
+    waist_dart_back = Dart.from_tip_center_width(
+        tip=intersect(grid.dart_back, grid.chest)[0],
+        center=pt28,
+        width=wd.hAbI,
+        dart_type=DartType.RHOMBUS,
+        second_tip=pt28.translate(0, 16 * CM) # TODO don't hard-code
+    ).set_name("Waist Dart Back")
+
+    # Front waist dart — mouth on waist line at bust_point position, tip upward
+    waist_dart_front = Dart.from_tip_center_width(
+        tip=pt_BrP,
+        center=pt19,
+        width=wd.vAbI,
+        dart_type=DartType.RHOMBUS,
+        second_tip=pt19.translate(0, 12 * CM) # TODO don't hard-code
+    ).set_name("Waist Dart Front")
+
     if not (pt14.coords == pt7.translate((meas.BrW / 2 + 10 * CM), 0).coords).all():
         raise ValueError("BrW is plotted incorrect.")
 
@@ -199,9 +239,26 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
             ).set_name("Shoulder Dart Back")
         ),
         PatternElement(
-            Segment(intersect(grid.waist, grid.side_back)[0], pt6, name="Waist Back"),
-            style=STYLE_DEBUG_RED
+            side_seam_back_upper, style=STYLE_STITCH, is_outline=True
         ),
+        PatternElement(
+            waist_dart_back, style=STYLE_DART_FOLD
+        ),
+        PatternElement(waist_offset, is_construction=True),
+        PatternElement(CubicBezier(
+            pt_waist_sb_raised,
+            pt_waist_sb_raised,
+            intersect(grid.hip, grid.side_back)[0],
+            intersect(grid.hip, grid.side_back)[0],
+            name="Side Hip Curve Back",
+        ), is_outline=True, style=STYLE_STITCH),
+        PatternElement(
+            Segment(
+                intersect(grid.hip, grid.side_back)[0],
+                intersect(grid.hip, grid.side_back)[0].translate(0, Segment(pt8, pt9).length),
+            ),
+            style=STYLE_STITCH, is_outline=True
+        )
     ]
     block_back.extend(back_basic)
     block_back.add_notches(pt_hÄP, seam_edge=sleeve_back)
@@ -234,13 +291,25 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
         ),
         PatternElement(sleeve_front.set_name("Sleeve Front"), style=STYLE_STITCH),
         PatternElement(
-            Segment(
-                intersect(grid.waist, grid.center_front)[0],
-                intersect(grid.waist, grid.side_front)[0],
-                name="Waist Front"
-            ),
-            style=STYLE_DEBUG_RED
+            side_seam_front_upper, style=STYLE_STITCH, is_outline=True
         ),
+        PatternElement(
+            waist_dart_front, style=STYLE_DART_FOLD
+        ),
+        PatternElement(CubicBezier(
+            pt_waist_sf_raised,
+            pt_waist_sf_raised,
+            intersect(grid.hip, grid.side_front)[0],
+            intersect(grid.hip, grid.side_front)[0],
+            name="Side Hip Curve Front",
+        ), is_outline=True, style=STYLE_STITCH),
+        PatternElement(
+            Segment(
+                intersect(grid.hip, grid.side_front)[0],
+                intersect(grid.hip, grid.side_front)[0].translate(0, Segment(pt8, pt9).length),
+            ),
+            style=STYLE_STITCH, is_outline=True
+        )
     ]
     block_front.add_notches(pt_vÄP, seam_edge=sleeve_front)
     block_front.extend(front_basic)

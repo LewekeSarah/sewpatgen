@@ -467,7 +467,7 @@ def _render_elements(
                     if isinstance(element, Point)
                     else setattr(element, "name", effective_name)
                 )
-            except AttributeError, TypeError:
+            except (AttributeError, TypeError):
                 pass
             svg_nodes.extend(renderer(element, style.as_dict()))
             try:
@@ -476,7 +476,7 @@ def _render_elements(
                     if isinstance(element, Point)
                     else setattr(element, "name", original_name)
                 )
-            except AttributeError, TypeError:
+            except (AttributeError, TypeError):
                 pass
 
     # Render all SA elements as one connected path (clean corners via linejoin).

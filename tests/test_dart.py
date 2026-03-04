@@ -1,6 +1,7 @@
 """Tests for Dart geometry and PatternPart.add_dart()."""
 
 import math
+import warnings
 
 import pytest
 
@@ -200,6 +201,101 @@ class TestDartGeometry:
         d1 = _simple_dart()
         d2 = _simple_dart()
         assert len({d1, d2}) == 1
+
+
+# ---------------------------------------------------------------------------
+# second_tip warning
+# ---------------------------------------------------------------------------
+
+
+class TestDartSecondTipWarning:
+    """Dart emits a UserWarning when second_tip is supplied for a non-rhombus type."""
+
+    _second_tip = Point(50, -40)
+
+    # --- should warn ---
+
+    def test_direct_init_triangle_warns(self) -> None:
+        with pytest.warns(UserWarning, match="second_tip"):
+            Dart(
+                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                dart_type=DartType.TRIANGLE,
+                second_tip=self._second_tip,
+            )
+
+    def test_from_tip_center_width_triangle_warns(self) -> None:
+        with pytest.warns(UserWarning, match="second_tip"):
+            Dart.from_tip_center_width(
+                tip=Point(50, 80), center=Point(50, 0), width=20.0,
+                dart_type=DartType.TRIANGLE,
+                second_tip=self._second_tip,
+            )
+
+    def test_from_tip_and_legs_triangle_warns(self) -> None:
+        with pytest.warns(UserWarning, match="second_tip"):
+            Dart.from_tip_and_legs(
+                Point(50, 80), Point(40, 0), Point(60, 0),
+                dart_type=DartType.TRIANGLE,
+                second_tip=self._second_tip,
+            )
+
+    def test_warning_message_mentions_dart_type(self) -> None:
+        with pytest.warns(UserWarning, match="triangle"):
+            Dart(
+                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                dart_type=DartType.TRIANGLE,
+                second_tip=self._second_tip,
+            )
+
+    def test_warning_is_user_warning(self) -> None:
+        with pytest.warns(UserWarning):
+            Dart(
+                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                dart_type=DartType.TRIANGLE,
+                second_tip=self._second_tip,
+            )
+
+    # --- should NOT warn ---
+
+    def test_rhombus_with_second_tip_no_warning(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            Dart(
+                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                dart_type=DartType.RHOMBUS,
+                second_tip=self._second_tip,
+            )
+
+    def test_triangle_without_second_tip_no_warning(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80))
+
+    def test_rhombus_without_second_tip_no_warning(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            Dart(
+                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                dart_type=DartType.RHOMBUS,
+            )
+
+    def test_from_tip_center_width_rhombus_no_warning(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            Dart.from_tip_center_width(
+                tip=Point(50, 80), center=Point(50, 0), width=20.0,
+                dart_type=DartType.RHOMBUS,
+                second_tip=self._second_tip,
+            )
+
+    def test_from_tip_and_legs_rhombus_no_warning(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            Dart.from_tip_and_legs(
+                Point(50, 80), Point(40, 0), Point(60, 0),
+                dart_type=DartType.RHOMBUS,
+                second_tip=self._second_tip,
+            )
 
 
 class TestDartSplit:

@@ -23,6 +23,8 @@ from .measurements import (
     BlouseMeasurements,
     ModelConfig,
     TrouserMeasurements,
+    WaistDistribution,
+    calculate_waist_distribution,
     make_blouse_measurements,
     make_measurements_trouser,
 )
