@@ -5,7 +5,9 @@ from .geometry import (
     CubicBezier,
     Dart,
     InfoBox,
+    Line,
     Point,
+    Ray,
     Rect,
     Segment,
     Triangle,
@@ -39,6 +41,8 @@ class PatternElement:
         | Circle
         | Triangle
         | CubicBezier
+        | Line
+        | Ray
         | Point
         | InfoBox
         | Dart,

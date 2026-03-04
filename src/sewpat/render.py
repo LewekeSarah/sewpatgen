@@ -8,7 +8,9 @@ from sewpat.geometry import (
     Circle,
     CubicBezier,
     InfoBox,
+    Line,
     Point,
+    Ray,
     Rect,
     Segment,
     Triangle,
@@ -192,6 +194,29 @@ def _render_segment(
     return nodes
 
 
+def _render_line(element: Line, style_dict: dict[str, Any]) -> list[str]:
+    """Render an infinite :class:`Line` by clipping it to a finite extent.
+
+    The line is extended 1500 mm in each direction from its base point and
+    then rendered as a regular :class:`Segment`.
+    """
+    extent = 1500.0
+    p1 = element.point_at_distance(-extent)
+    p2 = element.point_at_distance(extent)
+    seg = Segment(p1, p2, name=element.name)
+    return _render_segment(seg, style_dict)
+
+
+def _render_ray(element: Ray, style_dict: dict[str, Any]) -> list[str]:
+    """Render a semi-infinite :class:`Ray` by clipping it to a finite extent.
+
+    The ray starts at its origin and extends 1500 mm in its direction.
+    """
+    extent = 1500.0
+    seg = Segment(element.origin, element.point_at_distance(extent), name=element.name)
+    return _render_segment(seg, style_dict)
+
+
 def _render_circle(element: Circle, style_dict: dict[str, Any]) -> list[str]:
     """Return SVG elements for a Circle.
 
@@ -326,15 +351,15 @@ def _make_renderers(
 ) -> dict[type, Callable[[Any, dict[str, Any]], list[str]]]:
     """Build a mapping from geometry type to its render callable."""
     return {
-        CubicBezier: lambda el, sd: _render_cubic_bezier(
-            el, sd, show_bezier_control_points
-        ),
-        Segment: lambda el, sd: _render_segment(el, sd),
-        Circle: lambda el, sd: _render_circle(el, sd),
-        Triangle: lambda el, sd: _render_triangle(el, sd),
-        InfoBox: lambda el, sd: _render_info_box(el, sd),
-        Rect: lambda el, sd: _render_rect(el, sd),
-        Point: lambda el, sd: _render_point(el, sd),
+        CubicBezier: lambda el, sd: _render_cubic_bezier(el, sd, show_bezier_control_points),
+        Segment:     lambda el, sd: _render_segment(el, sd),
+        Line:        lambda el, sd: _render_line(el, sd),
+        Ray:         lambda el, sd: _render_ray(el, sd),
+        Circle:      lambda el, sd: _render_circle(el, sd),
+        Triangle:    lambda el, sd: _render_triangle(el, sd),
+        InfoBox:     lambda el, sd: _render_info_box(el, sd),
+        Rect:        lambda el, sd: _render_rect(el, sd),
+        Point:       lambda el, sd: _render_point(el, sd),
     }
 
 
@@ -401,6 +426,8 @@ def _render_elements(
         CubicBezier: "cubicbezier",
         Circle: "circle",
         Point: "point",
+        Line: "segment",
+        Ray: "segment",
     }
 
     sa_elements: list["PatternElement"] = []

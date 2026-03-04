@@ -15,6 +15,7 @@ from sewpat import (
 from sewpat.geometry import (
     Circle,
     Dart,
+    Line,
     Point,
     Ray,
     Segment,
@@ -119,6 +120,7 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     pt_HP = (
         Segment(pt18, pt10).point_at_t(0.5).translate(1 * CM, 0)
     )  # TODO don't hard-code
+    shoulder_blade = Line(pt_HP, (1, 0), name="Shoulder Blade")
     pt_hÄP = (
         Segment(pt18, pt10).point_at_t(0.75).translate(1.5 * CM, 0)
     )  # TODO don't hard-code
@@ -159,7 +161,7 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     # Darts on the Back
     pt27 = intersect(grid.waist, grid.sleeve_back)
     pt28 = intersect(grid.waist, grid.dart_back)
-    pt29 = intersect(grid.dart_back, Ray(pt_HP, [-1, 0]))[0]
+    pt29 = intersect(grid.dart_back, shoulder_blade)[0]
 
 
     # Waist Ausfallbetrag
@@ -190,6 +192,7 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
         PatternElement(
             shoulder_back.set_name("Shoulder Back"), style=STYLE_STITCH, is_outline=True
         ),
+        PatternElement(shoulder_blade, is_construction=True),
         PatternElement(sleeve_back.set_name("Sleeve Back"), style=STYLE_STITCH, is_outline=True),
         PatternElement(
             Dart.from_tip_and_legs(
@@ -264,15 +267,7 @@ if __name__ == "__main__":
         filename=str(Path(__file__).parent / "top_waisted_dart_grid.svg"),
         parts=grid_parts + pattern_parts,
         show_bezier_control_points=True,
-        show_construction=False,
+        show_construction=True,
     )
-#
-#     # Clean version — construction grid not included
-#     export_pattern_svg_mm(
-#         pattern,
-#         width_mm=DinA0.width,
-#         height_mm=DinA0.height,
-#         filename=str(Path(__file__).parent / "blouse_grid_clean.svg"),
-#         parts=pattern_parts,
-#     )
+
 # #marker_single  top_waisted_dart.pdf ./
