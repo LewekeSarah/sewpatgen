@@ -12,7 +12,7 @@ from .geometry import (
     Segment,
     Triangle,
 )
-from .style import STYLE_PRECISION_POINT, StyleOptions
+from .style import STYLE_CONSTRUCTION_GRID, STYLE_PRECISION_POINT, StyleOptions
 from .units import MM
 
 
@@ -54,7 +54,10 @@ class PatternElement:
         is_construction: bool = False,
     ) -> None:
         self.geometry = geometry
-        self.style = style if style is not None else StyleOptions()
+        if style is None and is_construction:
+            self.style = STYLE_CONSTRUCTION_GRID
+        else:
+            self.style = style if style is not None else StyleOptions()
         self.name = name
         self.role = role
         self.is_outline = is_outline

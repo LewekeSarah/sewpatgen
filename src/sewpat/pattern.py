@@ -171,6 +171,8 @@ class PatternPart(NamedAccessMixin):
 
         The element's name is taken from ``geometry.name``; set it on the
         geometry object before calling (e.g. ``seg.set_name("Center Back")``).
+        Construction elements with no explicit style receive
+        :data:`~sewpat.style.STYLE_CONSTRUCTION_GRID` automatically.
         """
         elem = PatternElement(
             geometry=geometry,
@@ -192,13 +194,16 @@ class PatternPart(NamedAccessMixin):
         control over fold style, notches, etc.
 
         All other :class:`PatternElement` objects are appended as-is after
-        stamping ``is_construction``.
+        stamping ``is_construction``. Construction elements with no explicit
+        style receive :data:`~sewpat.style.STYLE_CONSTRUCTION_GRID` automatically.
         """
         for elem in elements:
             if isinstance(elem.geometry, Dart):
                 self.add_dart(elem.geometry, stitch_style=elem.style)
             else:
                 elem.is_construction = elem.is_construction or self.is_construction
+                if elem.is_construction and elem.style == StyleOptions():
+                    elem.style = STYLE_CONSTRUCTION_GRID
                 self.elements.append(elem)
 
     def _outline_polygon(self) -> _sg.Polygon | None:

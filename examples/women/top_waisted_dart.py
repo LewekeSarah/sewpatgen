@@ -7,7 +7,6 @@ from sewpat import (
     PatternElement,
     STYLE_STITCH,
     STYLE_DEBUG_RED,
-    STYLE_CONSTRUCTION_GRID,
     CubicBezier,
     STYLE_DART_FOLD,
     GarmentPart,
@@ -187,12 +186,12 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
         ),
         PatternElement(
             shoulder_back_orig.set_name("Shoulder Back Orig"),
-            style=STYLE_CONSTRUCTION_GRID, is_outline=False, is_construction=True
+            is_outline=False, is_construction=True
         ),
+        PatternElement(shoulder_blade, is_construction=True),
         PatternElement(
             shoulder_back.set_name("Shoulder Back"), style=STYLE_STITCH, is_outline=True
         ),
-        PatternElement(shoulder_blade, is_construction=True),
         PatternElement(sleeve_back.set_name("Sleeve Back"), style=STYLE_STITCH, is_outline=True),
         PatternElement(
             Dart.from_tip_and_legs(
@@ -219,11 +218,11 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
         ),
         PatternElement(
             Segment(pt_SuP, pt25, name="Shoulder Front Orig"),
-            style=STYLE_CONSTRUCTION_GRID, is_outline=False, is_construction=True
+            is_outline=False, is_construction=True
         ),
         PatternElement(
             Segment(pt_sHlP_front, pt26, name="Shoulder Front Dart Orig"),
-            style=STYLE_CONSTRUCTION_GRID, is_outline=False, is_construction=True
+            is_outline=False, is_construction=True
         ),
         PatternElement(shoulder_front_long.set_name("Shoulder Front"), style=STYLE_STITCH, is_outline=True),
         PatternElement(shoulder_front_short.set_name("Shoulder Front Dart"), style=STYLE_STITCH, is_outline=True),
