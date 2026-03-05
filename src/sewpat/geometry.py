@@ -1508,35 +1508,61 @@ def with_endpoints(
     return CubicBezier(new_start, g.p1, g.p2, new_end, name=g.name)
 
 
+def _reverse_geom(g: "Segment | CubicBezier") -> "Segment | CubicBezier":
+    """Return a copy of *g* with its direction reversed."""
+    if isinstance(g, Segment):
+        return Segment(g.p2, g.p1, name=g.name)
+    return CubicBezier(g.p3, g.p2, g.p1, g.p0, name=g.name)
+
+
 def build_chain(
-    geoms: list[Segment | CubicBezier],
-) -> list[Segment | CubicBezier]:
+    geoms: list["Segment | CubicBezier"],
+) -> list["Segment | CubicBezier"]:
     """Sort *geoms* into a single connected chain, reversing pieces as needed.
 
-    Walks through *geoms* greedily: the next piece whose start or end lies
-    within ``_CHAIN_SNAP`` mm of the current tail is appended (reversed if
-    necessary).  Any unconnected remainder is appended as-is.
+    Grows the chain greedily from **both ends**: after each successful
+    attachment the loop restarts so that newly freed endpoints on either the
+    head or tail are tried immediately.  A piece is reversed when only its
+    end (not its start) snaps to the current head/tail.
+
+    Any pieces that cannot be connected to either end after a full pass are
+    appended as-is (preserving the previous behaviour for genuinely
+    disconnected outlines such as darts).
     """
-    chain = [geoms[0]]
-    remaining = list(geoms[1:])
-    while remaining:
+    chain: list[Segment | CubicBezier] = [geoms[0]]
+    remaining: list[Segment | CubicBezier] = list(geoms[1:])
+
+    changed = True
+    while remaining and changed:
+        changed = False
         tail = geom_end(chain[-1])
+        head = geom_start(chain[0])
+
         for i, g in enumerate(remaining):
-            if tail.distance_to(geom_start(g)) < _CHAIN_SNAP:
+            gs, ge = geom_start(g), geom_end(g)
+
+            # ── attach to tail ──────────────────────────────────────────────
+            if tail.distance_to(gs) < _CHAIN_SNAP:
                 chain.append(remaining.pop(i))
+                changed = True
                 break
-            elif tail.distance_to(geom_end(g)) < _CHAIN_SNAP:
-                rev: Segment | CubicBezier = (
-                    Segment(g.p2, g.p1, name=g.name)
-                    if isinstance(g, Segment)
-                    else CubicBezier(g.p3, g.p2, g.p1, g.p0, name=g.name)
-                )
-                chain.append(rev)
-                remaining.pop(i)
+            if tail.distance_to(ge) < _CHAIN_SNAP:
+                chain.append(_reverse_geom(remaining.pop(i)))
+                changed = True
                 break
-        else:
-            chain.extend(remaining)  # gap — append remainder as-is
-            break
+
+            # ── attach to head ──────────────────────────────────────────────
+            if head.distance_to(ge) < _CHAIN_SNAP:
+                chain.insert(0, remaining.pop(i))
+                changed = True
+                break
+            if head.distance_to(gs) < _CHAIN_SNAP:
+                chain.insert(0, _reverse_geom(remaining.pop(i)))
+                changed = True
+                break
+
+    if remaining:
+        chain.extend(remaining)  # gap — append remainder as-is
     return chain
 
 
@@ -1545,13 +1571,22 @@ def miter_corner(
     gb: Segment | CubicBezier,
     sa_distance: float,
     miter_limit: float = 4.0,
+    check_reflex: bool = True,
 ) -> Point:
     """Return the miter-join corner between the end of *ga* and the start of *gb*.
 
     Extends the end-tangent of *ga* and start-tangent of *gb* as infinite lines
     and returns their intersection.  Falls back to the bevel midpoint when the
     lines are parallel, the miter extension exceeds *miter_limit* × *sa_distance*,
-    or the corner is reflex (concave on the offset curve).
+    or (when *check_reflex* is True) the corner is reflex (concave on the offset
+    curve).
+
+    Args:
+        check_reflex: When ``False`` the reflex-corner check is skipped.  Use
+            this for zero-gap corners where the two offset endpoints have
+            diverged from a shared outline point (e.g. a Bézier with a
+            degenerate start control point) — the intersection is still the
+            correct outward corner even though it appears behind the end tangent.
     """
 
     end_a = geom_end(ga)
@@ -1575,7 +1610,7 @@ def miter_corner(
     # on the offset curve and the miter would punch inward, creating a spike.
     # This check is winding-direction-independent: dot(pt - end_a, ta) < 0
     # is true for reflex corners regardless of whether the outline is CW or CCW.
-    if float(np.dot(pt - end_a.coords, ta)) < 0.0:
+    if check_reflex and float(np.dot(pt - end_a.coords, ta)) < 0.0:
         return bevel_mid
 
     if (

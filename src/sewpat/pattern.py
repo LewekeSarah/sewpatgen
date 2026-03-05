@@ -643,10 +643,14 @@ class PatternPart(NamedAccessMixin):
             j = (i + 1) % n
             ga = offset_groups[i][-1]
             gb = offset_groups[j][0]
-            if geom_end(ga).distance_to(geom_start(gb)) > 0.01:
-                key_a = _ep_key(chain_mixed[i])
-                key_b = _ep_key(chain_mixed[j])
-                effective_cj = elem_cj.get(key_a) or elem_cj.get(key_b) or corner_join
+            key_a = _ep_key(chain_mixed[i])
+            key_b = _ep_key(chain_mixed[j])
+            effective_cj = elem_cj.get(key_a) or elem_cj.get(key_b) or corner_join
+            gap = geom_end(ga).distance_to(geom_start(gb))
+            # Apply corner join when there is a geometric gap, OR when bevel is
+            # explicitly requested (covers zero-gap corners where offsets diverge,
+            # e.g. a Bézier with a degenerate start control point).
+            if gap > 0.01 or effective_cj == "bevel":
 
                 if effective_cj == "miter":
                     corner = miter_corner(ga, gb, distance)
@@ -663,10 +667,8 @@ class PatternPart(NamedAccessMixin):
                     else:
                         offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), arc)
                         offset_groups[j][0] = with_endpoints(gb, arc, geom_end(gb))
-                else:  # bevel
-                    _ea = geom_end(ga)
-                    _sb = geom_start(gb)
-                    corner = (_ea + _sb) * 0.5
+                else:  # bevel — clipped miter: use tangent intersection capped at 3.0× SA
+                    corner = miter_corner(ga, gb, distance, miter_limit=3.0, check_reflex=False)
                     offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), corner)
                     offset_groups[j][0] = with_endpoints(gb, corner, geom_end(gb))
 

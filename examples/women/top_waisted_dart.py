@@ -10,6 +10,7 @@ from sewpat import (
     DartType,
     STYLE_HEM,
 )
+from sewpat.style import StyleOptions
 from sewpat.geometry import (
     Circle,
     Dart,
@@ -150,10 +151,41 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     pt25 = shoulder_front_aux.point_along_from(pt24, Segment(pt_sHlP_front, pt20).length)
     pt26 = pt_BrP.translate(0, -Segment(pt_BrP, pt25).length)
     shoulder_front_long = Segment(pt_SuP, pt25).offset(1 * CM)
-    shoulder_front_short = Segment(pt26, pt_sHlP_front).offset(1 * CM)
+    # Proper parallel offset — stays exactly 1 cm from Segment(pt26, pt_sHlP_front).
+    _shoulder_front_short_raw = Segment(pt26, pt_sHlP_front).offset(1 * CM)
+
+    # Neckline front Bézier — split at the intersection with the Ray extending
+    # shoulder_front_short, then snap shoulder_front_short.p2 to that exact
+    # intersection point so the two elements share a common endpoint with zero
+    # gap — same pattern as the sleeve/shoulder and back neckline/shoulder splits.
+    neckline_front_full = CubicBezier(pt22, pt22, pt21.translate(-meas.HlB, meas.HlB), pt_sHlP_front)
+    _short_ray = Ray(_shoulder_front_short_raw.p1, _shoulder_front_short_raw.unit_direction)
+    _neckline_intersections = intersect(neckline_front_full, _short_ray)
+    if _neckline_intersections:
+        _ix = _neckline_intersections[0]
+        # Rebuild short shoulder so p2 lands exactly on the neckline intersection
+        shoulder_front_short = Segment(_shoulder_front_short_raw.p1, _ix)
+        _neckline_split = neckline_front_full.split_at_points([_ix])
+        # Snap the neckline end to exactly _ix to eliminate any floating-point epsilon
+        _nf = _neckline_split[0]
+        neckline_front = CubicBezier(_nf.p0, _nf.p1, _nf.p2, _ix)  # pt22 → _ix (outline)
+        neckline_front_stub = _neckline_split[1] if len(_neckline_split) > 1 else None
+    else:
+        shoulder_front_short = _shoulder_front_short_raw
+        neckline_front = neckline_front_full
+        neckline_front_stub = None
 
     # Sleeves
     sleeve_front = CubicBezier(pt_SuP, pt_BrP.translate(-4 * CM, -3 * CM), pt12, pt12)
+    # Split sleeve_front at exactly shoulder_front_long.p1 (projected onto the
+    # curve) so the lower part starts flush at the shoulder endpoint — no gap.
+    _sleeve_split_parts = sleeve_front.split_at_points([shoulder_front_long.p1])
+    if len(_sleeve_split_parts) > 1:
+        sleeve_front_upper = _sleeve_split_parts[0]   # pt_SuP → shoulder_front_long.p1 (construction)
+        sleeve_front_lower = _sleeve_split_parts[1]   # shoulder_front_long.p1 → pt12   (outline)
+    else:
+        sleeve_front_upper = None
+        sleeve_front_lower = sleeve_front
     sleeve_back = CubicBezier(
         pt11,
         pt_hÄP.translate(-0.5 * CM, 3 * CM),
@@ -260,7 +292,7 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
 
     block_back.append(Segment(pt1, pt6, name="Center Back"), style=STYLE_STITCH, is_outline=True)
     block_back.append(Segment(pt6, pt9, name="Center Back Hem"), style=STYLE_STITCH, is_outline=True)
-    block_back.append(CubicBezier(pt1, pt1, pt17, shoulder_back.p1, name="Neckline Back"), style=STYLE_STITCH, is_outline=True)
+    block_back.append(CubicBezier(pt1, pt1, pt17, shoulder_back.p1, name="Neckline Back"), style=StyleOptions(dash_array=[5.0, 2.0], corner_join="bevel"), is_outline=True)
     block_back.append(shoulder_back_orig.set_name("Shoulder Back Orig"), is_construction=True)
     block_back.append(shoulder_blade, is_construction=True)
     block_back.append(shoulder_back.set_name("Shoulder Back"), style=STYLE_STITCH, is_outline=True)
@@ -275,8 +307,10 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     block_back.add_notches(pt_hÄP, seam_edge=sleeve_back)
 
     # STEP Center Front, Neckline, and Shoulder
-    block_front.append(Segment(pt22, intersect(grid.center_front, grid.hem)[0], name="Center Front"), style=STYLE_STITCH, is_outline=True)
-    block_front.append(CubicBezier(pt22, pt22, pt21.translate(-meas.HlB, meas.HlB), pt_sHlP_front, name="Neckline Front"), style=STYLE_STITCH, is_outline=True)
+    block_front.append(Segment(pt22, intersect(grid.center_front, grid.hem)[0], name="Center Front"), style=StyleOptions(dash_array=[5.0, 2.0], corner_join="bevel"), is_outline=True)
+    block_front.append(neckline_front.set_name("Neckline Front"), style=STYLE_STITCH, is_outline=True)
+    if neckline_front_stub is not None:
+        block_front.append(neckline_front_stub.set_name("Neckline Front Stub"), is_construction=True)
     block_front.append(Segment(pt_SuP, pt25, name="Shoulder Front Orig"), is_construction=True)
     block_front.append(Segment(pt_sHlP_front, pt26, name="Shoulder Front Dart Orig"), is_construction=True)
     block_front.append(shoulder_front_long.set_name("Shoulder Front"), style=STYLE_STITCH, is_outline=True)
@@ -284,9 +318,12 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     block_front.add_dart(
         Dart.from_tip_and_legs(pt_BrP, shoulder_front_short.p1, shoulder_front_long.p2).set_name("Shoulder Dart Front")
     )
-    block_front.append(sleeve_front.set_name("Sleeve Front"), style=STYLE_STITCH, is_outline=True)
-    block_front.add_notches(pt_vÄP, seam_edge=sleeve_front)
     block_front.append(side_seam_front_upper, style=STYLE_STITCH, is_outline=True)
+    if sleeve_front_upper is not None:
+        block_front.append(sleeve_front_upper.set_name("Sleeve Front Upper"), is_construction=True)
+    block_front.append(sleeve_front_lower.set_name("Sleeve Front"), style=STYLE_STITCH, is_outline=True)
+    block_front.add_notches(pt_vÄP, seam_edge=sleeve_front_lower)
+
     block_front.add_dart(waist_dart_front)
     block_front.append(side_front_curved, is_outline=True, style=STYLE_STITCH)
     block_front.append(Segment(pt37_front, pt37_front.translate(0, Segment(pt8, pt9).length)), style=STYLE_STITCH, is_outline=True)
@@ -304,7 +341,7 @@ if __name__ == "__main__":
     pattern = make_blouse(measurements, model_config)
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
-    grid_parts = [Part.GRID]
+    grid_parts = [] # [Part.GRID]
 
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
@@ -313,7 +350,7 @@ if __name__ == "__main__":
         height_mm=DinA0.height,
         filename=str(Path(__file__).parent / "top_waisted_dart_grid.svg"),
         parts=grid_parts + pattern_parts,
-        show_bezier_control_points=True,
+        show_bezier_control_points=False,
         show_construction=True,
         show_seam_allowance=True
     )
