@@ -110,7 +110,7 @@ if __name__ == "__main__":
         height_mm=DinA0.height,
         filename=str(Path(__file__).parent / "top_waisted_dart_grid.svg"),
         parts=grid_parts + pattern_parts,
-        show_bezier_control_points=True,
+        show_bezier_control_points=False,
         show_construction=True,
         show_seam_allowance=True
     )

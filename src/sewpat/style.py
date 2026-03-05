@@ -168,6 +168,15 @@ STYLE_STITCH = StyleOptions(
     dash_array=[5.0, 2.0],
 )
 
+# Stitching Line with bevel corner join — used where two stitch segments meet
+# at a sharp angle (e.g. center-front/back lines that change direction at the waist).
+STYLE_STITCH_BEVEL = StyleOptions(
+    stroke_color="black",
+    stroke_width=DEFAULT_STROKE_WIDTH,
+    dash_array=[5.0, 2.0],
+    corner_join="bevel",
+)
+
 
 # Center Front / Center Back Line — long-dash–short-dash line marking
 # the vertical centre of a garment front or back.
