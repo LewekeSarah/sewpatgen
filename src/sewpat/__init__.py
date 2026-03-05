@@ -31,6 +31,7 @@ from .measurements import (
     make_measurements_trouser,
 )
 from .pages import DinA0, DinA1, DinA2, DinA4
+from .blocks import TopBlock, TopBlockBack, TopBlockFront
 from .pattern import (
     Block,
     ConstructionGrid,
@@ -84,6 +85,10 @@ __all__ = [
     "MM",
     "CM",
     "INCH",
+    # Grids & Blocks
+    "TopBlock",
+    "TopBlockBack",
+    "TopBlockFront",
     # Pattern element
     "PatternElement",
     "PrecisionPoint",
