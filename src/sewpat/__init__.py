@@ -21,17 +21,23 @@ from .geometry import (
 from .measurements import (
     Allowance,
     BlouseMeasurements,
+    HipDistribution,
     ModelConfig,
     TrouserMeasurements,
+    WaistDistribution,
+    calculate_hip_distribution,
+    calculate_waist_distribution,
     make_blouse_measurements,
     make_measurements_trouser,
 )
 from .pages import DinA0, DinA1, DinA2, DinA4
+from .blocks import TopBlock, TopBlockBack, TopBlockFront
 from .pattern import (
     Block,
     ConstructionGrid,
     ConstructionGridPart,
     DartResult,
+    GarmentPart,
     OverlayPart,
     Pattern,
     PatternPart,
@@ -79,6 +85,10 @@ __all__ = [
     "MM",
     "CM",
     "INCH",
+    # Grids & Blocks
+    "TopBlock",
+    "TopBlockBack",
+    "TopBlockFront",
     # Pattern element
     "PatternElement",
     "PrecisionPoint",
@@ -87,6 +97,7 @@ __all__ = [
     # Pattern
     "PatternPart",
     "Pattern",
+    "GarmentPart",
     "ConstructionGrid",
     "ConstructionGridPart",
     "Block",

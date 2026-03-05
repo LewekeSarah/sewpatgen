@@ -8,7 +8,9 @@ from sewpat.geometry import (
     Circle,
     CubicBezier,
     InfoBox,
+    Line,
     Point,
+    Ray,
     Rect,
     Segment,
     Triangle,
@@ -171,8 +173,7 @@ def _render_segment(
             y2 -= SCISSOR_BLADE_OVERHANG * dy / length
 
     nodes.append(
-        f'<line x1="{element.p1.x}" y1="{element.p1.y}" '
-        f'x2="{x2}" y2="{y2}" {attrs} />'
+        f'<line x1="{element.p1.x}" y1="{element.p1.y}" x2="{x2}" y2="{y2}" {attrs} />'
     )
     if getattr(element, "name", None):
         mid_x = (element.p1.x + element.p2.x) / 2
@@ -193,11 +194,43 @@ def _render_segment(
     return nodes
 
 
+def _render_line(element: Line, style_dict: dict[str, Any]) -> list[str]:
+    """Render an infinite :class:`Line` by clipping it to a finite extent.
+
+    The line is extended 1500 mm in each direction from its base point and
+    then rendered as a regular :class:`Segment`.
+    """
+    extent = 1500.0
+    p1 = element.point_at_distance(-extent)
+    p2 = element.point_at_distance(extent)
+    seg = Segment(p1, p2, name=element.name)
+    return _render_segment(seg, style_dict)
+
+
+def _render_ray(element: Ray, style_dict: dict[str, Any]) -> list[str]:
+    """Render a semi-infinite :class:`Ray` by clipping it to a finite extent.
+
+    The ray starts at its origin and extends 1500 mm in its direction.
+    """
+    extent = 1500.0
+    seg = Segment(element.origin, element.point_at_distance(extent), name=element.name)
+    return _render_segment(seg, style_dict)
+
+
 def _render_circle(element: Circle, style_dict: dict[str, Any]) -> list[str]:
-    """Return SVG elements for a Circle."""
+    """Return SVG elements for a Circle.
+
+    The stroke is painted on the inside of the radius so the outer edge of the
+    visible stroke coincides exactly with the declared radius.  This mirrors
+    the ``stroke-alignment: inside`` behaviour used by ``_render_rect``.
+    """
     attrs = _common_stroke_attrs(style_dict)
+    cx, cy, r = element.center.x, element.center.y, element.radius
+    # Unique clip id derived from the circle's geometry.
+    clip_id = f"cc_{int(round(cx * 100))}_{int(round(cy * 100))}_{int(round(r * 100))}"
     return [
-        f'<circle cx="{element.center.x}" cy="{element.center.y}" r="{element.radius}mm" {attrs} />'
+        f'<clipPath id="{clip_id}"><circle cx="{cx}" cy="{cy}" r="{r}" /></clipPath>',
+        f'<circle cx="{cx}" cy="{cy}" r="{r}" clip-path="url(#{clip_id})" {attrs} />',
     ]
 
 
@@ -318,15 +351,15 @@ def _make_renderers(
 ) -> dict[type, Callable[[Any, dict[str, Any]], list[str]]]:
     """Build a mapping from geometry type to its render callable."""
     return {
-        CubicBezier: lambda el, sd: _render_cubic_bezier(
-            el, sd, show_bezier_control_points
-        ),
-        Segment: lambda el, sd: _render_segment(el, sd),
-        Circle: lambda el, sd: _render_circle(el, sd),
-        Triangle: lambda el, sd: _render_triangle(el, sd),
-        InfoBox: lambda el, sd: _render_info_box(el, sd),
-        Rect: lambda el, sd: _render_rect(el, sd),
-        Point: lambda el, sd: _render_point(el, sd),
+        CubicBezier: lambda el, sd: _render_cubic_bezier(el, sd, show_bezier_control_points),
+        Segment:     lambda el, sd: _render_segment(el, sd),
+        Line:        lambda el, sd: _render_line(el, sd),
+        Ray:         lambda el, sd: _render_ray(el, sd),
+        Circle:      lambda el, sd: _render_circle(el, sd),
+        Triangle:    lambda el, sd: _render_triangle(el, sd),
+        InfoBox:     lambda el, sd: _render_info_box(el, sd),
+        Rect:        lambda el, sd: _render_rect(el, sd),
+        Point:       lambda el, sd: _render_point(el, sd),
     }
 
 
@@ -377,19 +410,24 @@ def _render_elements(
     elements: list["PatternElement"],
     svg_nodes: list[str],
     show_bezier_control_points: bool,
-    show_points: bool,
+    show_construction: bool,
     styles: dict[str, StyleOptions] | None = None,
 ) -> None:
     """Render PatternElements into *svg_nodes* in-place.
 
     SA elements are collected and flushed as a single connected ``<path>`` at
     the end so ``stroke-linejoin`` applies at every corner.
+
+    Elements with ``is_construction=True`` are skipped when *show_construction*
+    is ``False``.
     """
     _TYPE_KEY = {
         Segment: "segment",
         CubicBezier: "cubicbezier",
         Circle: "circle",
         Point: "point",
+        Line: "segment",
+        Ray: "segment",
     }
 
     sa_elements: list["PatternElement"] = []
@@ -407,7 +445,7 @@ def _render_elements(
                 sa_style_dict = pat_elem.style.as_dict()
             continue
 
-        if not show_points and isinstance(element, Point):
+        if not show_construction and pat_elem.is_construction:
             continue
 
         # Resolve effective style: use the per-element style unless it is still
@@ -474,7 +512,7 @@ def _build_svg(
     width_mm: float,
     height_mm: float,
     margin_mm: float,
-    show_points: bool,
+    show_construction: bool,
     show_bezier_control_points: bool,
     show_seam_allowance: bool = True,
     styles: dict[str, StyleOptions] | None = None,
@@ -498,7 +536,7 @@ def _build_svg(
             visible,
             svg_nodes,
             show_bezier_control_points,
-            show_points,
+            show_construction,
             resolved,
         )
 
@@ -513,7 +551,7 @@ def export_pattern_part_svg_mm(
     height_mm: float = 297,
     margin_mm: float = 10,
     style_map: dict[str, StyleOptions] | None = None,
-    show_points: bool = True,
+    show_construction: bool = True,
     show_bezier_control_points: bool = False,
     show_seam_allowance: bool = True,
 ) -> None:
@@ -525,7 +563,8 @@ def export_pattern_part_svg_mm(
         width_mm / height_mm: Canvas size in mm.
         margin_mm: Canvas margin in mm.
         style_map: Element-type → StyleOptions overrides; unknown keys warn.
-        show_points: Render Point elements.
+        show_construction: Render elements flagged ``is_construction=True``.
+            Set to ``False`` for a clean print view without drafting aids.
         show_bezier_control_points: Render Bézier control-point handles.
         show_seam_allowance: Include SA offset lines (default True).
     """
@@ -536,7 +575,7 @@ def export_pattern_part_svg_mm(
         width_mm=width_mm,
         height_mm=height_mm,
         margin_mm=margin_mm,
-        show_points=show_points,
+        show_construction=show_construction,
         show_bezier_control_points=show_bezier_control_points,
         show_seam_allowance=show_seam_allowance,
         styles=styles,
@@ -552,7 +591,7 @@ def export_pattern_svg_mm(
     height_mm: float = 297,
     margin_mm: float = 10,
     style_map: dict[str, StyleOptions] | None = None,
-    show_points: bool = True,
+    show_construction: bool = True,
     show_bezier_control_points: bool = False,
     parts: list[str] | None = None,
     show_seam_allowance: bool = True,
@@ -565,7 +604,8 @@ def export_pattern_svg_mm(
         width_mm / height_mm: Canvas size in mm.
         margin_mm: Canvas margin in mm.
         style_map: Element-type → StyleOptions overrides; unknown keys warn.
-        show_points: Render Point elements.
+        show_construction: Render elements flagged ``is_construction=True``.
+            Set to ``False`` for a clean print view without drafting aids.
         show_bezier_control_points: Render Bézier control-point handles.
         parts: Part names to include.  When ``None``, all parts are rendered
             except :class:`ConstructionGridPart` and :class:`Block` — those
@@ -578,8 +618,7 @@ def export_pattern_svg_mm(
         selected_parts = [p for p in pattern.parts if p.name in parts]
     else:
         selected_parts = [
-            p for p in pattern.parts
-            if not isinstance(p, (ConstructionGridPart, Block))
+            p for p in pattern.parts if not isinstance(p, (ConstructionGridPart, Block))
         ]
 
     element_groups: list[list[PatternElement]] = []
@@ -593,7 +632,7 @@ def export_pattern_svg_mm(
         width_mm=width_mm,
         height_mm=height_mm,
         margin_mm=margin_mm,
-        show_points=show_points,
+        show_construction=show_construction,
         show_bezier_control_points=show_bezier_control_points,
         show_seam_allowance=show_seam_allowance,
         styles=styles,

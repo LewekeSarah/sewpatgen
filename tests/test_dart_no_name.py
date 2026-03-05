@@ -1,4 +1,5 @@
 """Regression: SVG export must not crash when dart has no name."""
+
 import pytest
 from sewpat import Dart, DartType, Point, Segment, PatternPart, Pattern, MM
 from sewpat.element import PatternElement
@@ -35,8 +36,10 @@ def test_svg_export_direct_dart_no_name(tmp_path):
     """Dart constructed directly (not via factory) without a name."""
     part = PatternPart("test")
     dart = Dart(
-        leg_a=Point(40, 0), leg_b=Point(60, 0),
-        center=Point(50, 0), tip=Point(50, 50),
+        leg_a=Point(40, 0),
+        leg_b=Point(60, 0),
+        center=Point(50, 0),
+        tip=Point(50, 50),
         dart_type=DartType.TRIANGLE,
         # name omitted
     )
@@ -47,4 +50,3 @@ def test_svg_export_direct_dart_no_name(tmp_path):
     export_pattern_svg_mm(pattern, filename=str(out), width_mm=210, height_mm=297)
     assert out.exists()
     assert "<svg" in out.read_text()
-

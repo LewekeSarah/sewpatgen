@@ -237,6 +237,7 @@ class TestPointMoveTowards(unittest.TestCase):
     def test_line_forward(self):
         """Moving along an infinite line works in both directions."""
         from sewpat.geometry import Line
+
         line = Line(Point(0, 0), (1, 0))
         p = Point(10, 0)
         result = p.move_towards(line, 25)
@@ -245,6 +246,7 @@ class TestPointMoveTowards(unittest.TestCase):
     def test_line_backward(self):
         """Negative arc_length on a Line moves in the opposite direction."""
         from sewpat.geometry import Line
+
         line = Line(Point(0, 0), (1, 0))
         p = Point(10, 0)
         result = p.move_towards(line, -10)
@@ -391,7 +393,6 @@ class TestSegment(unittest.TestCase):
         seg = Segment(Point(0, 0), Point(10, 0))
         with self.assertRaises(ValueError):
             seg.point_perpendicular(5.0, arc_length=3.0, t=0.3)
-
 
     def test_line_line_intersection(self):
         """Test intersection between two lines.
@@ -1089,7 +1090,9 @@ class TestCubicBezierSplitAtPoints(unittest.TestCase):
     def test_split_at_points_chain_is_continuous(self):
         """End of each sub-curve must equal the start of the next."""
         b = self._curve()
-        subs = b.split_at_points([b.point_at_t(0.2), b.point_at_t(0.6), b.point_at_t(0.9)])
+        subs = b.split_at_points(
+            [b.point_at_t(0.2), b.point_at_t(0.6), b.point_at_t(0.9)]
+        )
         for a, c in zip(subs, subs[1:]):
             self.assertAlmostEqual(a.p3.x, c.p0.x, places=6)
             self.assertAlmostEqual(a.p3.y, c.p0.y, places=6)
@@ -1098,7 +1101,7 @@ class TestCubicBezierSplitAtPoints(unittest.TestCase):
         """Points in reverse order must produce the same sub-lengths."""
         b = self._curve()
         pa, pb = b.point_at_t(0.3), b.point_at_t(0.7)
-        forward  = b.split_at_points([pa, pb])
+        forward = b.split_at_points([pa, pb])
         backward = b.split_at_points([pb, pa])
         self.assertEqual(len(forward), len(backward))
         for a, c in zip(forward, backward):
@@ -1245,7 +1248,9 @@ class TestSegmentNewMethods(unittest.TestCase):
     def test_split_at_points_chain_is_continuous(self):
         """End of each sub-segment must equal start of the next."""
         s = self._seg()
-        subs = s.split_at_points([s.point_at_t(0.2), s.point_at_t(0.6), s.point_at_t(0.9)])
+        subs = s.split_at_points(
+            [s.point_at_t(0.2), s.point_at_t(0.6), s.point_at_t(0.9)]
+        )
         for a, b in zip(subs, subs[1:]):
             self.assertAlmostEqual(a.p2.x, b.p1.x, places=6)
             self.assertAlmostEqual(a.p2.y, b.p1.y, places=6)
@@ -1495,7 +1500,7 @@ class TestRoundCorner(unittest.TestCase):
             self.assertLess(
                 radial_err,
                 tolerance,
-                f"t={k/20:.2f}: radial error {radial_err:.5f} mm > {tolerance:.5f} mm",
+                f"t={k / 20:.2f}: radial error {radial_err:.5f} mm > {tolerance:.5f} mm",
             )
 
     def test_reflex_corner_returns_point(self):
@@ -1538,10 +1543,11 @@ class TestDartRoof(unittest.TestCase):
     def _make_symmetric_dart(self, width=40.0, depth=80.0):
         """Helper: symmetric dart centered at origin on the x-axis."""
         from sewpat.geometry import Dart, Point
+
         center = Point(0.0, 0.0)
         leg_a = Point(-width / 2, 0.0)
         leg_b = Point(+width / 2, 0.0)
-        tip = Point(0.0, -depth)           # tip below the seam line
+        tip = Point(0.0, -depth)  # tip below the seam line
         return Dart(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip)
 
     def test_dart_roof_returns_dart_roof_instance(self):
@@ -1570,15 +1576,19 @@ class TestDartRoof(unittest.TestCase):
           h = (half_w * cos(α)) / sin(α) = half_w² / depth
         """
         import math
+
         width, depth = 40.0, 80.0
         dart = self._make_symmetric_dart(width=width, depth=depth)
         roof_height = np.linalg.norm(dart.roof.coords - dart.center.coords)
 
-        self.assertAlmostEqual(float(math.tan(dart.intake_angle)*(dart.width / 2)), roof_height, places=5)
+        self.assertAlmostEqual(
+            float(math.tan(dart.intake_angle) * (dart.width / 2)), roof_height, places=5
+        )
 
     def test_zero_width_dart_no_roof_displacement(self):
         """A dart with zero-length seam has no roof displacement."""
         from sewpat.geometry import Dart, Point
+
         tip = Point(0.0, -50.0)
         center = Point(0.0, 0.0)
         dart = Dart(leg_a=center, leg_b=center, center=center, tip=tip)
@@ -1595,7 +1605,9 @@ class TestDartRoof(unittest.TestCase):
         dart_narrow = self._make_symmetric_dart(width=20.0, depth=80.0)
         dart_wide = self._make_symmetric_dart(width=60.0, depth=80.0)
         # For this setup tip is at y=-80, seam at y=0; roof is at y > 0
-        rise_narrow = np.linalg.norm(dart_narrow.roof.coords - dart_narrow.center.coords)
+        rise_narrow = np.linalg.norm(
+            dart_narrow.roof.coords - dart_narrow.center.coords
+        )
         rise_wide = np.linalg.norm(dart_wide.roof.coords - dart_wide.center.coords)
         self.assertGreater(rise_wide, rise_narrow)
 

@@ -46,7 +46,9 @@ class BalanceAdjustments:
 
 
 class PersonAnalyser:
-    def __init__(self, person: Person, balance_adjustments: BalanceAdjustments | None = None):
+    def __init__(
+        self, person: Person, balance_adjustments: BalanceAdjustments | None = None
+    ):
         self.person = person
         self.person_balanced: Person | None = None
         self.balance = balance_adjustments

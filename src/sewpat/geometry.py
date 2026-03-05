@@ -134,10 +134,18 @@ class Point:
         """Scalar equality: True when both coordinates and name match exactly."""
         if not isinstance(other, Point):
             return NotImplemented
-        return bool(np.array_equal(self.coords, other.coords)) and self.name == other.name
+        return (
+            bool(np.array_equal(self.coords, other.coords)) and self.name == other.name
+        )
 
     def __hash__(self) -> int:
-        return hash((round(float(self.coords[0]), 9), round(float(self.coords[1]), 9), self.name))
+        return hash(
+            (
+                round(float(self.coords[0]), 9),
+                round(float(self.coords[1]), 9),
+                self.name,
+            )
+        )
 
     def rotate(self, center: "Point", angle_rad: float) -> "Point":
         """Return a copy rotated by *angle_rad* around *center* (counter-clockwise)."""
@@ -176,6 +184,44 @@ class Segment:
         self.p2 = p2
         self.name = name
 
+    @classmethod
+    def from_direction(
+        cls,
+        start: Point,
+        through: Point,
+        length: float,
+        name: str | None = None,
+    ) -> "Segment":
+        """Create a segment starting at *start*, pointing towards *through*, with given *length*.
+
+        The direction is determined by the vector from *start* to *through*;
+        the actual distance between them does not matter.
+
+        Args:
+            start:   Origin of the new segment.
+            through: Any point that defines the direction (need not be the endpoint).
+            length:  Desired length of the resulting segment in mm.
+            name:    Optional label.
+
+        Returns:
+            A :class:`Segment` of exactly *length* mm from *start* in the
+            direction of *through*.
+
+        Raises:
+            ValueError: If *start* and *through* are the same point.
+
+        Example::
+
+            # Shoulder seam 13 cm long, starting at pt_neck towards pt_arm
+            seg_shoulder = Segment.from_direction(pt_neck, pt_arm, 13 * CM)
+        """
+        d = through.coords - start.coords
+        norm = float(np.linalg.norm(d))
+        if norm == 0.0:
+            raise ValueError("'start' and 'through' must be different points.")
+        end_coords = start.coords + (d / norm) * length
+        return cls(start, Point(*end_coords), name=name)
+
     def __str__(self) -> str:
         if self.name:
             return f"Segment(name={self.name}; p1={self.p1}, p2={self.p2})"
@@ -185,9 +231,16 @@ class Segment:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def set_name(self, name: str) -> "Segment":
+        """Set the name of this segment and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
+
     def translate(self, dx: float, dy: float) -> "Segment":
         """Return a copy translated by (dx, dy)."""
-        return Segment(self.p1.translate(dx, dy), self.p2.translate(dx, dy), name=self.name)
+        return Segment(
+            self.p1.translate(dx, dy), self.p2.translate(dx, dy), name=self.name
+        )
 
     @property
     def start(self) -> Point:
@@ -248,7 +301,9 @@ class Segment:
         if not (0.0 < t < 1.0):
             raise ValueError(f"t must be in (0, 1), got {t}")
         mid = self.point_at_t(t)
-        return Segment(self.p1, mid, name=self.name), Segment(mid, self.p2, name=self.name)
+        return Segment(self.p1, mid, name=self.name), Segment(
+            mid, self.p2, name=self.name
+        )
 
     def split_at_points(
         self,
@@ -297,7 +352,7 @@ class Segment:
         # Re-use split() so there is a single source of truth for the arithmetic.
         tail: Segment = Segment(self.p1, self.p2, name=self.name)
         sub_segments: list[Segment] = []
-        consumed: float = 0.0          # fraction of original length already cut off
+        consumed: float = 0.0  # fraction of original length already cut off
         for t in breakpoints:
             local_t = (t - consumed) / (1.0 - consumed)
             head, tail = tail.split(local_t)
@@ -618,7 +673,14 @@ class Rect:
 
     def translate(self, dx: float, dy: float) -> "Rect":
         """Return a copy translated by (dx, dy)."""
-        return Rect(self.origin.translate(dx, dy), self.width, self.height, name=self.name)
+        return Rect(
+            self.origin.translate(dx, dy), self.width, self.height, name=self.name
+        )
+
+    def set_name(self, name: str) -> "Rect":
+        """Set the name of this rectangle and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
 
 
 class Triangle:
@@ -658,6 +720,11 @@ class Triangle:
             self.p3.translate(dx, dy),
             name=self.name,
         )
+
+    def set_name(self, name: str) -> "Triangle":
+        """Set the name of this triangle and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
 
 
 class InfoBox:
@@ -767,6 +834,11 @@ class Circle:
     def translate(self, dx: float, dy: float) -> "Circle":
         """Return a copy translated by (dx, dy)."""
         return Circle(self.center.translate(dx, dy), self.radius, name=self.name)
+
+    def set_name(self, name: str) -> "Circle":
+        """Set the name of this circle and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
         """Return the point *arc_length* mm further along this circle from *point* (CCW positive)."""
@@ -880,6 +952,11 @@ class CubicBezier:
             name=self.name,
         )
 
+    def set_name(self, name: str) -> "CubicBezier":
+        """Set the name of this curve and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
+
     def point_at_t(self, t: float) -> Point:
         """Evaluate the Bezier curve at parameter t.
 
@@ -932,9 +1009,33 @@ class CubicBezier:
         return np.array([d.real, d.imag])
 
     def normal_at_t(self, t: float) -> np.ndarray:
-        """Unit normal at *t*: 90° counter-clockwise from the tangent (left of travel)."""
-        n = self._svg().normal(t)
-        return np.array([n.real, n.imag])
+        """Unit normal at *t*: 90° counter-clockwise from the tangent (left of travel).
+
+        Falls back to a nearby t when the tangent is degenerate at the exact
+        endpoint (e.g. when cp2 == p3 or cp1 == p0).
+        """
+        svg = self._svg()
+        try:
+            n = svg.normal(t)
+            return np.array([n.real, n.imag])
+        except ValueError:
+            # Degenerate endpoint — step slightly inward and retry.
+            eps = 1e-4
+            fallback_t = max(eps, t - eps) if t > 0.5 else min(1.0 - eps, t + eps)
+            try:
+                n = svg.normal(fallback_t)
+                return np.array([n.real, n.imag])
+            except ValueError:
+                # Last resort: finite-difference tangent from point_at_t.
+                dt = 1e-4
+                t0 = max(0.0, t - dt)
+                t1 = min(1.0, t + dt)
+                p0 = self.point_at_t(t0)
+                p1 = self.point_at_t(t1)
+                dx, dy = p1.x - p0.x, p1.y - p0.y
+                length = (dx**2 + dy**2) ** 0.5 or 1.0
+                # Rotate 90° CCW: (dx, dy) → (-dy, dx)
+                return np.array([-dy / length, dx / length])
 
     def point_at_length(self, arc_length: float) -> Point:
         """Return the point at *arc_length* mm from p0 (uses svgpathtools.ilength). Raises ValueError if out of range."""
@@ -1004,8 +1105,7 @@ class CubicBezier:
         eps = tolerance / total_len
 
         ts: list[float] = sorted(
-            _bezier_closest_t(svg, complex(pt.x, pt.y))
-            for pt in points
+            _bezier_closest_t(svg, complex(pt.x, pt.y)) for pt in points
         )
         breakpoints: list[float] = [t for t in ts if eps < t < 1.0 - eps]
 
@@ -1390,6 +1490,7 @@ def edge_tangent(g: Segment | CubicBezier, at_end: bool) -> np.ndarray:
         at_end: ``True`` → tangent at t=1 (arriving); ``False`` → tangent at t=0 (leaving).
     """
     import numpy as _np
+
     if isinstance(g, Segment):
         d = g.end.coords - g.start.coords
     else:
@@ -1407,35 +1508,61 @@ def with_endpoints(
     return CubicBezier(new_start, g.p1, g.p2, new_end, name=g.name)
 
 
+def _reverse_geom(g: "Segment | CubicBezier") -> "Segment | CubicBezier":
+    """Return a copy of *g* with its direction reversed."""
+    if isinstance(g, Segment):
+        return Segment(g.p2, g.p1, name=g.name)
+    return CubicBezier(g.p3, g.p2, g.p1, g.p0, name=g.name)
+
+
 def build_chain(
-    geoms: list[Segment | CubicBezier],
-) -> list[Segment | CubicBezier]:
+    geoms: list["Segment | CubicBezier"],
+) -> list["Segment | CubicBezier"]:
     """Sort *geoms* into a single connected chain, reversing pieces as needed.
 
-    Walks through *geoms* greedily: the next piece whose start or end lies
-    within ``_CHAIN_SNAP`` mm of the current tail is appended (reversed if
-    necessary).  Any unconnected remainder is appended as-is.
+    Grows the chain greedily from **both ends**: after each successful
+    attachment the loop restarts so that newly freed endpoints on either the
+    head or tail are tried immediately.  A piece is reversed when only its
+    end (not its start) snaps to the current head/tail.
+
+    Any pieces that cannot be connected to either end after a full pass are
+    appended as-is (preserving the previous behaviour for genuinely
+    disconnected outlines such as darts).
     """
-    chain = [geoms[0]]
-    remaining = list(geoms[1:])
-    while remaining:
+    chain: list[Segment | CubicBezier] = [geoms[0]]
+    remaining: list[Segment | CubicBezier] = list(geoms[1:])
+
+    changed = True
+    while remaining and changed:
+        changed = False
         tail = geom_end(chain[-1])
+        head = geom_start(chain[0])
+
         for i, g in enumerate(remaining):
-            if tail.distance_to(geom_start(g)) < _CHAIN_SNAP:
+            gs, ge = geom_start(g), geom_end(g)
+
+            # ── attach to tail ──────────────────────────────────────────────
+            if tail.distance_to(gs) < _CHAIN_SNAP:
                 chain.append(remaining.pop(i))
+                changed = True
                 break
-            elif tail.distance_to(geom_end(g)) < _CHAIN_SNAP:
-                rev: Segment | CubicBezier = (
-                    Segment(g.p2, g.p1, name=g.name)
-                    if isinstance(g, Segment)
-                    else CubicBezier(g.p3, g.p2, g.p1, g.p0, name=g.name)
-                )
-                chain.append(rev)
-                remaining.pop(i)
+            if tail.distance_to(ge) < _CHAIN_SNAP:
+                chain.append(_reverse_geom(remaining.pop(i)))
+                changed = True
                 break
-        else:
-            chain.extend(remaining)  # gap — append remainder as-is
-            break
+
+            # ── attach to head ──────────────────────────────────────────────
+            if head.distance_to(ge) < _CHAIN_SNAP:
+                chain.insert(0, remaining.pop(i))
+                changed = True
+                break
+            if head.distance_to(gs) < _CHAIN_SNAP:
+                chain.insert(0, _reverse_geom(remaining.pop(i)))
+                changed = True
+                break
+
+    if remaining:
+        chain.extend(remaining)  # gap — append remainder as-is
     return chain
 
 
@@ -1444,13 +1571,22 @@ def miter_corner(
     gb: Segment | CubicBezier,
     sa_distance: float,
     miter_limit: float = 4.0,
+    check_reflex: bool = True,
 ) -> Point:
     """Return the miter-join corner between the end of *ga* and the start of *gb*.
 
     Extends the end-tangent of *ga* and start-tangent of *gb* as infinite lines
     and returns their intersection.  Falls back to the bevel midpoint when the
     lines are parallel, the miter extension exceeds *miter_limit* × *sa_distance*,
-    or the corner is reflex (concave on the offset curve).
+    or (when *check_reflex* is True) the corner is reflex (concave on the offset
+    curve).
+
+    Args:
+        check_reflex: When ``False`` the reflex-corner check is skipped.  Use
+            this for zero-gap corners where the two offset endpoints have
+            diverged from a shared outline point (e.g. a Bézier with a
+            degenerate start control point) — the intersection is still the
+            correct outward corner even though it appears behind the end tangent.
     """
 
     end_a = geom_end(ga)
@@ -1474,7 +1610,7 @@ def miter_corner(
     # on the offset curve and the miter would punch inward, creating a spike.
     # This check is winding-direction-independent: dot(pt - end_a, ta) < 0
     # is true for reflex corners regardless of whether the outline is CW or CCW.
-    if float(np.dot(pt - end_a.coords, ta)) < 0.0:
+    if check_reflex and float(np.dot(pt - end_a.coords, ta)) < 0.0:
         return bevel_mid
 
     if (
@@ -1545,7 +1681,7 @@ def round_corner(
     handle = k * r
 
     # Control points along the tangent directions at each endpoint.
-    cp1 = end_a   + Point(*(handle * ta))
+    cp1 = end_a + Point(*(handle * ta))
     cp2 = start_b - Point(*(handle * tb))
 
     return CubicBezier(end_a, cp1, cp2, start_b)
@@ -1643,9 +1779,9 @@ def project_onto_edge(
         ls = geom_to_shapely(edge)
         _, nearest = _so.nearest_points(_sg.Point(ref.x, ref.y), ls)
         notch_pt = Point(nearest.x, nearest.y)
-        # Recover t from arc-length fraction along the chord approximation.
-        frac = ls.project(_sg.Point(nearest.x, nearest.y), normalized=True)
-        t_c = float(np.clip(frac, 0.0, 1.0))
+        # Use svgpathtools radialrange to get the true Bézier parameter t at
+        # the closest point
+        t_c = _bezier_closest_t(edge._svg(), complex(nearest.x, nearest.y))
         raw = edge.tangent_at_t(t_c)
         norm = float(np.linalg.norm(raw))
         along = raw / norm if norm > 1e-12 else raw
@@ -1680,6 +1816,7 @@ def offset_adaptive(
 # ---------------------------------------------------------------------------
 # Dart geometry
 # ---------------------------------------------------------------------------
+
 
 class Dart:
     """Immutable dart (Abnäher) geometry.
@@ -1725,6 +1862,14 @@ class Dart:
         self.dart_type: DartType = dart_type
         self.name = name
         self.second_tip: Point | None = second_tip
+        if second_tip is not None and dart_type is not DartType.RHOMBUS:
+            import warnings
+            warnings.warn(
+                f"second_tip is only used for rhombus darts, but dart_type is "
+                f"{dart_type!r}. The second_tip will be ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
         self.stitch_curve_a: "Segment | CubicBezier | None" = stitch_curve_a
         self.stitch_curve_b: "Segment | CubicBezier | None" = stitch_curve_b
         # Internal: the source PatternElement (carries edge style for roof rendering).
@@ -1742,6 +1887,7 @@ class Dart:
         width: float,
         dart_type: "DartType | str" = DartType.TRIANGLE,
         name: str | None = None,
+        second_tip: Point | None = None,
     ) -> "Dart":
         """Construct a dart from tip, mouth centre and width.
 
@@ -1751,12 +1897,59 @@ class Dart:
         fold_seg = Segment(tip, center)
         if fold_seg.length < 1e-9:
             raise ValueError("tip and center must be distinct")
-        perp = fold_seg.unit_normal   # ⊥ to fold line, already unit-length
+        perp = fold_seg.unit_normal  # ⊥ to fold line, already unit-length
         half = width / 2.0
         leg_a = center - Point(*perp) * half
         leg_b = center + Point(*perp) * half
-        return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
-                   dart_type=dart_type, name=name)
+        return cls(
+            leg_a=leg_a,
+            leg_b=leg_b,
+            center=center,
+            tip=tip,
+            dart_type=dart_type,
+            second_tip=second_tip,
+            name=name,
+        )
+
+    @classmethod
+    def from_edge_at_legs(
+        cls,
+        edge: "object",
+        leg_a: Point,
+        leg_b: Point,
+        tip: Point,
+        dart_type: "DartType | str" = DartType.TRIANGLE,
+        name: str | None = None,
+    ) -> "Dart":
+        """Place a dart on *edge* with explicitly computed leg points.
+
+        Use this when both legs lie on the same edge but are placed
+        asymmetrically — for example one leg projected from a landmark and the
+        other a fixed arc-length further along the curve — so none of the
+        symmetric :meth:`from_edge_at_t` / :meth:`from_edge_at_point` factories
+        apply.  ``_edge_element`` is set automatically so
+        :meth:`~sewpat.pattern.PatternPart.add_dart` will split *edge* in-place
+        at the dart legs.
+
+        Args:
+            edge: ``PatternElement`` wrapping a ``Segment`` or ``CubicBezier``,
+                or the geometry object itself.  Must already be in the part
+                before :meth:`~sewpat.pattern.PatternPart.add_dart` is called.
+            leg_a: First mouth endpoint (already on *edge*).
+            leg_b: Second mouth endpoint (already on *edge*).
+            tip: Dart tip (apex).
+        """
+        _geom, edge_elem = _unwrap_edge(edge)
+        center = Segment(leg_a, leg_b).midpoint
+        return cls(
+            leg_a=leg_a,
+            leg_b=leg_b,
+            center=center,
+            tip=tip,
+            dart_type=dart_type,
+            name=name,
+            _edge_element=edge_elem,
+        )
 
     @classmethod
     def from_tip_and_legs(
@@ -1772,13 +1965,35 @@ class Dart:
 
         The mouth centre is the midpoint of *leg_a* and *leg_b*.
 
+        Use this factory when the dart legs are **pre-existing named points on
+        two separate seam segments** (e.g. the endpoints of two shoulder pieces
+        that already define the mouth) and no single source edge needs to be
+        split.  ``_edge_element`` is always ``None`` on the result, so
+        :meth:`~sewpat.pattern.PatternPart.add_dart` will *not* attempt an
+        in-place edge split — the outline is already correct without one.
+
+        If both legs lie on the **same continuous edge** and that edge should
+        be trimmed at the dart mouth, use one of the :meth:`from_edge_at_t`,
+        :meth:`from_edge_at_point`, or :meth:`from_edge_free_tip` factories
+        instead (they set ``_edge_element`` automatically).  If you need
+        asymmetric leg placement on a single edge *and* want the in-place
+        split, construct the dart directly via ``Dart(..., _edge_element=elem)``
+        after computing the leg points yourself.
+
         Args:
             second_tip: Explicit second apex for rhombus darts.  Defaults to
                 the reflection of *tip* across the mouth line.
         """
         center = Segment(leg_a, leg_b).midpoint
-        return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
-                   dart_type=dart_type, name=name, second_tip=second_tip)
+        return cls(
+            leg_a=leg_a,
+            leg_b=leg_b,
+            center=center,
+            tip=tip,
+            dart_type=dart_type,
+            name=name,
+            second_tip=second_tip,
+        )
 
     @classmethod
     def from_edge_at_t(
@@ -1813,8 +2028,15 @@ class Dart:
         tip = center + Point(*normal) * depth
         leg_a = center.move_towards(geom, -width / 2.0)
         leg_b = center.move_towards(geom, +width / 2.0)
-        return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
-                   dart_type=dart_type, name=name, _edge_element=edge_elem)
+        return cls(
+            leg_a=leg_a,
+            leg_b=leg_b,
+            center=center,
+            tip=tip,
+            dart_type=dart_type,
+            name=name,
+            _edge_element=edge_elem,
+        )
 
     @classmethod
     def from_edge_at_point(
@@ -1848,18 +2070,34 @@ class Dart:
             normal: np.ndarray = geom.unit_normal
         else:
             # Segment or CubicBezier — find t via Shapely projection.
-            t = float(np.clip(
-                geom_to_shapely(geom).project(_sg.Point(point.x, point.y), normalized=True),
-                0.0, 1.0,
-            ))
+            t = float(
+                np.clip(
+                    geom_to_shapely(geom).project(
+                        _sg.Point(point.x, point.y), normalized=True
+                    ),
+                    0.0,
+                    1.0,
+                )
+            )
             center = geom.point_at_t(t)
-            normal = geom.normal_at_t(t) if isinstance(geom, CubicBezier) else geom.unit_normal
+            normal = (
+                geom.normal_at_t(t)
+                if isinstance(geom, CubicBezier)
+                else geom.unit_normal
+            )
 
         tip = center + Point(*normal) * depth
         leg_a = center.move_towards(geom, -width / 2.0)
         leg_b = center.move_towards(geom, +width / 2.0)
-        return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
-                   dart_type=dart_type, name=name, _edge_element=edge_elem)
+        return cls(
+            leg_a=leg_a,
+            leg_b=leg_b,
+            center=center,
+            tip=tip,
+            dart_type=dart_type,
+            name=name,
+            _edge_element=edge_elem,
+        )
 
     @classmethod
     def from_edge_free_tip(
@@ -1881,11 +2119,20 @@ class Dart:
             raise ValueError(f"t must be in [0, 1], got {t}")
         geom, edge_elem = _unwrap_edge(edge)
         center = geom.point_at_t(t)
-        tip = reference_point.move_towards(Segment(reference_point, center), tip_shortfall)
+        tip = reference_point.move_towards(
+            Segment(reference_point, center), tip_shortfall
+        )
         leg_a = center.move_towards(geom, -width / 2.0)
         leg_b = center.move_towards(geom, +width / 2.0)
-        return cls(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip,
-                   dart_type=dart_type, name=name, _edge_element=edge_elem)
+        return cls(
+            leg_a=leg_a,
+            leg_b=leg_b,
+            center=center,
+            tip=tip,
+            dart_type=dart_type,
+            name=name,
+            _edge_element=edge_elem,
+        )
 
     # ------------------------------------------------------------------
     # Derived geometry
@@ -1969,15 +2216,20 @@ class Dart:
 
     def translate(self, dx: float, dy: float) -> "Dart":
         """Return a translated copy."""
-        def _translate_curve(c: "Segment | CubicBezier | None") -> "Segment | CubicBezier | None":
+
+        def _translate_curve(
+            c: "Segment | CubicBezier | None",
+        ) -> "Segment | CubicBezier | None":
             if c is None:
                 return None
             if isinstance(c, Segment):
                 return Segment(c.p1.translate(dx, dy), c.p2.translate(dx, dy))
             # CubicBezier — attributes are p0, p1, p2, p3
             return CubicBezier(
-                c.p0.translate(dx, dy), c.p1.translate(dx, dy),
-                c.p2.translate(dx, dy), c.p3.translate(dx, dy),
+                c.p0.translate(dx, dy),
+                c.p1.translate(dx, dy),
+                c.p2.translate(dx, dy),
+                c.p3.translate(dx, dy),
             )
 
         return Dart(
@@ -1992,20 +2244,32 @@ class Dart:
             stitch_curve_b=_translate_curve(self.stitch_curve_b),
         )
 
+    def set_name(self, name: str) -> "Dart":
+        """Set the name of this dart and return ``self`` for fluent chaining."""
+        self.name = name
+        return self
+
     def rotate(self, pivot: Point, angle_rad: float) -> "Dart":
         """Return a rotated copy (CCW around *pivot*).
 
         Preserves intake angle and depth — used for pivot-method dart transfer.
         """
-        def _rotate_curve(c: "Segment | CubicBezier | None") -> "Segment | CubicBezier | None":
+
+        def _rotate_curve(
+            c: "Segment | CubicBezier | None",
+        ) -> "Segment | CubicBezier | None":
             if c is None:
                 return None
             if isinstance(c, Segment):
-                return Segment(c.p1.rotate(pivot, angle_rad), c.p2.rotate(pivot, angle_rad))
+                return Segment(
+                    c.p1.rotate(pivot, angle_rad), c.p2.rotate(pivot, angle_rad)
+                )
             # CubicBezier — attributes are p0, p1, p2, p3
             return CubicBezier(
-                c.p0.rotate(pivot, angle_rad), c.p1.rotate(pivot, angle_rad),
-                c.p2.rotate(pivot, angle_rad), c.p3.rotate(pivot, angle_rad),
+                c.p0.rotate(pivot, angle_rad),
+                c.p1.rotate(pivot, angle_rad),
+                c.p2.rotate(pivot, angle_rad),
+                c.p3.rotate(pivot, angle_rad),
             )
 
         return Dart(
@@ -2015,7 +2279,9 @@ class Dart:
             tip=self.tip.rotate(pivot, angle_rad),
             dart_type=self.dart_type,
             name=self.name,
-            second_tip=self.second_tip.rotate(pivot, angle_rad) if self.second_tip else None,
+            second_tip=self.second_tip.rotate(pivot, angle_rad)
+            if self.second_tip
+            else None,
             stitch_curve_a=_rotate_curve(self.stitch_curve_a),
             stitch_curve_b=_rotate_curve(self.stitch_curve_b),
         )
@@ -2051,12 +2317,18 @@ class Dart:
         mid_a = (self.leg_a + split_leg) * 0.5
         mid_b = (split_leg + self.leg_b) * 0.5
         dart_a = Dart(
-            leg_a=self.leg_a, leg_b=split_leg, center=mid_a, tip=self.tip,
+            leg_a=self.leg_a,
+            leg_b=split_leg,
+            center=mid_a,
+            tip=self.tip,
             dart_type=self.dart_type,
             name=(f"{self.name} A" if self.name else None),
         )
         dart_b = Dart(
-            leg_a=split_leg, leg_b=self.leg_b, center=mid_b, tip=self.tip,
+            leg_a=split_leg,
+            leg_b=self.leg_b,
+            center=mid_b,
+            tip=self.tip,
             dart_type=self.dart_type,
             name=(f"{self.name} B" if self.name else None),
         )
@@ -2091,11 +2363,16 @@ class Dart:
 
     def __hash__(self) -> int:
         """Hash based on tip coordinates, width and depth for use in sets/dicts."""
-        return hash((
-            round(self.tip.x, 6), round(self.tip.y, 6),
-            round(self.width, 6), round(self.depth, 6),
-            self.dart_type, self.name,
-        ))
+        return hash(
+            (
+                round(self.tip.x, 6),
+                round(self.tip.y, 6),
+                round(self.width, 6),
+                round(self.depth, 6),
+                self.dart_type,
+                self.name,
+            )
+        )
 
 
 def _unwrap_edge(
@@ -2122,5 +2399,3 @@ def _unwrap_edge(
         "edge must be a PatternElement, Segment, CubicBezier, Ray or Line, "
         f"got {type(edge).__name__!r}"
     )
-
-

@@ -41,31 +41,30 @@ class TestPatternElement(unittest.TestCase):
         p = Point(0, 0)
         elem = PatternElement(geometry=p)
         self.assertIsInstance(elem.style, StyleOptions)
-        self.assertIsNone(elem.name)
         self.assertIs(elem.geometry, p)
 
-    def test_creation_with_style_and_name(self):
-        """Explicit style and name are stored correctly."""
+    def test_creation_with_style_and_named_geometry(self):
+        """Style is stored correctly; name is read from geometry.name."""
         p = Point(1, 2)
         style = StyleOptions(stroke_color="red")
-        elem = PatternElement(geometry=p, style=style, name="my-point")
+        elem = PatternElement(geometry=p, style=style)
         self.assertIs(elem.style, style)
-        self.assertEqual(elem.name, "my-point")
+        self.assertIsNone(elem.get_name())  # Point has no name
 
-    def test_get_name_returns_element_name_over_geometry_name(self):
-        """Element name takes precedence over geometry name."""
-        seg = Segment(Point(0, 0), Point(1, 0), name="geo-name")
-        elem = PatternElement(geometry=seg, name="elem-name")
-        self.assertEqual(elem.get_name(), "elem-name")
-
-    def test_get_name_falls_back_to_geometry_name(self):
-        """get_name returns geometry.name when element has no own name."""
+    def test_get_name_from_geometry(self):
+        """get_name returns the name set on the geometry object."""
         seg = Segment(Point(0, 0), Point(1, 0), name="geo-name")
         elem = PatternElement(geometry=seg)
         self.assertEqual(elem.get_name(), "geo-name")
 
-    def test_get_name_none_when_both_absent(self):
-        """get_name returns None when neither element nor geometry has a name."""
+    def test_get_name_via_named_fluent(self):
+        """get_name works when name is set via the .set_name() fluent method."""
+        seg = Segment(Point(0, 0), Point(1, 0)).set_name("fluent-name")
+        elem = PatternElement(geometry=seg)
+        self.assertEqual(elem.get_name(), "fluent-name")
+
+    def test_get_name_none_when_absent(self):
+        """get_name returns None when geometry carries no name."""
         p = Point(0, 0)  # Point has no name attribute
         elem = PatternElement(geometry=p)
         self.assertIsNone(elem.get_name())
@@ -94,13 +93,13 @@ class TestPatternPartBasics(unittest.TestCase):
         self.assertIs(elem.geometry, p)
         self.assertEqual(len(part.elements), 1)
 
-    def test_append_with_style_and_name(self):
-        """append() passes style and name through to PatternElement."""
+    def test_append_with_style_and_named_geometry(self):
+        """append() passes style through; name comes from geometry.name."""
         part = PatternPart(name="Body")
         style = StyleOptions(stroke_color="blue")
-        elem = part.append(Point(0, 0), style=style, name="centre")
+        elem = part.append(Segment(Point(0, 0), Point(1, 0), name="centre"), style=style)
         self.assertIs(elem.style, style)
-        self.assertEqual(elem.name, "centre")
+        self.assertEqual(elem.get_name(), "centre")
 
     def test_extend(self):
         """extend() appends multiple PatternElements at once."""
@@ -596,6 +595,111 @@ class TestAddNotches(unittest.TestCase):
         )
         base_x = (sa_tri.geometry.p1.x + sa_tri.geometry.p2.x) / 2
         self.assertAlmostEqual(base_x, 50.0, delta=1.0)
+
+
+# ---------------------------------------------------------------------------
+# PatternPart – _project_dart_notches_to_sa (dart-leg notches → SA)
+# ---------------------------------------------------------------------------
+
+
+class TestProjectDartNotchesToSA(unittest.TestCase):
+    """Tests for automatic SA projection of dart-leg notches.
+
+    When add_dart() is called *before* add_seam_allowance(), the dart-leg
+    notches are initially placed only on the seam line.  add_seam_allowance()
+    must retroactively project them onto the SA edge via
+    _project_dart_notches_to_sa().
+    """
+
+    def _square_part_with_dart(self) -> "PatternPart":
+        """100×100 mm square with a triangle dart on the top edge, SA not yet added."""
+        from sewpat.geometry import Dart
+        part = PatternPart(name="DartSquare")
+        part.append(Segment(Point(0, 0),   Point(100, 0)),   is_outline=True)
+        part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True)
+        part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
+        part.append(Segment(Point(0, 100), Point(0, 0)),     is_outline=True)
+        dart = Dart.from_tip_and_legs(
+            tip=Point(50, 80),
+            leg_a=Point(40, 0),
+            leg_b=Point(60, 0),
+        )
+        part.add_dart(dart)
+        return part
+
+    def test_dart_leg_notches_projected_after_sa(self):
+        """After add_seam_allowance the dart-leg notches gain SA counterparts."""
+        part = self._square_part_with_dart()
+        part.add_seam_allowance(10.0)
+
+        sa_dart_notches = [
+            e for e in part.elements
+            if e.role == "dart_notch"
+            and e.is_seam_allowance
+            and isinstance(e.geometry, Triangle)
+        ]
+        self.assertGreaterEqual(
+            len(sa_dart_notches), 2,
+            "Expected at least one SA notch per dart leg (leg_a and leg_b)",
+        )
+
+    def test_seam_line_notches_become_is_seam_notch(self):
+        """The original seam-line dart notches are marked is_seam_notch=True
+        after add_seam_allowance so they are hidden when SA is rendered."""
+        part = self._square_part_with_dart()
+        part.add_seam_allowance(10.0)
+
+        seam_notches = [
+            e for e in part.elements
+            if e.role == "dart_notch"
+            and not e.is_seam_allowance
+            and isinstance(e.geometry, Triangle)
+        ]
+        for e in seam_notches:
+            self.assertTrue(
+                e.is_seam_notch,
+                "Seam-line dart notch should be marked is_seam_notch=True",
+            )
+
+    def test_sa_notch_sits_on_sa_edge(self):
+        """SA dart-leg notch base should lie on the SA edge (y ≈ -10 for top edge)."""
+        part = self._square_part_with_dart()
+        sa_dist = 10.0
+        part.add_seam_allowance(sa_dist)
+
+        sa_dart_notches = [
+            e for e in part.elements
+            if e.role == "dart_notch"
+            and e.is_seam_allowance
+            and isinstance(e.geometry, Triangle)
+        ]
+        for e in sa_dart_notches:
+            tri = e.geometry
+            base_y = (tri.p1.y + tri.p2.y) / 2
+            self.assertAlmostEqual(
+                base_y, -sa_dist, delta=1.5,
+                msg="SA dart notch base should be on the SA edge",
+            )
+
+    def test_no_duplicate_projection_on_second_sa_call(self):
+        """Calling add_seam_allowance a second time must not duplicate SA notches."""
+        part = self._square_part_with_dart()
+        part.add_seam_allowance(10.0)
+        count_after_first = len([
+            e for e in part.elements
+            if e.role == "dart_notch" and e.is_seam_allowance
+        ])
+        # A second SA call (e.g. re-generation) should not project again because
+        # the seam-line notches are already marked is_seam_notch=True.
+        part.add_seam_allowance(10.0)
+        count_after_second = len([
+            e for e in part.elements
+            if e.role == "dart_notch" and e.is_seam_allowance
+        ])
+        self.assertEqual(
+            count_after_first, count_after_second,
+            "A second add_seam_allowance must not re-project already-projected notches",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1281,8 +1385,8 @@ class TestSeamAllowanceCornerJoin(unittest.TestCase):
 # Block
 # ---------------------------------------------------------------------------
 
-class TestBlock(unittest.TestCase):
 
+class TestBlock(unittest.TestCase):
     def test_is_instance_of_pattern_part(self):
         block = Block(name="Grundschnitt")
         self.assertIsInstance(block, PatternPart)
@@ -1345,14 +1449,18 @@ class TestBlock(unittest.TestCase):
         from sewpat.render import export_pattern_svg_mm
 
         block = Block(name="Grundschnitt")
-        block.append(Segment(Point(0, 0), Point(50, 0), name="Oberkante"), is_outline=True)
+        block.append(
+            Segment(Point(0, 0), Point(50, 0), name="Oberkante"), is_outline=True
+        )
 
         pat = Pattern(name="Test")
         pat.add_part(block)
 
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
-        export_pattern_svg_mm(pat, fname, width_mm=200, height_mm=200, parts=["Grundschnitt"])
+        export_pattern_svg_mm(
+            pat, fname, width_mm=200, height_mm=200, parts=["Grundschnitt"]
+        )
         svg = Path(fname).read_text()
 
         self.assertIn("Oberkante", svg)
@@ -1378,6 +1486,7 @@ class TestBlock(unittest.TestCase):
 # OverlayPart
 # ---------------------------------------------------------------------------
 
+
 def _front_part() -> PatternPart:
     """A simple 100 × 150 mm front piece."""
     part = PatternPart(name="Vorderteil")
@@ -1389,7 +1498,6 @@ def _front_part() -> PatternPart:
 
 
 class TestOverlayPart(unittest.TestCase):
-
     def test_is_instance_of_pattern_part(self):
         front = _front_part()
         overlay = OverlayPart(name="Tasche", parent=front)
@@ -1493,7 +1601,9 @@ class TestOverlayPart(unittest.TestCase):
         front = _front_part()
         pocket = OverlayPart(name="Tasche", parent=front)
         style = StyleOptions(stroke_color="red")
-        pocket.append(Segment(Point(10, 10), Point(40, 10)), style=style, is_outline=True)
+        pocket.append(
+            Segment(Point(10, 10), Point(40, 10)), style=style, is_outline=True
+        )
         result = pocket.explode(offset=Point(110, 0))
         self.assertEqual(result.elements[0].style.stroke_color, "red")
 
