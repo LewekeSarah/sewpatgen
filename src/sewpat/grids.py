@@ -40,10 +40,10 @@ class TopGrid:
         hip_adj: Vertical guide for the hip adjustment (BeckenAdjustment).
         neck: Vertical guide at the neck position
         dart_back: Vertical guide at the back dart position.
-        sleeve_back: Vertical guide at the back sleeve position.
+        armscye_back: Vertical guide at the back armscye position.
         side_back: Vertical guide at the back side-seam position.
         side_front: Vertical guide at the front side-seam position.
-        sleeve_front: Vertical guide at the front sleeve position.
+        armscye_front: Vertical guide at the front armscye position.
         bust_point: Vertical guide through the bust point.
         center_front: Vertical guide along the front centre.
     """
@@ -63,10 +63,10 @@ class TopGrid:
     hip_adj: Segment
     neck: Segment
     dart_back: Segment
-    sleeve_back: Segment
+    armscye_back: Segment
     side_back: Segment
     side_front: Segment
-    sleeve_front: Segment
+    armscye_front: Segment
     bust_point: Segment
     center_front: Segment
 
@@ -108,10 +108,10 @@ class TopGrid:
                 ("Hip Adjustment", hip_adj),
                 ("Neck", 0 + meas.HlB),
                 ("Dart Back", hip_adj + meas.RüB / 2),
-                ("Sleeve Back", hip_adj + meas.RüB),
+                ("Armscye Back", hip_adj + meas.RüB),
                 ("Side Back", hip_adj + meas.RüB + meas.ArD * 2 / 3),
                 ("Side Front", hip_adj + meas.RüB + meas.ArD * 2 / 3 + config.margin),
-                ("Sleeve Front", hip_adj + meas.RüB + meas.ArD + config.margin),
+                ("Armscye Front", hip_adj + meas.RüB + meas.ArD + config.margin),
                 (
                     "Bustpoint",
                     hip_adj + meas.RüB + meas.ArD + meas.BrB - bust_pos + config.margin,
@@ -128,7 +128,7 @@ class TopGrid:
         def seg(name: str) -> Segment:
             return built.get_element(name).geometry  # type: ignore[return-value]
 
-        return cls(
+        grid = cls(
             part=built,
             shoulder_front=seg("Shoulder Front"),
             shoulder_back=seg("Shoulder Back"),
@@ -139,11 +139,40 @@ class TopGrid:
             center_back=seg("Center Back"),
             hip_adj=seg("Hip Adjustment"),
             neck=seg("Neck"),
-            sleeve_back=seg("Sleeve Back"),
             dart_back=seg("Dart Back"),
+            armscye_back=seg("Armscye Back"),
             side_back=seg("Side Back"),
             side_front=seg("Side Front"),
-            sleeve_front=seg("Sleeve Front"),
+            armscye_front=seg("Armscye Front"),
             bust_point=seg("Bustpoint"),
             center_front=seg("Center Front"),
         )
+
+        _check_chest_width(grid, meas.BrW / 2)
+        return grid
+
+
+def _check_chest_width(grid: "TopGrid", expected_half_width: float) -> None:
+    """Validate that the built grid positions satisfy the chest-width constraint.
+
+    The distance from ``hip_adj`` to ``side_back`` (back half-width) plus the
+    distance from ``side_front`` to ``center_front`` (front half-width) must
+    equal *expected_half_width* (typically ``BrW / 2``).
+
+    This is checked against the actual segment positions rather than the source
+    measurements, so any mistake in the grid formulas is caught here regardless
+    of how the grid was constructed (from measurements, a file, a database, …).
+
+    Raises:
+        ValueError: if the constraint is violated beyond floating-point tolerance.
+    """
+    actual = (
+        (grid.side_back.p1.x    - grid.hip_adj.p1.x) +
+        (grid.center_front.p1.x - grid.side_front.p1.x)
+    )
+    if abs(actual - expected_half_width) > 1e-6:
+        raise ValueError(
+            f"Chest-width control failed: hip_adj→side_back + side_front→center_front "
+            f"= {actual:.4f} but expected {expected_half_width:.4f}."
+        )
+

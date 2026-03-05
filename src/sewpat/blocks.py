@@ -567,8 +567,8 @@ def _assemble_front_part(
     part.append(front.shoulder_neckline.set_name("Shoulder Front Dart"),         style=STYLE_STITCH, is_outline=True)
     part.add_dart(darts.shoulder_dart_front)
     if front.armscye_front_upper is not None:
-        part.append(front.armscye_front_upper.set_name("Sleeve Front Upper"),    is_construction=True)
-    part.append(front.armscye_front_lower.set_name("Sleeve Front"),              style=STYLE_STITCH, is_outline=True)
+        part.append(front.armscye_front_upper.set_name("Armscye Front Upper"),  is_construction=True)
+    part.append(front.armscye_front_lower.set_name("Armscye Front"),              style=STYLE_STITCH, is_outline=True)
     part.append(sides.side_chest_waist_front,                                    style=STYLE_STITCH, is_outline=True)
     part.add_dart(darts.waist_dart_front)
     part.append(sides.side_waist_hip_front,                                      is_outline=True, style=STYLE_STITCH)
@@ -760,7 +760,7 @@ class TopBlock:
 
         # Append the armscye first so we have the edge element for the shoulder dart
         armscye_back_elem = block_back.append(
-            back_geom.armscye_back.set_name("Sleeve Back"),
+            back_geom.armscye_back.set_name("Armscye Back"),
             style=STYLE_STITCH,
             is_outline=True,
         )

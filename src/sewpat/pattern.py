@@ -59,7 +59,7 @@ from .units import CM, MM
 @dataclass
 class PatternConfig:
     anchor: Point = Point(5 * CM, 5 * CM, "anchor")
-    margin: float = 10 * CM
+    margin: float = 15 * CM
 
 
 class GarmentPart(str, Enum):
