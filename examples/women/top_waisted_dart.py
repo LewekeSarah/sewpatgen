@@ -322,13 +322,12 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
     if sleeve_front_upper is not None:
         block_front.append(sleeve_front_upper.set_name("Sleeve Front Upper"), is_construction=True)
     block_front.append(sleeve_front_lower.set_name("Sleeve Front"), style=STYLE_STITCH, is_outline=True)
-    block_front.add_notches(pt_vÄP, seam_edge=sleeve_front_lower)
-
     block_front.add_dart(waist_dart_front)
     block_front.append(side_front_curved, is_outline=True, style=STYLE_STITCH)
     block_front.append(Segment(pt37_front, pt37_front.translate(0, Segment(pt8, pt9).length)), style=STYLE_STITCH, is_outline=True)
     block_front.append(Segment(intersect(grid.hem, side_front_offset)[0], intersect(grid.hem, grid.center_front)[0]), style=STYLE_HEM, is_outline=True)
     block_front.add_seam_allowance(model.seam_allowance)
+    block_front.add_notches(pt_vÄP, seam_edge=sleeve_front_lower)
     return pattern
 
 

@@ -547,6 +547,7 @@ class PatternPart(NamedAccessMixin):
                     style=sa_style,
                 )
                 new_elem.is_seam_allowance = True
+                self._project_dart_notches_to_sa()
                 return [new_elem]
 
         geoms: list[Segment | CubicBezier] = [
@@ -580,6 +581,7 @@ class PatternPart(NamedAccessMixin):
                 )
                 elem.is_seam_allowance = True
                 added.append(elem)
+            self._project_dart_notches_to_sa()
             return added
 
         # ── Mixed / Bézier path: per-element offset + corner stitching ────────
@@ -688,7 +690,89 @@ class PatternPart(NamedAccessMixin):
             elem = self.append(geom, style=sa_style)
             elem.is_seam_allowance = True
             added_mixed.append(elem)
+        self._project_dart_notches_to_sa()
         return added_mixed
+
+    def _project_dart_notches_to_sa(self) -> None:
+        """Project existing dart-leg notches onto the seam-allowance edge.
+
+        Called automatically at the end of :meth:`add_seam_allowance`.  It
+        finds every seam-line dart notch (``role="dart_notch"``,
+        ``is_seam_allowance=False``, ``is_seam_notch=False``) and creates a
+        matching notch on the nearest SA edge, mirroring what
+        :meth:`add_notches` does when SA elements are already present.
+        """
+        sa_geoms: list[Segment | CubicBezier] = [
+            e.geometry
+            for e in self.elements
+            if e.is_seam_allowance and isinstance(e.geometry, (Segment, CubicBezier))
+        ]
+        if not sa_geoms:
+            return
+
+        inward_ref = self.centroid
+
+        def _closest_sa_edge(ref: Point) -> Segment | CubicBezier | None:
+            sp = _sg.Point(ref.x, ref.y)
+            return min(sa_geoms, key=lambda g: sp.distance(geom_to_shapely(g)))
+
+        candidates = [
+            e for e in self.elements
+            if e.role == "dart_notch"
+            and not e.is_seam_allowance
+            and not e.is_seam_notch
+            and isinstance(e.geometry, Triangle)
+        ]
+
+        for seam_elem in candidates:
+            tri = seam_elem.geometry
+            # Base centre of the triangle is the point on the seam line
+            base_centre = Point(
+                (tri.p1.x + tri.p2.x) / 2,
+                (tri.p1.y + tri.p2.y) / 2,
+            )
+            # Derive length and width from the existing triangle
+            half_w = tri.p1.distance_to(tri.p2) / 2
+            length = base_centre.distance_to(tri.p3)
+
+            sa_edge = _closest_sa_edge(base_centre)
+            if sa_edge is None:
+                continue
+
+            sa_pt, sa_along, sa_normal = project_onto_edge(sa_edge, base_centre, inward_ref)
+            along_pt = Point(*sa_along)
+            normal_pt = Point(*sa_normal)
+
+            # Determine whether this is a double (back) notch: two triangles
+            # share the same base centre within a small tolerance.
+            is_back = any(
+                e is not seam_elem
+                and e.role == "dart_notch"
+                and not e.is_seam_allowance
+                and not e.is_seam_notch
+                and isinstance(e.geometry, Triangle)
+                and Point(
+                    (e.geometry.p1.x + e.geometry.p2.x) / 2,
+                    (e.geometry.p1.y + e.geometry.p2.y) / 2,
+                ).distance_to(base_centre) < 1.0
+                for e in self.elements
+            )
+
+            gap = half_w * 2 * 0.5
+            offsets = (
+                [-(half_w + gap / 2), +(half_w + gap / 2)] if is_back else [0.0]
+            )
+
+            for offset in offsets:
+                centre = sa_pt + along_pt * offset
+                tip = centre + normal_pt * length
+                bl = centre - along_pt * half_w
+                br = centre + along_pt * half_w
+                sa_notch_elem = self.append(Triangle(bl, br, tip))
+                sa_notch_elem.is_seam_allowance = True
+                sa_notch_elem.role = "dart_notch"
+
+            seam_elem.is_seam_notch = True
 
     def append_split_at_dart(
         self,

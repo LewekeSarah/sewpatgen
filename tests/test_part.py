@@ -598,6 +598,111 @@ class TestAddNotches(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# PatternPart – _project_dart_notches_to_sa (dart-leg notches → SA)
+# ---------------------------------------------------------------------------
+
+
+class TestProjectDartNotchesToSA(unittest.TestCase):
+    """Tests for automatic SA projection of dart-leg notches.
+
+    When add_dart() is called *before* add_seam_allowance(), the dart-leg
+    notches are initially placed only on the seam line.  add_seam_allowance()
+    must retroactively project them onto the SA edge via
+    _project_dart_notches_to_sa().
+    """
+
+    def _square_part_with_dart(self) -> "PatternPart":
+        """100×100 mm square with a triangle dart on the top edge, SA not yet added."""
+        from sewpat.geometry import Dart
+        part = PatternPart(name="DartSquare")
+        part.append(Segment(Point(0, 0),   Point(100, 0)),   is_outline=True)
+        part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True)
+        part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
+        part.append(Segment(Point(0, 100), Point(0, 0)),     is_outline=True)
+        dart = Dart.from_tip_and_legs(
+            tip=Point(50, 80),
+            leg_a=Point(40, 0),
+            leg_b=Point(60, 0),
+        )
+        part.add_dart(dart)
+        return part
+
+    def test_dart_leg_notches_projected_after_sa(self):
+        """After add_seam_allowance the dart-leg notches gain SA counterparts."""
+        part = self._square_part_with_dart()
+        part.add_seam_allowance(10.0)
+
+        sa_dart_notches = [
+            e for e in part.elements
+            if e.role == "dart_notch"
+            and e.is_seam_allowance
+            and isinstance(e.geometry, Triangle)
+        ]
+        self.assertGreaterEqual(
+            len(sa_dart_notches), 2,
+            "Expected at least one SA notch per dart leg (leg_a and leg_b)",
+        )
+
+    def test_seam_line_notches_become_is_seam_notch(self):
+        """The original seam-line dart notches are marked is_seam_notch=True
+        after add_seam_allowance so they are hidden when SA is rendered."""
+        part = self._square_part_with_dart()
+        part.add_seam_allowance(10.0)
+
+        seam_notches = [
+            e for e in part.elements
+            if e.role == "dart_notch"
+            and not e.is_seam_allowance
+            and isinstance(e.geometry, Triangle)
+        ]
+        for e in seam_notches:
+            self.assertTrue(
+                e.is_seam_notch,
+                "Seam-line dart notch should be marked is_seam_notch=True",
+            )
+
+    def test_sa_notch_sits_on_sa_edge(self):
+        """SA dart-leg notch base should lie on the SA edge (y ≈ -10 for top edge)."""
+        part = self._square_part_with_dart()
+        sa_dist = 10.0
+        part.add_seam_allowance(sa_dist)
+
+        sa_dart_notches = [
+            e for e in part.elements
+            if e.role == "dart_notch"
+            and e.is_seam_allowance
+            and isinstance(e.geometry, Triangle)
+        ]
+        for e in sa_dart_notches:
+            tri = e.geometry
+            base_y = (tri.p1.y + tri.p2.y) / 2
+            self.assertAlmostEqual(
+                base_y, -sa_dist, delta=1.5,
+                msg="SA dart notch base should be on the SA edge",
+            )
+
+    def test_no_duplicate_projection_on_second_sa_call(self):
+        """Calling add_seam_allowance a second time must not duplicate SA notches."""
+        part = self._square_part_with_dart()
+        part.add_seam_allowance(10.0)
+        count_after_first = len([
+            e for e in part.elements
+            if e.role == "dart_notch" and e.is_seam_allowance
+        ])
+        # A second SA call (e.g. re-generation) should not project again because
+        # the seam-line notches are already marked is_seam_notch=True.
+        part.add_seam_allowance(10.0)
+        count_after_second = len([
+            e for e in part.elements
+            if e.role == "dart_notch" and e.is_seam_allowance
+        ])
+        self.assertEqual(
+            count_after_first, count_after_second,
+            "A second add_seam_allowance must not re-project already-projected notches",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Pattern
 # ---------------------------------------------------------------------------
 
