@@ -1,9 +1,19 @@
 """Fit class (Passformklasse) — single source of truth for garment ease.
 
 The :class:`FitClass` wraps a single integer ``pk`` in the range 0–12 that
-encodes how tightly a garment fits the body.  All ease values and
-PK-dependent construction offsets are derived from it, so no magic numbers
-need to appear at call sites.
+encodes how tightly a garment fits the body.  All ease values are read from
+``src/sewpat/data/fitclass.csv`` (multi-index: pk × ease field × lo/hi).
+
+Default values are the upper bound (hi) of the published range.
+Any field may be overridden at construction time; the value must lie within
+the published [lo, hi] range or a :class:`ValueError` is raised.
+
+``bust_point_ease`` (ZuBrA) is derived as a construction offset and is
+included in the table; ``bust_width_ease`` is *never* stored — it is always
+derived as ``2 × (back_width_ease + armscye_width_ease + chest_width_ease)``.
+
+Only PK 4 is populated with real values.  All other PKs raise
+:class:`KeyError` until the full Mueller & Sohn table is digitised.
 
 Typical PK ranges
 -----------------
@@ -15,89 +25,185 @@ Typical PK ranges
 Source: Mueller & Sohn, Rundschau / Modenähen drafting system.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
+
+from dataclasses import dataclass, field, fields
+from pathlib import Path
 from typing import NamedTuple
+
+import pandas as pd
 
 from .units import CM
 
 
 # ---------------------------------------------------------------------------
-# Ranged PK value — stores the published range so callers can inspect it
-# and optionally choose a position within it.
+# CSV loader — executed once at import time
 # ---------------------------------------------------------------------------
 
-class _PKRange(NamedTuple):
-    """A published range [lo, hi] for a PK-dependent construction value."""
+_CSV_PATH = Path(__file__).parent / "data" / "fitclass.csv"
+
+#: Ease fields exposed on FitClass (matches CSV column level-0 names).
+EASE_FIELDS = (
+    "back_width_ease",    # RüB  — Rückenbreite-Zugabe
+    "armscye_width_ease", # ArD  — Armdurchmesser-Zugabe
+    "chest_width_ease",   # BrB  — Brustbreite-Zugabe
+    "armscye_depth_ease", # AlT  — Armlochtiefe-Zugabe
+    "waist_ease",         # TaU  — Taillenumfang-Zugabe
+    "hip_ease",           # HüU  — Hüftumfang-Zugabe
+    "bust_point_ease",    # ZuBrA — Zugabe Brustpunktabstand
+)
+
+
+class _Range(NamedTuple):
+    """Published [lo, hi] range for a single ease field at a given PK."""
     lo: float
     hi: float
 
-    @property
-    def midpoint(self) -> float:
-        """Midpoint of the range — used as the default value."""
-        return (self.lo + self.hi) / 2
 
+def _load_table() -> dict[int, dict[str, _Range]]:
+    """Load fitclass.csv into a nested dict: pk → field → _Range (values in mm)."""
+    df = pd.read_csv(_CSV_PATH, header=[0, 1], index_col=0)
+    result: dict[int, dict[str, _Range]] = {}
+    for pk_val in df.index:
+        row: dict[str, _Range] = {}
+        for ef in EASE_FIELDS:
+            lo = float(df.loc[pk_val, (ef, "lo")]) * CM
+            hi = float(df.loc[pk_val, (ef, "hi")]) * CM
+            row[ef] = _Range(lo=lo, hi=hi)
+        result[int(pk_val)] = row
+    return result
+
+
+_TABLE: dict[int, dict[str, _Range]] = _load_table()
 
 # ---------------------------------------------------------------------------
 # FitClass
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
+@dataclass
 class FitClass:
     """Fit class — single source of truth for ease and construction offsets.
 
-    Parameters
-    ----------
-    pk:
-        Integer in the range 0–12 describing garment fit tightness.
+    Pass only ``pk`` to use upper-bound defaults for all ease fields.
+    Override individual fields as needed; each must lie within the published
+    range for the given PK or a :class:`ValueError` is raised.
 
-    Examples
-    --------
-    ::
+    ``bust_width_ease`` is always derived and cannot be set directly.
 
-        from sewpat.fitclass import FitClass
-        from sewpat.units import CM
+    Args:
+        pk: Integer 0–12 describing garment fit tightness.
+        back_width_ease:    RüB  — Rückenbreite-Zugabe (override, mm).
+        armscye_width_ease: ArD  — Armdurchmesser-Zugabe (override, mm).
+        chest_width_ease:   BrB  — Brustbreite-Zugabe (override, mm).
+        armscye_depth_ease: AlT  — Armlochtiefe-Zugabe (override, mm).
+        waist_ease:         TaU  — Taillenumfang-Zugabe (override, mm).
+        hip_ease:           HüU  — Hüftumfang-Zugabe (override, mm).
+        bust_point_ease:    ZuBrA — Zugabe Brustpunktabstand (override, mm).
 
-        fc = FitClass(pk=4)
-        offset = fc.bust_point_offset          # → 1.0 cm (midpoint)
-        offset = fc.bust_point_offset_range.lo # → 1.0 cm (lower bound)
+    Examples::
+
+        fc = FitClass(pk=4)                          # all upper-bound defaults
+        fc = FitClass(pk=4, back_width_ease=0.7*CM)  # override one field
+        fc.bust_width_ease                           # always derived
     """
 
     pk: int
-    _ZuBrA: float | None = None  # optional override; use bust_point_offset_range midpoint if None
+    back_width_ease:    float | None = None  # RüB  — Rückenbreite-Zugabe
+    armscye_width_ease: float | None = None  # ArD  — Armdurchmesser-Zugabe
+    chest_width_ease:   float | None = None  # BrB  — Brustbreite-Zugabe
+    armscye_depth_ease: float | None = None  # AlT  — Armlochtiefe-Zugabe
+    waist_ease:         float | None = None  # TaU  — Taillenumfang-Zugabe
+    hip_ease:           float | None = None  # HüU  — Hüftumfang-Zugabe
+    bust_point_ease:    float | None = None  # ZuBrA — Zugabe Brustpunktabstand
 
     def __post_init__(self) -> None:
         if not (0 <= self.pk <= 12):
             raise ValueError(f"FitClass pk must be 0–12, got {self.pk!r}")
+        if self.pk not in _TABLE:
+            raise KeyError(
+                f"PK {self.pk} is not yet in the fit-class table. "
+                "Only PK 4 is currently populated."
+            )
+        row = _TABLE[self.pk]
+        for ef in EASE_FIELDS:
+            override = getattr(self, ef)
+            if override is not None:
+                r = row[ef]
+                if not (r.lo - 1e-9 <= override <= r.hi + 1e-9):
+                    raise ValueError(
+                        f"FitClass pk={self.pk}: {ef}={override/CM:.2f} cm is outside "
+                        f"the valid range [{r.lo/CM:.2f}, {r.hi/CM:.2f}] cm."
+                    )
 
-    # ------------------------------------------------------------------
-    # ZuBrA — Zugabe Brustpunktabstand (bust-point spacing offset)
-    # Source: Mueller & Sohn; TODO: verify exact per-PK table reference.
-    # ------------------------------------------------------------------
+    def _resolved(self, field_name: str) -> float:
+        """Return override if set, otherwise the table upper bound (hi)."""
+        override = getattr(self, field_name)
+        if override is not None:
+            return override
+        return _TABLE[self.pk][field_name].hi
 
     @property
-    def bust_point_offset_range(self) -> _PKRange:
-        """Published [lo, hi] range for the bust-point spacing offset (ZuBrA).
+    def resolved_back_width_ease(self) -> float:
+        """RüB — Rückenbreite-Zugabe (override or table hi)."""
+        return self._resolved("back_width_ease")
 
-        The midpoint is used as the default; callers that need a specific
-        position within the range can read ``.lo`` and ``.hi`` directly.
+    @property
+    def resolved_armscye_width_ease(self) -> float:
+        """ArD — Armdurchmesser-Zugabe (override or table hi)."""
+        return self._resolved("armscye_width_ease")
 
-        Source: Mueller & Sohn, Rundschau.
-        TODO: confirm exact per-PK table page reference.
+    @property
+    def resolved_chest_width_ease(self) -> float:
+        """BrB — Brustbreite-Zugabe (override or table hi)."""
+        return self._resolved("chest_width_ease")
+
+    @property
+    def resolved_armscye_depth_ease(self) -> float:
+        """AlT — Armlochtiefe-Zugabe (override or table hi)."""
+        return self._resolved("armscye_depth_ease")
+
+    @property
+    def resolved_waist_ease(self) -> float:
+        """TaU — Taillenumfang-Zugabe (override or table hi)."""
+        return self._resolved("waist_ease")
+
+    @property
+    def resolved_hip_ease(self) -> float:
+        """HüU — Hüftumfang-Zugabe (override or table hi)."""
+        return self._resolved("hip_ease")
+
+    @property
+    def resolved_bust_point_ease(self) -> float:
+        """ZuBrA — Zugabe Brustpunktabstand (override or table hi)."""
+        return self._resolved("bust_point_ease")
+
+    @property
+    def bust_width_ease(self) -> float:
+        """BrW-Zugabe — always derived: 2 × (back + armscye_width + chest)."""
+        return 2.0 * (
+            self.resolved_back_width_ease
+            + self.resolved_armscye_width_ease
+            + self.resolved_chest_width_ease
+        )
+
+    def range(self, field_name: str) -> _Range:
+        """Return the published [lo, hi] range for *field_name* at this PK.
+
+        Args:
+            field_name: One of the names in :data:`EASE_FIELDS`.
+
+        Raises:
+            KeyError: if *field_name* is not a recognised ease field.
         """
-        if self.pk < 4:
-            return _PKRange(lo=0.0 * CM, hi=0.5 * CM)
-        if self.pk < 8:
-            return _PKRange(lo=1.0 * CM, hi=1.0 * CM)
-        return _PKRange(lo=1.5 * CM, hi=1.5 * CM)
+        if field_name not in _TABLE[self.pk]:
+            raise KeyError(f"{field_name!r} is not a recognised ease field.")
+        return _TABLE[self.pk][field_name]
+
+    # ------------------------------------------------------------------
+    # Convenience aliases used by Allowance.from_fit_class and grids
+    # ------------------------------------------------------------------
 
     @property
     def ZuBrA(self) -> float:
-        """Bust-point spacing offset.
-
-        Returns the override value if supplied, otherwise the midpoint of
-        :attr:`bust_point_offset_range`.
-        """
-        if self._ZuBrA is not None:
-            return self._ZuBrA
-        return self.bust_point_offset_range.midpoint
-
+        """Alias for :attr:`resolved_bust_point_ease` (ZuBrA — Zugabe Brustpunktabstand)."""
+        return self.resolved_bust_point_ease

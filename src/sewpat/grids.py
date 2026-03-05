@@ -9,7 +9,6 @@ as ``.part`` for adding to a :class:`~sewpat.pattern.Pattern`.
 from dataclasses import dataclass
 
 from .geometry import Segment
-from .measurements import BlouseMeasurements, ModelConfig
 from .measurements import BlouseMeasurements, GarmentConfig
 from .pattern import ConstructionGrid, PatternConfig, ConstructionGridPart
 from .person import PersonalAdjustments
@@ -93,42 +92,42 @@ class TopGrid:
         from .fitclass import FitClass  # local import to avoid circularity
 
         fc = fit_class_or_model
-        ZuBrA = fc.ZuBrA if isinstance(fc, FitClass) else 0.5 * CM
-        BeckenAdjustment = adjustments.BeckenAdjustment if adjustments is not None else 0.0
-        MoL = config.MoL if config is not None else 75 * CM
-        seam_allowance = config.seam_allowance if config is not None else 1 * CM
+        bust_point_ease  = fc.ZuBrA if isinstance(fc, FitClass) else 0.5 * CM
+        hip_offset       = adjustments.hip_offset if adjustments is not None else 0.0
+        length           = config.length if config is not None else 75 * CM
+        seam_allowance   = config.seam_allowance if config is not None else 1 * CM
 
         layout = layout or PatternConfig()
 
-        hip_adj = BeckenAdjustment * meas.AlT / meas.RüL
-        bust_pos = meas.BrU / 10 + ZuBrA
+        hip_adj  = hip_offset * meas.armscye_depth / meas.back_length
+        bust_pos = meas.bust / 10 + bust_point_ease
 
         cg = ConstructionGrid(
             anchor=layout.anchor,
             horizontals=[
-                ("Shoulder Front", meas.RüL - meas.VL),  # TODO check VL vs VL2
+                ("Shoulder Front", meas.back_length - meas.front_length),  # TODO check front_length vs VL2
                 ("Shoulder Back", 0),
-                ("Chest", meas.AlT),
-                ("Waist", meas.RüL),
-                ("Hip", meas.RüL + meas.HüT),
-                ("Hem", MoL),
+                ("Chest", meas.armscye_depth),
+                ("Waist", meas.back_length),
+                ("Hip", meas.back_length + meas.hip_depth),
+                ("Hem", length),
             ],
             verticals=[
                 ("Center Back", 0),
                 ("Hip Adjustment", hip_adj),
-                ("Neck", 0 + meas.HlB),
-                ("Dart Back", hip_adj + meas.RüB / 2),
-                ("Armscye Back", hip_adj + meas.RüB),
-                ("Side Back", hip_adj + meas.RüB + meas.ArD * 2 / 3),
-                ("Side Front", hip_adj + meas.RüB + meas.ArD * 2 / 3 + layout.margin),
-                ("Armscye Front", hip_adj + meas.RüB + meas.ArD + layout.margin),
+                ("Neck", 0 + meas.neck_size),
+                ("Dart Back", hip_adj + meas.back_width / 2),
+                ("Armscye Back", hip_adj + meas.back_width),
+                ("Side Back", hip_adj + meas.back_width + meas.armscye_width * 2 / 3),
+                ("Side Front", hip_adj + meas.back_width + meas.armscye_width * 2 / 3 + layout.margin),
+                ("Armscye Front", hip_adj + meas.back_width + meas.armscye_width + layout.margin),
                 (
                     "Bustpoint",
-                    hip_adj + meas.RüB + meas.ArD + meas.BrB - bust_pos + layout.margin,
+                    hip_adj + meas.back_width + meas.armscye_width + meas.chest_width - bust_pos + layout.margin,
                 ),
                 (
                     "Center Front",
-                    hip_adj + meas.RüB + meas.ArD + meas.BrB + layout.margin,
+                    hip_adj + meas.back_width + meas.armscye_width + meas.chest_width + layout.margin,
                 ),
             ],
             part_name="Grid",
@@ -158,7 +157,7 @@ class TopGrid:
             center_front=seg("Center Front"),
         )
 
-        _check_chest_width(grid, meas.BrW / 2)
+        _check_chest_width(grid, meas.bust_width / 2)
         return grid
 
 

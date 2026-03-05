@@ -17,33 +17,33 @@ from sewpat.units import CM
 
 def make_person() -> Person:
     return Person(
-        KöH=159 * CM,
-        BrU=83.5 * CM,
-        TaU=69.5 * CM,
-        HüU=93 * CM,
-        HüT=24 * CM,
-        BrT=27.5 * CM,
-        HlB=6.5 * CM,
-        BrPA=8.3 * CM,
-        SuB=12.1 * CM,
-        RüL=39 * CM,
-        VL=43.4 * CM,
+        height=159 * CM,
+        bust=83.5 * CM,
+        waist=69.5 * CM,
+        hip=93 * CM,
+        hip_depth=24 * CM,
+        bust_depth=27.5 * CM,
+        neck_size=6.5 * CM,
+        bust_span=8.3 * CM,
+        shoulder_width=12.1 * CM,
+        back_length=39 * CM,
+        front_length=43.4 * CM,
     )
 
 
 def make_fit_class() -> FitClass:
-    return FitClass(pk=4, _ZuBrA=0.5 * CM)
+    return FitClass(pk=4, bust_point_ease=0.5 * CM)
 
 
 def make_adjustments() -> PersonalAdjustments:
     return PersonalAdjustments(
-        BeckenAdjustment=1 * CM,
-        balance=BalanceAdjustments(VL=-0.9 * CM),
+        hip_offset=1 * CM,
+        balance=BalanceAdjustments(front_length=-0.9 * CM),
     )
 
 
 def make_config() -> GarmentConfig:
-    return GarmentConfig(MoL=75 * CM)
+    return GarmentConfig(length=75 * CM)
 
 
 class Part(GarmentPart):
