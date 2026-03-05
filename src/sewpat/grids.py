@@ -10,7 +10,9 @@ from dataclasses import dataclass
 
 from .geometry import Segment
 from .measurements import BlouseMeasurements, ModelConfig
+from .measurements import BlouseMeasurements, GarmentConfig
 from .pattern import ConstructionGrid, PatternConfig, ConstructionGridPart
+from .person import PersonalAdjustments
 
 
 @dataclass(frozen=True)
@@ -74,34 +76,42 @@ class TopGrid:
     def from_measurements(
         cls,
         meas: BlouseMeasurements,
-        model: ModelConfig,
-        config: PatternConfig,
+        fit_class_or_model: "FitClass | None" = None,
+        adjustments: PersonalAdjustments | None = None,
+        config: GarmentConfig | None = None,
+        layout: PatternConfig | None = None,
     ) -> "TopGrid":
         """Build and return a :class:`TopGrid` from the given measurements.
 
-        Parameters
-        ----------
-        meas:
-            Blouse-specific measurements (ease already included).
-        model:
-            Model-level design choices such as garment length (``MoL``) and
-            hip adjustment (``BeckenAdjustment``).
-        config:
-            Pattern configuration supplying the anchor point and the gap
-            between back and front halves (``margin``).
+        Args:
+            meas: Blouse measurements (ease already included).
+            fit_class_or_model: :class:`~sewpat.fitclass.FitClass`.
+            adjustments: Personal body-deviation corrections.
+            config: Garment-design choices (length, seam allowance).
+            layout: Pattern layout configuration.
         """
-        hip_adj = model.BeckenAdjustment * meas.AlT / meas.RüL
-        bust_pos = meas.BrU / 10 + model.ZuBrA
+        from .fitclass import FitClass  # local import to avoid circularity
+
+        fc = fit_class_or_model
+        ZuBrA = fc.ZuBrA if isinstance(fc, FitClass) else 0.5 * CM
+        BeckenAdjustment = adjustments.BeckenAdjustment if adjustments is not None else 0.0
+        MoL = config.MoL if config is not None else 75 * CM
+        seam_allowance = config.seam_allowance if config is not None else 1 * CM
+
+        layout = layout or PatternConfig()
+
+        hip_adj = BeckenAdjustment * meas.AlT / meas.RüL
+        bust_pos = meas.BrU / 10 + ZuBrA
 
         cg = ConstructionGrid(
-            anchor=config.anchor,
+            anchor=layout.anchor,
             horizontals=[
                 ("Shoulder Front", meas.RüL - meas.VL),  # TODO check VL vs VL2
                 ("Shoulder Back", 0),
                 ("Chest", meas.AlT),
                 ("Waist", meas.RüL),
                 ("Hip", meas.RüL + meas.HüT),
-                ("Hem", model.MoL),
+                ("Hem", MoL),
             ],
             verticals=[
                 ("Center Back", 0),
@@ -110,15 +120,15 @@ class TopGrid:
                 ("Dart Back", hip_adj + meas.RüB / 2),
                 ("Armscye Back", hip_adj + meas.RüB),
                 ("Side Back", hip_adj + meas.RüB + meas.ArD * 2 / 3),
-                ("Side Front", hip_adj + meas.RüB + meas.ArD * 2 / 3 + config.margin),
-                ("Armscye Front", hip_adj + meas.RüB + meas.ArD + config.margin),
+                ("Side Front", hip_adj + meas.RüB + meas.ArD * 2 / 3 + layout.margin),
+                ("Armscye Front", hip_adj + meas.RüB + meas.ArD + layout.margin),
                 (
                     "Bustpoint",
-                    hip_adj + meas.RüB + meas.ArD + meas.BrB - bust_pos + config.margin,
+                    hip_adj + meas.RüB + meas.ArD + meas.BrB - bust_pos + layout.margin,
                 ),
                 (
                     "Center Front",
-                    hip_adj + meas.RüB + meas.ArD + meas.BrB + config.margin,
+                    hip_adj + meas.RüB + meas.ArD + meas.BrB + layout.margin,
                 ),
             ],
             part_name="Grid",

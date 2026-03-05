@@ -694,13 +694,13 @@ class PatternPart(NamedAccessMixin):
         return added_mixed
 
     def _project_dart_notches_to_sa(self) -> None:
-        """Project existing dart-leg notches onto the seam-allowance edge.
+        """Project dart-leg and dart-center notches onto the SA edge.
 
-        Called automatically at the end of :meth:`add_seam_allowance`.  It
-        finds every seam-line dart notch (``role="dart_notch"``,
-        ``is_seam_allowance=False``, ``is_seam_notch=False``) and creates a
-        matching notch on the nearest SA edge, mirroring what
-        :meth:`add_notches` does when SA elements are already present.
+        Called at the end of :meth:`add_seam_allowance`.  For leg notches the
+        position is projected perpendicularly onto the nearest SA edge while
+        the roof-line orientation is preserved.  For the center notch the fold
+        line is intersected with every SA edge so the result always lands
+        exactly on the fold line, bypassing the roof knick-point.
         """
         sa_geoms: list[Segment | CubicBezier] = [
             e.geometry
@@ -718,7 +718,7 @@ class PatternPart(NamedAccessMixin):
 
         candidates = [
             e for e in self.elements
-            if e.role == "dart_notch"
+            if e.role in ("dart_notch", "dart_center_notch")
             and not e.is_seam_allowance
             and not e.is_seam_notch
             and isinstance(e.geometry, Triangle)
@@ -739,23 +739,84 @@ class PatternPart(NamedAccessMixin):
             if sa_edge is None:
                 continue
 
-            sa_pt, sa_along, sa_normal = project_onto_edge(sa_edge, base_centre, inward_ref)
-            along_pt = Point(*sa_along)
-            normal_pt = Point(*sa_normal)
+            # For dart_center_notch use _sa_center (dart.tip) as inward ref,
+            # not the centroid which can be on the wrong side of the roof.
+            _notch_inward = getattr(seam_elem, "_sa_center", None)
+            _effective_inward = _notch_inward if _notch_inward is not None else inward_ref
 
-            # Determine whether this is a double (back) notch: two triangles
-            # share the same base centre within a small tolerance.
-            is_back = any(
-                e is not seam_elem
-                and e.role == "dart_notch"
-                and not e.is_seam_allowance
-                and not e.is_seam_notch
-                and isinstance(e.geometry, Triangle)
-                and Point(
-                    (e.geometry.p1.x + e.geometry.p2.x) / 2,
-                    (e.geometry.p1.y + e.geometry.p2.y) / 2,
-                ).distance_to(base_centre) < 1.0
-                for e in self.elements
+            if seam_elem.role == "dart_center_notch":
+                # Intersect the fold line (extended past dart.roof) with every
+                # SA edge to find a point exactly on the fold line.
+                import numpy as _np_cn
+                from .geometry import Ray as _Ray, intersect as _intersect_geom
+
+                _dart = getattr(seam_elem, "_dart_ref", None)
+                _fold_sa_pt: Point | None = None
+                if _dart is not None:
+                    _outward_dir = _dart.roof.coords - _dart.tip.coords
+                    _od_norm = float(_np_cn.linalg.norm(_outward_dir))
+                    if _od_norm > 1e-12:
+                        _outward_dir = _outward_dir / _od_norm
+                        _fold_ray = _Ray(_dart.roof, _outward_dir)
+                        _best_d = float("inf")
+                        for _seg in sa_geoms:
+                            try:
+                                _hits = _intersect_geom(_fold_ray, _seg)
+                            except Exception:
+                                continue
+                            for _h in _hits:
+                                _d = _dart.roof.distance_to(_h)
+                                if _d < _best_d:
+                                    _best_d = _d
+                                    _fold_sa_pt = _h
+
+                # Preserve orientation from the seam-line triangle.
+                orig_along = tri.p2 - tri.p1
+                _oa_norm = float(_np_cn.linalg.norm(orig_along.coords))
+                orig_along_u = orig_along.coords / _oa_norm if _oa_norm > 1e-12 else orig_along.coords
+                orig_normal = tri.p3 - base_centre
+                _on_norm = float(_np_cn.linalg.norm(orig_normal.coords))
+                orig_normal_u = orig_normal.coords / _on_norm if _on_norm > 1e-12 else orig_normal.coords
+
+                if _fold_sa_pt is None:
+                    _fold_sa_pt, _, _ = project_onto_edge(sa_edge, base_centre, _effective_inward)
+
+                sa_pt = _fold_sa_pt
+                along_pt = Point(*orig_along_u)
+                normal_pt = Point(*orig_normal_u)
+            else:
+                # Leg notch: project leg point onto SA edge for position,
+                # but preserve the roof-direction orientation.
+                import numpy as _np_leg_sa
+
+                orig_along_l = tri.p2 - tri.p1
+                _oal_n = float(_np_leg_sa.linalg.norm(orig_along_l.coords))
+                orig_along_lu = orig_along_l.coords / _oal_n if _oal_n > 1e-12 else orig_along_l.coords
+                orig_normal_l = tri.p3 - base_centre
+                _onl_n = float(_np_leg_sa.linalg.norm(orig_normal_l.coords))
+                orig_normal_lu = orig_normal_l.coords / _onl_n if _onl_n > 1e-12 else orig_normal_l.coords
+
+                _leg_pt_l = getattr(seam_elem, "_leg_pt", None)
+                _proj_ref = _leg_pt_l if _leg_pt_l is not None else base_centre
+                sa_pt, _, _ = project_onto_edge(sa_edge, _proj_ref, inward_ref)
+                along_pt = Point(*orig_along_lu)
+                normal_pt = Point(*orig_normal_lu)
+
+            # Center notch is never a back (double) notch.
+            is_back = (
+                seam_elem.role != "dart_center_notch"
+                and any(
+                    e is not seam_elem
+                    and e.role == "dart_notch"
+                    and not e.is_seam_allowance
+                    and not e.is_seam_notch
+                    and isinstance(e.geometry, Triangle)
+                    and Point(
+                        (e.geometry.p1.x + e.geometry.p2.x) / 2,
+                        (e.geometry.p1.y + e.geometry.p2.y) / 2,
+                    ).distance_to(base_centre) < 1.0
+                    for e in self.elements
+                )
             )
 
             gap = half_w * 2 * 0.5
@@ -763,6 +824,7 @@ class PatternPart(NamedAccessMixin):
                 [-(half_w + gap / 2), +(half_w + gap / 2)] if is_back else [0.0]
             )
 
+            sa_role = seam_elem.role  # preserve "dart_center_notch" vs "dart_notch"
             for offset in offsets:
                 centre = sa_pt + along_pt * offset
                 tip = centre + normal_pt * length
@@ -770,7 +832,7 @@ class PatternPart(NamedAccessMixin):
                 br = centre + along_pt * half_w
                 sa_notch_elem = self.append(Triangle(bl, br, tip))
                 sa_notch_elem.is_seam_allowance = True
-                sa_notch_elem.role = "dart_notch"
+                sa_notch_elem.role = sa_role
 
             seam_elem.is_seam_notch = True
 
@@ -917,12 +979,8 @@ class PatternPart(NamedAccessMixin):
             # Fold / crease line
             _add(PatternElement(dart.fold_line, style=_fold, role="dart_fold"))
 
-            # Abnäherdach roof outline — part of the SA polygon.
-            # The offset must go away from the dart tip (outward across the
-            # mouth) rather than away from the part centroid, which fails for
-            # shoulder darts whose roof segments point inward.  We set
-            # _sa_center = dart.tip on each roof element; add_seam_allowance()
-            # uses this instead of the centroid for these segments only.
+            # Abnäherdach roof — _sa_center=dart.tip so the SA offset goes
+            # away from the tip regardless of part centroid position.
             roof = dart.roof
             roof_a = _add(
                 PatternElement(
@@ -943,15 +1001,35 @@ class PatternPart(NamedAccessMixin):
             )
             roof_b._sa_center = dart.tip
 
-            # Centre notch at the roof peak
+            # Center notch at roof peak: slit on the fold line pointing toward
+            # dart.tip.  _dart_ref lets _project_dart_notches_to_sa() find the
+            # exact SA position via fold-line intersection.
             if notches:
-                delta = dart.roof - dart.center
-                mouth_edge = Segment(dart.leg_a + delta, dart.leg_b + delta)
-                before = len(self.elements)
-                self.add_notches(roof, seam_edge=mouth_edge, **_nkw, symbol="")
-                for e in self.elements[before:]:
-                    e.role = "dart_notch"
-                    created.append(e)
+                import numpy as _np_local
+
+                nkw_len = _nkw.get("length", 0.8 * CM)
+                nkw_wid = _nkw.get("width", 0.4 * CM)
+                half_w_cn = nkw_wid / 2 / 5  # slit: 1/5 of half-width
+
+                # along = perp to fold line; normal = toward dart.tip
+                _fold_dir = dart.tip.coords - dart.center.coords
+                _fold_norm = float(_np_local.linalg.norm(_fold_dir))
+                if _fold_norm > 1e-12:
+                    _fold_dir = _fold_dir / _fold_norm
+                _along_cn = _np_local.array([-_fold_dir[1], _fold_dir[0]])
+                _normal_cn = _fold_dir
+                along_pt_cn = Point(*_along_cn)
+                normal_pt_cn = Point(*_normal_cn)
+
+                cn_bl = roof - along_pt_cn * half_w_cn
+                cn_br = roof + along_pt_cn * half_w_cn
+                cn_tip_pt = roof + normal_pt_cn * nkw_len
+                cn_elem = _add(PatternElement(
+                    Triangle(cn_bl, cn_br, cn_tip_pt),
+                    role="dart_center_notch",
+                ))
+                cn_elem._sa_center = dart.tip
+                cn_elem._dart_ref = dart
 
             # Tip precision mark
             if precision_tip:
@@ -968,15 +1046,42 @@ class PatternPart(NamedAccessMixin):
                         )
                     )
 
-            # Leg notches
+            # Leg notches — base at leg point, along = roof direction,
+            # normal = perp to roof pointing toward dart.tip.
             if notches:
-                mouth_edge = Segment(dart.leg_a, dart.leg_b)
-                for pt in (dart.leg_a, dart.leg_b):
-                    before = len(self.elements)
-                    self.add_notches(pt, seam_edge=mouth_edge, **_nkw)
-                    for e in self.elements[before:]:
-                        e.role = "dart_notch"
-                        created.append(e)
+                import numpy as _np_leg
+
+                nkw_len_l = _nkw.get("length", 0.8 * CM)
+                nkw_wid_l = _nkw.get("width", 0.4 * CM)
+                half_w_l = nkw_wid_l / 2
+
+                for leg_pt, roof_seg_end in (
+                    (dart.leg_a, roof),
+                    (dart.leg_b, roof),
+                ):
+                    _rv = roof_seg_end.coords - leg_pt.coords
+                    _rn = float(_np_leg.linalg.norm(_rv))
+                    if _rn < 1e-12:
+                        continue
+                    _rd = _rv / _rn
+                    _along_l = _rd
+                    _perp = _np_leg.array([-_rd[1], _rd[0]])
+                    _to_tip = dart.tip.coords - leg_pt.coords
+                    if float(_np_leg.dot(_perp, _to_tip)) < 0:
+                        _perp = -_perp
+                    _normal_l = _perp
+                    along_pt_l = Point(*_along_l)
+                    normal_pt_l = Point(*_normal_l)
+
+                    ln_bl = leg_pt - along_pt_l * half_w_l
+                    ln_br = leg_pt + along_pt_l * half_w_l
+                    ln_tip = leg_pt + normal_pt_l * nkw_len_l
+                    ln_elem = _add(PatternElement(
+                        Triangle(ln_bl, ln_br, ln_tip),
+                        role="dart_notch",
+                    ))
+                    ln_elem._dart_ref = dart
+                    ln_elem._leg_pt = leg_pt
 
         else:
             # Rhombus dart — four diamond sides

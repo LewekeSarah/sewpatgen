@@ -3,20 +3,14 @@
 
 from pathlib import Path
 
-from sewpat import (
-    GarmentPart,
-)
+from sewpat import GarmentPart
 from sewpat.blocks import TopBlock
+from sewpat.fitclass import FitClass
 from sewpat.grids import TopGrid
-from sewpat.measurements import (
-    Allowance,
-    BlouseMeasurements,
-    ModelConfig,
-    make_blouse_measurements,
-)
+from sewpat.measurements import GarmentConfig, make_blouse_measurements
 from sewpat.pages import DinA0
 from sewpat.pattern import Pattern, PatternConfig
-from sewpat.person import BalanceAdjustments, Person
+from sewpat.person import BalanceAdjustments, Person, PersonalAdjustments
 from sewpat.render import export_pattern_svg_mm
 from sewpat.units import CM
 
@@ -37,24 +31,19 @@ def make_person() -> Person:
     )
 
 
-def make_allowance() -> Allowance:
-    return Allowance(
-        RüB=1.0 * CM,
-        ArD=2.0 * CM,
-        BrB=1.5 * CM,
-        AlT=1.5 * CM,
-        TaU=8.0 * CM,
-        HüU=6.0 * CM,
+def make_fit_class() -> FitClass:
+    return FitClass(pk=4, _ZuBrA=0.5 * CM)
+
+
+def make_adjustments() -> PersonalAdjustments:
+    return PersonalAdjustments(
+        BeckenAdjustment=1 * CM,
+        balance=BalanceAdjustments(VL=-0.9 * CM),
     )
 
 
-def make_model_config() -> ModelConfig:
-    # TODO the ZuBrA depends on the Passformklasse PK <4: 0-0.5cm, 5 <= PK < 8: 1cm, PK >=0: 1.5cm
-    return ModelConfig(MoL=75 * CM, BeckenAdjustment=1 * CM, ZuBrA=0.5 * CM)
-
-
-def make_balance() -> BalanceAdjustments:
-    return BalanceAdjustments(VL=-0.9 * CM)
+def make_config() -> GarmentConfig:
+    return GarmentConfig(MoL=75 * CM)
 
 
 class Part(GarmentPart):
@@ -64,25 +53,22 @@ class Part(GarmentPart):
     BLOCK_FRONT = "Block Front"
 
 
-# -----------------------------------------------------------------------
-def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
+def make_blouse(person: Person, fit_class: FitClass, adjustments: PersonalAdjustments, config: GarmentConfig) -> Pattern:
+    from sewpat.measurements import make_blouse_measurements
+    meas = make_blouse_measurements(person, fit_class, adjustments)
 
-    config = PatternConfig()
-    pattern = Pattern(name="Waisted Top with Darts Block", anchor=config.anchor)
+    layout = PatternConfig()
+    pattern = Pattern(name="Waisted Top with Darts Block", anchor=layout.anchor)
 
-    # -----------------------------------------------------------------------
-    # Grid — construction detail lines
-    # -----------------------------------------------------------------------
-    grid = TopGrid.from_measurements(meas=meas, model=model, config=config)
+    grid = TopGrid.from_measurements(meas=meas, fit_class_or_model=fit_class, adjustments=adjustments, config=config, layout=layout)
     pattern.add_part(grid.part)
 
-    # -----------------------------------------------------------------------
-    # Block — both pieces built and returned as a typed TopBlock
-    # -----------------------------------------------------------------------
     block = TopBlock.from_measurements(
         meas=meas,
-        model=model,
+        fit_class_or_model=fit_class,
+        adjustments=adjustments,
         config=config,
+        layout=layout,
         back_name=Part.BLOCK_BACK,
         front_name=Part.BLOCK_FRONT,
     )
@@ -93,15 +79,14 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
 
 
 if __name__ == "__main__":
-    person = make_person()
-    allowance = make_allowance()
-    balance = make_balance()
-    measurements = make_blouse_measurements(person, allowance, balance)
-    model_config = make_model_config()
-    pattern = make_blouse(measurements, model_config)
+    person      = make_person()
+    fit_class   = make_fit_class()
+    adjustments = make_adjustments()
+    config      = make_config()
+    pattern     = make_blouse(person, fit_class, adjustments, config)
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
-    grid_parts = [Part.GRID]
+    grid_parts    = [Part.GRID]
 
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
@@ -111,7 +96,7 @@ if __name__ == "__main__":
         filename=str(Path(__file__).parent / "top_waisted_dart_grid.svg"),
         parts=grid_parts + pattern_parts,
         show_bezier_control_points=False,
-        show_construction=True,
+        show_construction=False,
         show_seam_allowance=True
     )
 

@@ -615,14 +615,16 @@ class TestProjectDartNotchesToSA(unittest.TestCase):
         """100×100 mm square with a triangle dart on the top edge, SA not yet added."""
         from sewpat.geometry import Dart
         part = PatternPart(name="DartSquare")
+        dart_edge = Segment(Point(0, 100), Point(0, 0))
         part.append(Segment(Point(0, 0),   Point(100, 0)),   is_outline=True)
         part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True)
         part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
-        part.append(Segment(Point(0, 100), Point(0, 0)),     is_outline=True)
-        dart = Dart.from_tip_and_legs(
+        part.append(dart_edge,     is_outline=True)
+        dart = Dart.from_edge_at_legs(
             tip=Point(50, 80),
             leg_a=Point(40, 0),
             leg_b=Point(60, 0),
+            edge=dart_edge
         )
         part.add_dart(dart)
         return part

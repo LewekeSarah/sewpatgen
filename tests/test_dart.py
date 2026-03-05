@@ -1,9 +1,9 @@
 """Tests for Dart geometry and PatternPart.add_dart()."""
 
 import math
-import warnings
 
 import pytest
+import warnings
 
 from sewpat import CM, MM, Dart, DartResult, DartType, Point, Segment
 from sewpat.geometry import CubicBezier
@@ -296,6 +296,18 @@ class TestDartSecondTipWarning:
                 dart_type=DartType.RHOMBUS,
                 second_tip=self._second_tip,
             )
+
+    def test_rhombus_with_second_tip(self) -> None:
+        d = Dart(
+            Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+            dart_type=DartType.RHOMBUS,
+            second_tip=self._second_tip,
+        )
+        assert d.second_tip == self._second_tip
+
+    def test_triangle_without_second_tip(self) -> None:
+        d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80))
+        assert d.second_tip is None
 
 
 class TestDartSplit:

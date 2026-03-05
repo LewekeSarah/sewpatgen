@@ -1,7 +1,7 @@
 """Person related information required for pattern construction"""
 
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from sewpat.units import CM
@@ -19,30 +19,49 @@ class Gender(Enum):
 
 @dataclass
 class Person:
-    BrU: float | None = None  # Brustumfang
-    TaU: float | None = None  # Taillenumfang
-    HüU: float | None = None  # Hüftumfang
-    HüT: float | None = None  # Hüfttiefe
-    BrT: float | None = None  # Brusttiefe
-    HlB: float | None = None  # Halslochbreite
-    BrPA: float | None = None  # Brustpunktabstand
-    SuB: float | None = None  # Schulterbreite
-    RüL: float | None = None  # Rückenlänge
-    VL: float | None = None  # Vorderlänge
-    SiH: float | None = None  # Sitzhöhe
-    SrH: float | None = None  # Schritthöhe
-    RüB: float | None = None  # Rückenbreite
-    AlT: float | None = None  # Armlochtiefe
-    ArD: float | None = None  # Armdurchmesser
-    BrB: float | None = None  # Brustbreite
-    KöH: float | None = None  # Körperhöhe
-    gender: Gender = Gender.female  # Geschlecht
+    bust: float | None = None            # BrU — Brustumfang
+    waist: float | None = None           # TaU — Taillenumfang
+    hip: float | None = None             # HüU — Hüftumfang
+    hip_depth: float | None = None       # HüT — Hüfttiefe
+    bust_depth: float | None = None      # BrT — Brusttiefe
+    neck_size: float | None = None       # HlB — Halslochbreite
+    bust_span: float | None = None       # BrPA — Brustpunktabstand
+    shoulder_width: float | None = None  # SuB — Schulterbreite
+    back_length: float | None = None     # RüL — Rückenlänge
+    front_length: float | None = None    # VL  — Vorderlänge (VL2 variant: balancing, future feature)
+    body_rise: float | None = None       # SiH — Sitzhöhe
+    inseam: float | None = None          # SrH — Schritthöhe
+    back_width: float | None = None      # RüB — Rückenbreite
+    armscye_depth: float | None = None   # AlT — Armlochtiefe
+    armscye_width: float | None = None   # ArD — Armdurchmesser
+    chest_width: float | None = None     # BrB — Brustbreite
+    height: float | None = None          # KöH — Körperhöhe
+    gender: Gender = Gender.female       # Geschlecht
 
 
 @dataclass
 class BalanceAdjustments:
-    RüL: float = 0.0
-    VL: float = 0.0
+    back_length: float = 0.0   # RüL — Rückenlänge
+    front_length: float = 0.0  # VL  — Vorderlänge
+
+
+@dataclass(frozen=True)
+class PersonalAdjustments:
+    """Body-deviation corrections for non-standard figures.
+
+    These are individual corrections applied on top of standard block
+    construction.  Two people with the same measurements and
+    :class:`~sewpat.fitclass.FitClass` may still need different adjustments.
+
+    Attributes:
+        hip_offset: Horizontal hip offset — shifts the hip-adjustment
+            vertical grid line outward (positive) or inward (negative).
+            (BeckenAdjustment — Becken-Korrektur)
+        balance: Front/back length balance corrections.
+    """
+
+    hip_offset: float = 2.0  # BeckenAdjustment — Becken-Korrektur
+    balance: BalanceAdjustments = field(default_factory=BalanceAdjustments)
 
 
 class PersonAnalyser:
@@ -56,60 +75,60 @@ class PersonAnalyser:
         self.calculate_measurements()
         self.balance_person()
 
-    def _set_alt(self):
-        if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
-            self.person.AlT = (
-                self.person.BrU / 10 + 11 * CM
-                if self.person.AlT is None
-                else self.person.AlT
+    def _set_armscye_depth(self):
+        if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
+            self.person.armscye_depth = (
+                self.person.bust / 10 + 11 * CM
+                if self.person.armscye_depth is None
+                else self.person.armscye_depth
             )
-        if self.person.AlT is None:
+        if self.person.armscye_depth is None:
             raise NotImplementedError(
-                "Matching AlT formula for given bustline is not yet implemented."
+                "Matching armscye_depth formula for given bustline is not yet implemented."
             )
 
-    def _set_ard(self):
-        if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
-            self.person.ArD = (
-                self.person.BrU / 8 - 1.5 * CM
-                if self.person.ArD is None
-                else self.person.ArD
+    def _set_armscye_width(self):
+        if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
+            self.person.armscye_width = (
+                self.person.bust / 8 - 1.5 * CM
+                if self.person.armscye_width is None
+                else self.person.armscye_width
             )
-        if self.person.ArD is None:
+        if self.person.armscye_width is None:
             raise NotImplementedError(
-                "Matching ArD formula for given bustline is not yet implemented."
+                "Matching armscye_width formula for given bustline is not yet implemented."
             )
 
-    def _set_brb(self):
-        if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
-            self.person.BrB = (
-                self.person.BrU / 4 - 4.0 * CM
-                if self.person.BrB is None
-                else self.person.BrB
+    def _set_chest_width(self):
+        if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
+            self.person.chest_width = (
+                self.person.bust / 4 - 4.0 * CM
+                if self.person.chest_width is None
+                else self.person.chest_width
             )
-        if self.person.BrB is None:
+        if self.person.chest_width is None:
             raise NotImplementedError(
-                "Matching BrB formula for given bustline is not yet implemented."
+                "Matching chest_width formula for given bustline is not yet implemented."
             )
 
-    def _set_rüb(self):
-        if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
-            self.person.RüB = (
-                self.person.BrU / 8 + 5.5 * CM
-                if self.person.RüB is None
-                else self.person.RüB
+    def _set_back_width(self):
+        if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
+            self.person.back_width = (
+                self.person.bust / 8 + 5.5 * CM
+                if self.person.back_width is None
+                else self.person.back_width
             )
-        if self.person.RüB is None:
+        if self.person.back_width is None:
             raise NotImplementedError(
                 "Matching formula for given bustline is not yet implemented."
             )
 
     def calculate_measurements(self):
-        if self.person.BrU is not None:
-            self._set_alt()
-            self._set_ard()
-            self._set_brb()
-            self._set_rüb()
+        if self.person.bust is not None:
+            self._set_armscye_depth()
+            self._set_armscye_width()
+            self._set_chest_width()
+            self._set_back_width()
 
     def balance_person(self):
         person_balanced = copy.deepcopy(self.person)
@@ -119,8 +138,8 @@ class PersonAnalyser:
                     key, person_balanced.__getattribute__(key) + val
                 )
         if person_balanced.gender == Gender.female:
-            if (person_balanced.VL - person_balanced.RüL) > self.optimal_balance:
-                raise ValueError("VL and RüB are not properly balanced")
+            if (person_balanced.front_length - person_balanced.back_length) > self.optimal_balance:
+                raise ValueError("front_length and back_length are not properly balanced")
             else:
                 self.person_balanced = person_balanced
 
@@ -128,7 +147,7 @@ class PersonAnalyser:
         return self.person_balanced
 
     def get_optimal_balance(self) -> float:
-        if (self.person.BrU > 80 * CM) and (self.person.BrU <= 89 * CM):
+        if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
             return 3.5 * CM
         else:
             raise NotImplementedError(

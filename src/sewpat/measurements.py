@@ -1,8 +1,13 @@
-import warnings
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from sewpat.person import BalanceAdjustments, Gender, Person, PersonAnalyser
+import warnings
+
+from sewpat.person import BalanceAdjustments, Gender, Person, PersonalAdjustments, PersonAnalyser
 from sewpat.units import CM
+
+if TYPE_CHECKING:
+    from sewpat.fitclass import FitClass
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -33,6 +38,27 @@ class Allowance:
     def __post_init__(self):
         if (self.RüB is not None) and (self.ArD is not None) and (self.BrB is not None):
             self.BrU = 2 * (self.RüB + self.ArD + self.BrB)
+
+    @classmethod
+    def from_fit_class(cls, fc: "FitClass") -> "Allowance":
+        """Derive standard allowances from a :class:`~sewpat.fitclass.FitClass`.
+
+        The lookup table follows the Mueller & Sohn Rundschau system.
+        Callers who need non-standard values can still construct
+        :class:`Allowance` directly.
+
+        TODO: replace with authoritative Mueller & Sohn per-PK table.
+        The values below are placeholders matching the existing hard-coded
+        example constants and will be refined once the full table is available.
+        """
+        if fc.pk < 4:
+            return cls(RüB=0.5 * CM, ArD=1.5 * CM, BrB=0.5 * CM,
+                       AlT=1.0 * CM, TaU=6.0 * CM, HüU=4.0 * CM)
+        if fc.pk < 8:
+            return cls(RüB=1.0 * CM, ArD=2.0 * CM, BrB=1.5 * CM,
+                       AlT=1.5 * CM, TaU=8.0 * CM, HüU=6.0 * CM)
+        return cls(RüB=2.0 * CM, ArD=3.0 * CM, BrB=2.5 * CM,
+                   AlT=2.0 * CM, TaU=10.0 * CM, HüU=8.0 * CM)
 
 
 @dataclass
@@ -87,14 +113,31 @@ class BlouseMeasurements:
             raise ValueError("Brustline measurements are not matching.")
 
 
-@dataclass
-class ModelConfig:
+@dataclass(frozen=True)
+class GarmentConfig:
+    """Pure garment-design choices — independent of body measurements and fit.
+
+    Attributes:
+        MoL:             Modell-Länge — finished garment length (hem to nape).
+        seam_allowance:  Nahtzugabe — seam allowance width added to all seams.
+        SaW:             Saumweite — hem width (optional; used for trousers).
+    """
     MoL: float
-    BeckenAdjustment: float | None = None
+    seam_allowance: float = 1 * CM
+    SaW: float | None = None
+
+
+@dataclass(frozen=True)
+class TrouserConfig(GarmentConfig):
+    """Garment-design choices specific to trousers.
+
+    Extends :class:`GarmentConfig` with trouser-specific fields.
+
+    Attributes:
+        ZuvHoB: Zugabe vordere Hosenbreite — front trouser-width offset.
+    """
     ZuvHoB: float | None = None
-    SaW: float | None = None  # Saumweite
-    seam_allowance: float = 1 * CM  # Nahtzugabe
-    ZuBrA: float | None = None  # Zugabe Brustpunktabstand
+
 
 
 @dataclass
@@ -207,9 +250,6 @@ def calculate_waist_distribution(
 
     Returns:
         :class:`WaistDistribution` with all computed values.
-
-    Raises:
-        warnings.warn: If clamping leaves undistributed excess > 0.5 cm.
     """
     # Import here to avoid a circular import at module level.
     from sewpat.geometry import Segment  # noqa: PLC0415
@@ -250,13 +290,34 @@ def calculate_waist_distribution(
 
 
 def make_blouse_measurements(
-    person: Person, allowance: Allowance, balance: BalanceAdjustments
-) -> BlouseMeasurements:
-    person = PersonAnalyser(person, balance).get_balanced_person()
+    person: Person,
+    fit_class_or_allowance: "FitClass | Allowance | None" = None,
+    adjustments: "PersonalAdjustments | None" = None,
+) -> "BlouseMeasurements":
+    """Build ease-included blouse measurements from body measurements and fit.
+
+    Args:
+        person: Body measurements.
+        fit_class_or_allowance: :class:`~sewpat.fitclass.FitClass` or explicit
+            :class:`Allowance`.
+        adjustments: Personal body-deviation corrections.
+    """
+    from sewpat.fitclass import FitClass  # local import to avoid circularity
+
+    if isinstance(fit_class_or_allowance, FitClass):
+        resolved_allowance = Allowance.from_fit_class(fit_class_or_allowance)
+    elif fit_class_or_allowance is not None:
+        resolved_allowance = fit_class_or_allowance
+    else:
+        raise TypeError("Provide a FitClass or Allowance as the second argument.")
+
+    resolved_balance = adjustments.balance if isinstance(adjustments, PersonalAdjustments) else BalanceAdjustments()
+
+    person = PersonAnalyser(person, resolved_balance).get_balanced_person()
 
     measurements = {key: val for key, val in person.__dict__.items() if val is not None}
     allowances = {
-        key: val for key, val in allowance.__dict__.items() if val is not None
+        key: val for key, val in resolved_allowance.__dict__.items() if val is not None
     }
     width_instead_update = {"TaU", "BrU", "HüU"}
     for key in (
@@ -266,7 +327,7 @@ def make_blouse_measurements(
     ):
         measurements[key] += allowances[key]
     for perimeter, width in zip(["TaU", "BrU", "HüU"], ["TaW", "BrW", "HüW"]):
-        measurements[width] = measurements[perimeter] + getattr(allowance, perimeter)
+        measurements[width] = measurements[perimeter] + getattr(resolved_allowance, perimeter)
     measurements.pop("KöH")
 
     return BlouseMeasurements(**measurements)

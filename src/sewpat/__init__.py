@@ -18,17 +18,26 @@ from .geometry import (
     seam_length,
     segment_to_intersection,
 )
+from .fitclass import FitClass
 from .measurements import (
     Allowance,
     BlouseMeasurements,
+    GarmentConfig,
     HipDistribution,
-    ModelConfig,
+    TrouserConfig,
     TrouserMeasurements,
     WaistDistribution,
     calculate_hip_distribution,
     calculate_waist_distribution,
     make_blouse_measurements,
     make_measurements_trouser,
+)
+from .person import (
+    BalanceAdjustments,
+    Gender,
+    Person,
+    PersonalAdjustments,
+    PersonAnalyser,
 )
 from .pages import DinA0, DinA1, DinA2, DinA4
 from .blocks import TopBlock, TopBlockBack, TopBlockFront
@@ -111,9 +120,17 @@ __all__ = [
     "Allowance",
     "BlouseMeasurements",
     "TrouserMeasurements",
-    "ModelConfig",
+    "GarmentConfig",
+    "TrouserConfig",
+    "FitClass",
     "make_blouse_measurements",
     "make_measurements_trouser",
+    # Person
+    "Person",
+    "Gender",
+    "BalanceAdjustments",
+    "PersonalAdjustments",
+    "PersonAnalyser",
     # Style
     "StyleOptions",
     "Marker",

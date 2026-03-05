@@ -8,12 +8,15 @@ edge is a typed, named attribute with full IDE autocomplete.
 Example::
 
     from sewpat.blocks import TopBlock
-    from sewpat.grids import TopGrid
+    from sewpat.fitclass import FitClass
+    from sewpat.measurements import GarmentConfig
+    from sewpat.person import PersonalAdjustments
 
-    grid  = TopGrid.from_measurements(meas, model, config)
-    block = TopBlock.from_measurements(meas, model, config)
+    fc  = FitClass(pk=4)
+    adj = PersonalAdjustments(BeckenAdjustment=1 * CM)
+    cfg = GarmentConfig(MoL=75 * CM)
 
-    pattern.add_part(grid.part)
+    block = TopBlock.from_measurements(meas, fc, adj, cfg)
     pattern.add_part(block.back.part)
     pattern.add_part(block.front.part)
 
@@ -38,10 +41,12 @@ from .grids import TopGrid
 from .measurements import (
     BlouseMeasurements,
     ModelConfig,
+    GarmentConfig,
     calculate_hip_distribution,
     calculate_waist_distribution,
 )
 from .pattern import PatternConfig, PatternPart
+from .person import PersonalAdjustments
 from .style import STYLE_HEM, STYLE_STITCH, STYLE_STITCH_BEVEL
 from .units import CM
 
@@ -184,22 +189,21 @@ class _Darts:
 def _build_back_geometry(
     grid: TopGrid,
     meas: BlouseMeasurements,
-    model: ModelConfig,
-    config: PatternConfig,
+    anchor: Point,
+    BeckenAdjustment: float,
 ) -> _BackGeometry:
     """Compute all key points and curves for the back piece."""
 
-    anchor = config.anchor
     hem_center_back          = intersect(grid.center_back, grid.hem)[0]
     waist_center_back        = intersect(grid.center_back, grid.waist)[0]
     hip_center_back          = intersect(grid.center_back, grid.hip)[0]
-    waist_center_back_adj    = waist_center_back.translate(model.BeckenAdjustment, 0)
-    hip_center_back_adj      = hip_center_back.translate(model.BeckenAdjustment, 0)
-    hem_center_back_adj      = hem_center_back.translate(model.BeckenAdjustment, 0)
+    waist_center_back_adj    = waist_center_back.translate(BeckenAdjustment, 0)
+    hip_center_back_adj      = hip_center_back.translate(BeckenAdjustment, 0)
+    hem_center_back_adj      = hem_center_back.translate(BeckenAdjustment, 0)
 
-    armscye_chest        = intersect(grid.sleeve_back,   grid.chest)[0]
+    armscye_chest        = intersect(grid.armscye_back,  grid.chest)[0]
     side_chest           = intersect(grid.side_back,     grid.chest)[0]
-    armscye_shoulder     = intersect(grid.sleeve_back,   grid.shoulder_back)[0]
+    armscye_shoulder     = intersect(grid.armscye_back,  grid.shoulder_back)[0]
     neck_shoulder        = intersect(grid.shoulder_back, grid.neck)[0]
     armscye_shoulder_raised = armscye_shoulder.translate(0, _SHOULDER_RAISE)
 
@@ -275,7 +279,7 @@ def _build_front_geometry(
     """Compute all key points and curves for the front piece."""
 
     side_front_chest    = intersect(grid.side_front,   grid.chest)[0]
-    armscye_front_chest = intersect(grid.sleeve_front, grid.chest)[0]
+    armscye_front_chest = intersect(grid.armscye_front, grid.chest)[0]
 
     # Bust point
     bust_point_shoulder_line = intersect(grid.shoulder_front, grid.bust_point)[0]
@@ -375,7 +379,6 @@ def _build_front_geometry(
 def _build_side_seams(
     grid: TopGrid,
     meas: BlouseMeasurements,
-    model: ModelConfig,
     back: _BackGeometry,
     front: _FrontGeometry,
     wd: "WaistDistribution",
@@ -505,7 +508,7 @@ def _assemble_back_part(
     sides: _SideSeams,
     darts: _Darts,
     shoulder_dart_back: Dart,
-    model: ModelConfig,
+    seam_allowance: float,
 ) -> None:
     """Add all elements to the back PatternPart in drawing order.
 
@@ -534,8 +537,8 @@ def _assemble_back_part(
     part.append(sides.side_hip_hem_back,                                style=STYLE_STITCH, is_outline=True)
     part.append(sides.hem_side_to_center_back,                          style=STYLE_HEM, is_outline=True)
 
-    if model.seam_allowance > 0:
-        part.add_seam_allowance(model.seam_allowance)
+    if seam_allowance > 0:
+        part.add_seam_allowance(seam_allowance)
     part.add_notches(back.armscye_control, seam_edge=back.armscye_back)
 
 
@@ -545,7 +548,7 @@ def _assemble_front_part(
     sides: _SideSeams,
     darts: _Darts,
     grid: TopGrid,
-    model: ModelConfig,
+    seam_allowance: float,
 ) -> None:
     """Add all elements to the front PatternPart in drawing order."""
 
@@ -575,8 +578,8 @@ def _assemble_front_part(
     part.append(sides.side_hip_hem_front,                                        style=STYLE_STITCH, is_outline=True)
     part.append(sides.hem_side_to_center_front,                                  style=STYLE_HEM, is_outline=True)
 
-    if model.seam_allowance > 0:
-        part.add_seam_allowance(model.seam_allowance)
+    if seam_allowance > 0:
+        part.add_seam_allowance(seam_allowance)
     part.add_notches(front.armscye_control, seam_edge=front.armscye_front_lower)
 
 
@@ -698,41 +701,46 @@ class TopBlock:
     def from_measurements(
         cls,
         meas: BlouseMeasurements,
-        model: ModelConfig,
-        config: PatternConfig | None = None,
+        fit_class_or_model: "FitClass | None" = None,
+        adjustments: PersonalAdjustments | None = None,
+        config: GarmentConfig | None = None,
+        layout: PatternConfig | None = None,
         back_name: str = "Block Back",
         front_name: str = "Block Front",
     ) -> "TopBlock":
         """Build and return a :class:`TopBlock` from measurements.
 
-        The two ``PatternPart`` objects inside the returned block already
-        contain every outline element, both darts with notches and precision
-        marks, and (when ``model.seam_allowance > 0``) the SA offset.
-        Add them directly to your pattern::
-
-            pattern.add_part(block.back.part)
             pattern.add_part(block.front.part)
 
         Args:
             meas: Blouse measurements (ease already included).
-            model: Model-level design choices (garment length, hip adjustment,
-                seam allowance, …).
-            config: Pattern configuration (anchor, inter-piece margin).
-                Defaults to a standard :class:`~sewpat.pattern.PatternConfig`.
-            back_name: Name for the back :class:`~sewpat.pattern.PatternPart`.
-            front_name: Name for the front :class:`~sewpat.pattern.PatternPart`.
+            fit_class_or_model: :class:`~sewpat.fitclass.FitClass`.
+            adjustments: Personal body-deviation corrections.
+            config: Garment-design choices (length, seam allowance).
+            layout: Pattern layout config (anchor, inter-piece margin).
+            back_name: Name for the back part.
+            front_name: Name for the front part.
 
         Returns:
-            A :class:`TopBlock` with fully constructed ``.back`` and
-            ``.front`` pieces.
+            A :class:`TopBlock` with fully constructed ``.back`` and ``.front`` pieces.
         """
-        if config is None:
-            config = PatternConfig()
+        from .fitclass import FitClass  # local import to avoid circularity
 
-        grid = TopGrid.from_measurements(meas=meas, model=model, config=config)
+        seam_allowance   = config.seam_allowance if config is not None else 1 * CM
+        BeckenAdjustment = adjustments.BeckenAdjustment if adjustments is not None else 0.0
+
+        layout = layout or PatternConfig()
+
+        grid = TopGrid.from_measurements(
+            meas=meas,
+            fit_class_or_model=fit_class_or_model,
+            adjustments=adjustments,
+            config=config,
+            layout=layout,
+        )
 
         # ── 1. Build geometry for each piece independently ───────────────────
-        back_geom  = _build_back_geometry(grid, meas, model, config)
+        back_geom  = _build_back_geometry(grid, meas, layout.anchor, BeckenAdjustment)
         front_geom = _build_front_geometry(grid, meas, back_geom)
 
         # ── 2. Compute waist / hip distribution ──────────────────────────────
@@ -752,7 +760,7 @@ class TopBlock:
         )
 
         # ── 3. Build shared side-seam geometry ───────────────────────────────
-        sides = _build_side_seams(grid, meas, model, back_geom, front_geom, wd, hd)
+        sides = _build_side_seams(grid, meas, back_geom, front_geom, wd, hd)
 
         # ── 4. Assemble pieces and extract darts ─────────────────────────────
         block_back  = PatternPart(name=back_name)
