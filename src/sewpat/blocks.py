@@ -18,19 +18,568 @@ Example::
     pattern.add_part(block.front.part)
 
     # Extend the sleeve edge with a collar:
-    pt_collar = block.back.pt_hÄP.translate(0, -2 * CM)
+    pt_collar = block.back.sleeve_control.translate(0, -2 * CM)
 """
 
 from dataclasses import dataclass
 
-from .geometry import CubicBezier, Dart, Point, Segment
+from .geometry import (
+    Circle,
+    CubicBezier,
+    Dart,
+    DartType,
+    Line,
+    Point,
+    Ray,
+    Segment,
+    intersect,
+)
 from .grids import TopGrid
-from .measurements import BlouseMeasurements, ModelConfig
+from .measurements import (
+    BlouseMeasurements,
+    ModelConfig,
+    calculate_hip_distribution,
+    calculate_waist_distribution,
+)
 from .pattern import PatternConfig, PatternPart
 from .style import STYLE_HEM, STYLE_STITCH, StyleOptions
-from .geometry import Circle, intersect, Line, Ray
 from .units import CM
 
+# ---------------------------------------------------------------------------
+# Construction constants
+# These are pattern-drafting constants that encode standard ease/lift values.
+# ---------------------------------------------------------------------------
+
+#: Vertical raise applied to the sleeve-back/shoulder intersection.
+_SHOULDER_RAISE: float = 1.5 * CM
+
+#: Back neck depth — how far the back neckline drops below the shoulder line.
+_NECK_DEPTH: float = 2.0 * CM
+
+#: Ease added to / subtracted from the shoulder seam.
+_SHOULDER_EASE: float = 1.0 * CM
+
+#: Front neckline offset added to the measured neck-to-bust depth.
+_NECKLINE_EASE: float = 1.5 * CM
+
+#: Sleeve-front control-point offsets (X, Y).
+_SLEEVE_FRONT_CP_X: float = -5.0 * CM
+_SLEEVE_FRONT_CP_Y: float = -3.0 * CM
+
+#: Length of the control-point tangent for the side-hip Bézier curves.
+_SIDE_HIP_TANGENT: float = 15.0 * CM
+
+#: Distance from the waist dart centre to its lower (hem-side) tip — back.
+_WAIST_DART_BACK_LOWER_TIP: float = 16.0 * CM
+
+#: Distance from the waist dart centre to its lower (hem-side) tip — front.
+_WAIST_DART_FRONT_LOWER_TIP: float = 12.0 * CM
+
+
+# ---------------------------------------------------------------------------
+# Internal geometry containers
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class _BackGeometry:
+    """All computed geometry for the back piece, prior to assembly."""
+
+    # Key points
+    anchor: Point
+    hem_center_back: Point
+    waist_center_back: Point
+    hip_center_back: Point
+    waist_center_back_adj: Point
+    hip_center_back_adj: Point
+    hem_center_back_adj: Point
+    sleeve_back_chest: Point
+    side_back_chest: Point
+    sleeve_back_shoulder: Point
+    sleeve_back_shoulder_raised: Point
+    neck_back_shoulder: Point
+    shoulder_back_neckline: Point
+    shoulder_dart_notch: Point
+    shoulder_blade_dart_tip: Point
+    sleeve_control: Point   # armscye notch (pt_hÄP)
+
+    # Curves and segments
+    sleeve_back: CubicBezier
+    neckline_back: CubicBezier
+    shoulder_back: Segment
+    shoulder_back_orig: Segment
+    shoulder_blade: Line
+
+
+@dataclass(frozen=True)
+class _FrontGeometry:
+    """All computed geometry for the front piece, prior to assembly."""
+
+    # Key points
+    side_front_chest: Point
+    sleeve_front_chest: Point
+    bust_point: Point
+    neckline_front_start: Point
+    center_front_shoulder_line: Point
+    shoulder_front_neckline_pt: Point
+    shoulder_sleeve_end: Point
+    shoulder_neckline_start: Point
+    sleeve_control: Point   # armscye notch (pt_vÄP)
+
+    # Curves and segments
+    sleeve_front_lower: CubicBezier
+    sleeve_front_upper: CubicBezier | None
+    neckline_front: CubicBezier
+    neckline_front_stub: CubicBezier | None
+    shoulder_sleeve: Segment
+    shoulder_neckline: Segment
+    shoulder_front_aux_orig: Segment
+    shoulder_front_dart_orig: Segment
+
+
+@dataclass(frozen=True)
+class _SideSeams:
+    """Side-seam geometry shared between the two pieces."""
+
+    # Back
+    waist_indent_back: Point
+    hip_side_back: Point
+    side_chest_waist_back: Segment
+    side_waist_hip_back: CubicBezier
+    side_hip_hem_back: Segment
+    hem_side_to_center_back: Segment
+
+    # Front
+    waist_indent_front: Point
+    hip_side_front: Point
+    side_chest_waist_front: Segment
+    side_waist_hip_front: CubicBezier
+    side_hip_hem_front: Segment
+    hem_side_to_center_front: Segment
+
+    # Construction lines
+    waist_offset: "Line"
+
+
+@dataclass(frozen=True)
+class _Darts:
+    """All dart objects for both pieces."""
+
+    waist_dart_back: Dart
+    waist_dart_front: Dart
+    shoulder_dart_front: Dart
+
+
+# ---------------------------------------------------------------------------
+# Private geometry builders
+# ---------------------------------------------------------------------------
+
+def _build_back_geometry(
+    grid: TopGrid,
+    meas: BlouseMeasurements,
+    model: ModelConfig,
+    config: PatternConfig,
+) -> _BackGeometry:
+    """Compute all key points and curves for the back piece."""
+
+    anchor = config.anchor
+    hem_center_back          = anchor.translate(0, model.MoL)
+    waist_center_back        = anchor.translate(0, meas.RüL)
+    hip_center_back          = intersect(grid.center_back, grid.hip)[0]
+    waist_center_back_adj    = waist_center_back.translate(model.BeckenAdjustment, 0)
+    hip_center_back_adj      = hip_center_back.translate(model.BeckenAdjustment, 0)
+    hem_center_back_adj      = hem_center_back.translate(model.BeckenAdjustment, 0)
+
+    sleeve_back_chest        = intersect(grid.sleeve_back,   grid.chest)[0]
+    side_back_chest          = intersect(grid.side_back,     grid.chest)[0]
+    sleeve_back_shoulder     = intersect(grid.sleeve_back,   grid.shoulder_back)[0]
+    neck_back_shoulder       = intersect(grid.shoulder_back, grid.neck)[0]
+    sleeve_back_shoulder_raised = sleeve_back_shoulder.translate(0, _SHOULDER_RAISE)
+
+    # Shoulder seam
+    shoulder_back_neckline   = neck_back_shoulder.translate(0, -_NECK_DEPTH)
+    shoulder_dart_notch      = (
+        Segment(sleeve_back_shoulder_raised, sleeve_back_chest)
+        .point_at_t(0.5)
+        .translate(_SHOULDER_EASE, 0)
+    )
+    shoulder_blade = Line(shoulder_dart_notch, (1, 0), name="Shoulder Blade")
+    sleeve_control = (
+        Segment(sleeve_back_shoulder_raised, sleeve_back_chest)
+        .point_at_t(0.75)
+        .translate(_NECKLINE_EASE, 0)
+    )
+    shoulder_back_orig = Segment.from_direction(
+        shoulder_back_neckline,
+        sleeve_back_shoulder_raised,
+        length=meas.SuB + _SHOULDER_EASE,
+    )
+    shoulder_back = shoulder_back_orig.offset(-_SHOULDER_EASE)
+
+    shoulder_blade_dart_tip = intersect(grid.dart_back, shoulder_blade)[0]
+
+    # Sleeve curve
+    sleeve_back = CubicBezier(
+        side_back_chest,
+        sleeve_control.translate(-0.5 * CM, 3 * CM),
+        sleeve_control.translate(-1.5 * CM, 3 * CM),
+        shoulder_back.p2,
+    )
+
+    # Neckline curve
+    neckline_back = CubicBezier(
+        anchor,
+        anchor,
+        neck_back_shoulder,
+        shoulder_back.p1,
+        name="Neckline Back",
+    )
+
+    return _BackGeometry(
+        anchor=anchor,
+        hem_center_back=hem_center_back,
+        waist_center_back=waist_center_back,
+        hip_center_back=hip_center_back,
+        waist_center_back_adj=waist_center_back_adj,
+        hip_center_back_adj=hip_center_back_adj,
+        hem_center_back_adj=hem_center_back_adj,
+        sleeve_back_chest=sleeve_back_chest,
+        side_back_chest=side_back_chest,
+        sleeve_back_shoulder=sleeve_back_shoulder,
+        sleeve_back_shoulder_raised=sleeve_back_shoulder_raised,
+        neck_back_shoulder=neck_back_shoulder,
+        shoulder_back_neckline=shoulder_back_neckline,
+        shoulder_dart_notch=shoulder_dart_notch,
+        shoulder_blade_dart_tip=shoulder_blade_dart_tip,
+        sleeve_control=sleeve_control,
+        sleeve_back=sleeve_back,
+        neckline_back=neckline_back,
+        shoulder_back=shoulder_back,
+        shoulder_back_orig=shoulder_back_orig,
+        shoulder_blade=shoulder_blade,
+    )
+
+
+def _build_front_geometry(
+    grid: TopGrid,
+    meas: BlouseMeasurements,
+    back: _BackGeometry,
+) -> _FrontGeometry:
+    """Compute all key points and curves for the front piece."""
+
+    side_front_chest    = intersect(grid.side_front,   grid.chest)[0]
+    sleeve_front_chest  = intersect(grid.sleeve_front, grid.chest)[0]
+
+    # Bust point
+    bust_point_shoulder_line = intersect(grid.shoulder_front, grid.bust_point)[0]
+    bust_point = bust_point_shoulder_line.translate(0, meas.BrT)
+
+    # Neckline anchor points
+    center_front_shoulder_line = intersect(grid.center_front, grid.shoulder_front)[0]
+    neckline_front_start       = center_front_shoulder_line.translate(0, meas.HlB + _NECKLINE_EASE)
+    shoulder_front_neckline_pt = center_front_shoulder_line.translate(-meas.HlB, 0)
+
+    # Sleeve / shoulder construction
+    sleeve_control = sleeve_front_chest.translate(0, -0.25 * meas.ArD)
+    arm_seam_length = (
+        Segment(back.sleeve_back_shoulder_raised, back.sleeve_back_chest).length
+        - _SHOULDER_EASE
+    )
+    sleeve_front_chest_upper = sleeve_front_chest.translate(0, -arm_seam_length)
+    shoulder_upper_pt = Circle(sleeve_front_chest, arm_seam_length).point_along_from(
+        sleeve_front_chest_upper, -meas.BrU / 20
+    )
+    shoulder_front_pivot = intersect(
+        Circle(bust_point, meas.BrT),
+        Circle(shoulder_upper_pt, meas.SuB),
+    )[0]
+    shoulder_front_aux_seg = Segment(shoulder_front_pivot, shoulder_upper_pt)
+    shoulder_sleeve_end = shoulder_front_aux_seg.point_along_from(
+        shoulder_front_pivot,
+        Segment(shoulder_front_neckline_pt, bust_point_shoulder_line).length,
+    )
+    shoulder_neckline_start = bust_point.translate(
+        0, -Segment(bust_point, shoulder_sleeve_end).length
+    )
+    shoulder_sleeve   = Segment(shoulder_upper_pt, shoulder_sleeve_end).offset(_SHOULDER_EASE)
+    _shoulder_neckline_raw = Segment(shoulder_neckline_start, shoulder_front_neckline_pt).offset(
+        _SHOULDER_EASE
+    )
+
+    # Neckline front Bézier — split at shoulder_neckline ray
+    neckline_front_full = CubicBezier(
+        neckline_front_start,
+        neckline_front_start,
+        center_front_shoulder_line.translate(-meas.HlB, meas.HlB),
+        shoulder_front_neckline_pt,
+    )
+    _short_ray = Ray(_shoulder_neckline_raw.p1, _shoulder_neckline_raw.unit_direction)
+    _neckline_intersections = intersect(neckline_front_full, _short_ray)
+    if _neckline_intersections:
+        _ix = _neckline_intersections[0]
+        shoulder_neckline = Segment(_shoulder_neckline_raw.p1, _ix)
+        _neckline_split = neckline_front_full.split_at_points([_ix])
+        _nf = _neckline_split[0]
+        neckline_front = CubicBezier(_nf.p0, _nf.p1, _nf.p2, _ix)
+        neckline_front_stub = _neckline_split[1] if len(_neckline_split) > 1 else None
+    else:
+        shoulder_neckline = _shoulder_neckline_raw
+        neckline_front = neckline_front_full
+        neckline_front_stub = None
+
+    # Sleeve front curve — split at shoulder_sleeve.p1 (the offset shoulder-
+    # seam point that projects onto the armscye curve), separating the short
+    # construction cap (upper) from the visible stitch armscye (lower).
+    #
+    # p2 is offset upward from side_front_chest so the curve arrives at the
+    # side-chest point with a proper downward tangent (aligned with the side
+    # seam).  Previously p2 == p3 == side_front_chest produced a degenerate
+    # zero tangent that broke the SA corner calculation at this junction.
+    sleeve_front_full = CubicBezier(
+        shoulder_upper_pt,
+        bust_point.translate(_SLEEVE_FRONT_CP_X, _SLEEVE_FRONT_CP_Y),
+        side_front_chest.translate( meas.ArD * 0.03, 0),
+        side_front_chest,
+    )
+    _sleeve_split = sleeve_front_full.split_at_points([shoulder_sleeve.p1])
+    if len(_sleeve_split) > 1:
+        sleeve_front_upper = _sleeve_split[0]
+        sleeve_front_lower = _sleeve_split[1]
+    else:
+        sleeve_front_upper = None
+        sleeve_front_lower = sleeve_front_full
+
+    return _FrontGeometry(
+        side_front_chest=side_front_chest,
+        sleeve_front_chest=sleeve_front_chest,
+        bust_point=bust_point,
+        neckline_front_start=neckline_front_start,
+        center_front_shoulder_line=center_front_shoulder_line,
+        shoulder_front_neckline_pt=shoulder_front_neckline_pt,
+        shoulder_sleeve_end=shoulder_sleeve_end,
+        shoulder_neckline_start=shoulder_neckline_start,
+        sleeve_control=sleeve_control,
+        sleeve_front_lower=sleeve_front_lower,
+        sleeve_front_upper=sleeve_front_upper,
+        neckline_front=neckline_front,
+        neckline_front_stub=neckline_front_stub,
+        shoulder_sleeve=shoulder_sleeve,
+        shoulder_neckline=shoulder_neckline,
+        shoulder_front_aux_orig=Segment(shoulder_front_pivot, shoulder_upper_pt),
+        shoulder_front_dart_orig=Segment(shoulder_front_neckline_pt, shoulder_neckline_start),
+    )
+
+
+def _build_side_seams(
+    grid: TopGrid,
+    meas: BlouseMeasurements,
+    model: ModelConfig,
+    back: _BackGeometry,
+    front: _FrontGeometry,
+    wd: "WaistDistribution",
+    hd: "HipDistribution",
+) -> _SideSeams:
+    """Compute side-seam points and curves for both pieces."""
+
+    waist_offset = grid.waist.offset(-1 * CM).set_name("Waist Offset")
+
+    # Raised waist points (SaEinzug = side-seam waist take-in)
+    waist_indent_back  = intersect(grid.side_back,  waist_offset)[0].translate(-wd.SaEinzug, 0)
+    waist_indent_front = intersect(grid.side_front, waist_offset)[0].translate( wd.SaEinzug, 0)
+
+    side_chest_waist_back  = Segment(waist_indent_back,  back.side_back_chest,   name="Side Seam Back Upper")
+    side_chest_waist_front = Segment(waist_indent_front, front.side_front_chest, name="Side Seam Front Upper")
+
+    # Hip outset (Fehlbetrag = hip shortfall correction)
+    side_back_offset  = grid.side_back.offset(  hd.Fehlbetrag)
+    side_front_offset = grid.side_front.offset(-hd.Fehlbetrag)
+    hip_side_back  = intersect(grid.hip, side_back_offset )[0]
+    hip_side_front = intersect(grid.hip, side_front_offset)[0]
+
+    # Curved hip section
+    side_waist_hip_back = CubicBezier(
+        waist_indent_back,
+        intersect(grid.side_back, waist_offset)[0].translate(-hd.Fehlbetrag, _SIDE_HIP_TANGENT),
+        hip_side_back,
+        hip_side_back,
+        name="Side Hip Curve Back",
+    )
+    side_waist_hip_front = CubicBezier(
+        waist_indent_front,
+        intersect(grid.side_front, waist_offset)[0].translate(hd.Fehlbetrag, _SIDE_HIP_TANGENT),
+        hip_side_front,
+        hip_side_front,
+        name="Side Hip Curve Front",
+    )
+
+    # Straight hem section
+    hem_depth = Segment(back.hip_center_back_adj, back.hem_center_back_adj).length
+    side_hip_hem_back  = Segment(hip_side_back,  hip_side_back.translate( 0, hem_depth), name="Side Hem Back")
+    side_hip_hem_front = Segment(hip_side_front, hip_side_front.translate(0, hem_depth), name="Side Hem Front")
+
+    # Bottom hem edges (from side to centre)
+    hem_side_to_center_back = Segment(
+        intersect(grid.hem, side_back_offset)[0],
+        back.hem_center_back_adj,
+    )
+    hem_side_to_center_front = Segment(
+        intersect(grid.hem, side_front_offset)[0],
+        intersect(grid.hem, grid.center_front)[0],
+    )
+
+    return _SideSeams(
+        waist_indent_back=waist_indent_back,
+        hip_side_back=hip_side_back,
+        side_chest_waist_back=side_chest_waist_back,
+        side_waist_hip_back=side_waist_hip_back,
+        side_hip_hem_back=side_hip_hem_back,
+        hem_side_to_center_back=hem_side_to_center_back,
+        waist_indent_front=waist_indent_front,
+        hip_side_front=hip_side_front,
+        side_chest_waist_front=side_chest_waist_front,
+        side_waist_hip_front=side_waist_hip_front,
+        side_hip_hem_front=side_hip_hem_front,
+        hem_side_to_center_front=hem_side_to_center_front,
+        waist_offset=waist_offset,
+    )
+
+
+def _build_darts(
+    grid: TopGrid,
+    meas: BlouseMeasurements,
+    back: _BackGeometry,
+    front: _FrontGeometry,
+    sleeve_back_elem: "PatternPart",
+    wd: "WaistDistribution",
+) -> "_Darts":
+    """Build all dart objects for both pieces."""
+
+    # Back waist dart
+    waist_dart_back_center = intersect(grid.waist, grid.dart_back)[0]
+    waist_dart_back = Dart.from_tip_center_width(
+        tip=intersect(grid.dart_back, grid.chest)[0],
+        center=waist_dart_back_center,
+        width=wd.hAbI,
+        dart_type=DartType.RHOMBUS,
+        second_tip=waist_dart_back_center.translate(0, _WAIST_DART_BACK_LOWER_TIP),
+    ).set_name("Waist Dart Back")
+
+    # Front waist dart
+    bust_point_waist = intersect(grid.bust_point, grid.waist)[0]
+    waist_dart_front = Dart.from_tip_center_width(
+        tip=front.bust_point,
+        center=bust_point_waist,
+        width=wd.vAbI,
+        dart_type=DartType.RHOMBUS,
+        second_tip=bust_point_waist.translate(0, _WAIST_DART_FRONT_LOWER_TIP),
+    ).set_name("Waist Dart Front")
+
+    # Front shoulder dart
+    shoulder_dart_front = Dart.from_tip_and_legs(
+        front.bust_point,
+        front.shoulder_neckline.p1,
+        front.shoulder_sleeve.p2,
+    ).set_name("Shoulder Dart Front")
+
+    # Back shoulder dart (needs the appended sleeve edge element)
+    shoulder_dart_back = Dart.from_edge_at_legs(
+        sleeve_back_elem,
+        leg_a=back.shoulder_dart_notch,
+        leg_b=back.sleeve_back.point_along_from(back.shoulder_dart_notch, _NECKLINE_EASE),
+        tip=back.shoulder_blade_dart_tip,
+        name="Shoulder Dart Back",
+    )
+
+    return _Darts(
+        waist_dart_back=waist_dart_back,
+        waist_dart_front=waist_dart_front,
+        shoulder_dart_front=shoulder_dart_front,
+    ), shoulder_dart_back
+
+
+def _assemble_back_part(
+    part: PatternPart,
+    back: _BackGeometry,
+    sides: _SideSeams,
+    darts: _Darts,
+    shoulder_dart_back: Dart,
+    model: ModelConfig,
+) -> None:
+    """Add all elements to the back PatternPart in drawing order.
+
+    Note: ``back.sleeve_back`` is **not** appended here — it was already
+    appended in :meth:`TopBlock.from_measurements` before
+    :func:`_build_darts` is called, so that :class:`~sewpat.geometry.Dart`
+    can reference the live ``PatternElement`` for the in-place edge split.
+    Appending it a second time would corrupt the outline polygon and produce
+    wrong SA corners at the shoulder/sleeve junction.
+    """
+    part.append(Segment(back.anchor, back.waist_center_back_adj,       name="Center Back"),     style=STYLE_STITCH, is_outline=True)
+    part.append(Segment(back.waist_center_back_adj, back.hem_center_back_adj, name="Center Back Hem"), style=STYLE_STITCH, is_outline=True)
+    part.append(
+        back.neckline_back,
+        style=StyleOptions(dash_array=[5.0, 2.0], corner_join="bevel"),
+        is_outline=True,
+    )
+    part.append(back.shoulder_back_orig.set_name("Shoulder Back Orig"), is_construction=True)
+    part.append(back.shoulder_blade,                                     is_construction=True)
+    part.append(back.shoulder_back.set_name("Shoulder Back"),           style=STYLE_STITCH, is_outline=True)
+    part.add_dart(shoulder_dart_back)
+    part.append(sides.side_chest_waist_back,                            style=STYLE_STITCH, is_outline=True)
+    part.add_dart(darts.waist_dart_back)
+    part.append(sides.waist_offset,                                     is_construction=True)
+    part.append(sides.side_waist_hip_back,                              is_outline=True, style=STYLE_STITCH)
+    part.append(sides.side_hip_hem_back,                                style=STYLE_STITCH, is_outline=True)
+    part.append(sides.hem_side_to_center_back,                          style=STYLE_HEM, is_outline=True)
+
+    if model.seam_allowance > 0:
+        part.add_seam_allowance(model.seam_allowance)
+    part.add_notches(back.sleeve_control, seam_edge=back.sleeve_back)
+
+
+def _assemble_front_part(
+    part: PatternPart,
+    front: _FrontGeometry,
+    sides: _SideSeams,
+    darts: _Darts,
+    grid: TopGrid,
+    model: ModelConfig,
+) -> None:
+    """Add all elements to the front PatternPart in drawing order."""
+
+    part.append(
+        Segment(
+            front.neckline_front_start,
+            intersect(grid.center_front, grid.hem)[0],
+            name="Center Front",
+        ),
+        style=StyleOptions(dash_array=[5.0, 2.0], corner_join="bevel"),
+        is_outline=True,
+    )
+    part.append(front.neckline_front.set_name("Neckline Front"),                style=STYLE_STITCH, is_outline=True)
+    if front.neckline_front_stub is not None:
+        part.append(front.neckline_front_stub.set_name("Neckline Front Stub"),  is_construction=True)
+    part.append(front.shoulder_front_aux_orig.set_name("Shoulder Front Orig"),  is_construction=True)
+    part.append(front.shoulder_front_dart_orig.set_name("Shoulder Front Dart Orig"), is_construction=True)
+    part.append(front.shoulder_sleeve.set_name("Shoulder Front"),               style=STYLE_STITCH, is_outline=True)
+    part.append(front.shoulder_neckline.set_name("Shoulder Front Dart"),        style=STYLE_STITCH, is_outline=True)
+    part.add_dart(darts.shoulder_dart_front)
+    if front.sleeve_front_upper is not None:
+        part.append(front.sleeve_front_upper.set_name("Sleeve Front Upper"),    is_construction=True)
+    part.append(front.sleeve_front_lower.set_name("Sleeve Front"),              style=STYLE_STITCH, is_outline=True)
+    part.append(sides.side_chest_waist_front,                                   style=STYLE_STITCH, is_outline=True)
+    part.add_dart(darts.waist_dart_front)
+    part.append(sides.side_waist_hip_front,                                     is_outline=True, style=STYLE_STITCH)
+    part.append(sides.side_hip_hem_front,                                       style=STYLE_STITCH, is_outline=True)
+    part.append(sides.hem_side_to_center_front,                                 style=STYLE_HEM, is_outline=True)
+
+    if model.seam_allowance > 0:
+        part.add_seam_allowance(model.seam_allowance)
+    part.add_notches(front.sleeve_control, seam_edge=front.sleeve_front_lower)
+
+
+# ---------------------------------------------------------------------------
+# Public dataclasses
+# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class TopBlockBack:
@@ -40,29 +589,36 @@ class TopBlockBack:
         part: The :class:`~sewpat.pattern.PatternPart` ready to add to a
             :class:`~sewpat.pattern.Pattern`.  It already contains all outline
             segments, darts, and — when *seam_allowance* > 0 — the SA offset.
-        sleeve_back: Armscye curve of the back piece (pt11 → shoulder_back.p2).
-        shoulder_back: Shoulder seam (parallel-offset construction line).
-        side_seam_back_upper: Straight side-seam segment from raised waist
+        sleeve: Armscye curve of the back piece (armscye intersection → shoulder).
+        neckline: Neckline Bézier curve of the back piece.
+        shoulder: Shoulder seam (parallel-offset construction line).
+        side_chest_waist: Straight side-seam segment from raised waist
             point to the armscye.
-        waist_dart_back: Rhombus waist dart geometry.
-        shoulder_dart_back: Triangle shoulder dart cut into the armscye.
-        pt_hÄP: Armscye notch reference point on the back sleeve edge.
-        pt_waist_sb_raised: Raised waist point at the back side seam
+        side_waist_hip: Curved side-seam section from raised waist point to
+            the hip (waist_indent → side_hip).
+        side_hip_hem: Straight side-seam section from hip to hem
+            (side_hip → hem).
+        waist_dart: Rhombus waist dart geometry.
+        shoulder_dart: Triangle shoulder dart cut into the armscye.
+        sleeve_control: Armscye notch reference point on the back sleeve edge.
+        waist_indent: Raised waist point at the back side seam
             (after SaEinzug correction).
-        pt37: Hip point at the back side seam (after Fehlbetrag correction).
-        pt_armscye: Armscye intersection at the back side seam (pt11).
+        hip_outset: Hip point at the back side seam shifted outward
+            (after Fehlbetrag correction).
     """
 
     part: PatternPart
-    sleeve_back: CubicBezier
-    shoulder_back: Segment
-    side_seam_back_upper: Segment
-    waist_dart_back: Dart
-    shoulder_dart_back: Dart
-    pt_hÄP: Point
-    pt_waist_sb_raised: Point
-    pt37: Point
-    pt_armscye: Point
+    sleeve: CubicBezier
+    neckline: CubicBezier
+    shoulder: Segment
+    side_chest_waist: Segment
+    side_waist_hip: CubicBezier
+    side_hip_hem: Segment
+    waist_dart: Dart
+    shoulder_dart: Dart
+    sleeve_control: Point
+    waist_indent: Point
+    hip_outset: Point
 
 
 @dataclass(frozen=True)
@@ -73,34 +629,41 @@ class TopBlockFront:
         part: The :class:`~sewpat.pattern.PatternPart` ready to add to a
             :class:`~sewpat.pattern.Pattern`.  It already contains all outline
             segments, darts, and — when *seam_allowance* > 0 — the SA offset.
-        sleeve_front_lower: Armscye curve of the front piece, lower section
-            (shoulder endpoint → pt12).
-        shoulder_front_long: Long shoulder seam (from bust-point pivot side).
-        shoulder_front_short: Short shoulder seam (dart side, toward neckline).
-        side_seam_front_upper: Straight side-seam segment from raised waist
+        sleeve: Armscye curve of the front piece, lower section
+            (shoulder endpoint → side-chest intersection).
+        neckline: Neckline Bézier curve of the front piece.
+        shoulder_sleeve: Long shoulder seam running toward the sleeve (from bust-point pivot side).
+        shoulder_neckline: Short shoulder seam running toward the neckline (dart side).
+        side_chest_waist: Straight side-seam segment from raised waist
             point to the armscye.
-        waist_dart_front: Rhombus waist dart geometry.
-        shoulder_dart_front: Triangle shoulder dart (bust-dart rotated to shoulder).
-        pt_vÄP: Armscye notch reference point on the front sleeve edge.
-        pt_waist_sf_raised: Raised waist point at the front side seam
+        side_waist_hip: Curved side-seam section from raised waist point to
+            the hip (waist_indent → side_hip).
+        side_hip_hem: Straight side-seam section from hip to hem
+            (side_hip → hem).
+        waist_dart: Rhombus waist dart geometry.
+        shoulder_dart: Triangle shoulder dart (bust-dart rotated to shoulder).
+        sleeve_control: Armscye notch reference point on the front sleeve edge.
+        waist_indent: Raised waist point at the front side seam
             (after SaEinzug correction).
-        pt37_front: Hip point at the front side seam (after Fehlbetrag correction).
-        pt_BrP: Bust point.
-        pt_armscye: Armscye intersection at the front side seam (pt12).
+        hip_outset: Hip point at the front side seam shifted outward
+            (after Fehlbetrag correction).
+        bust_point: Bust point.
     """
 
     part: PatternPart
-    sleeve_front_lower: CubicBezier
-    shoulder_front_long: Segment
-    shoulder_front_short: Segment
-    side_seam_front_upper: Segment
-    waist_dart_front: Dart
-    shoulder_dart_front: Dart
-    pt_vÄP: Point
-    pt_waist_sf_raised: Point
-    pt37_front: Point
-    pt_BrP: Point
-    pt_armscye: Point
+    sleeve: CubicBezier
+    neckline: CubicBezier
+    shoulder_sleeve: Segment
+    shoulder_neckline: Segment
+    side_chest_waist: Segment
+    side_waist_hip: CubicBezier
+    side_hip_hem: Segment
+    waist_dart: Dart
+    shoulder_dart: Dart
+    sleeve_control: Point
+    waist_indent: Point
+    hip_outset: Point
+    bust_point: Point
 
 
 @dataclass(frozen=True)
@@ -118,7 +681,7 @@ class TopBlock:
         pattern.add_part(block.front.part)
 
         # Draw a new sleeve:
-        sleeve = CubicBezier(block.back.pt_armscye, ..., block.back.pt_hÄP)
+        sleeve = CubicBezier(block.back.sleeve.p0, ..., block.back.sleeve_control)
 
     Attributes:
         back:  :class:`TopBlockBack` — the complete back piece with typed geometry.
@@ -160,276 +723,79 @@ class TopBlock:
             A :class:`TopBlock` with fully constructed ``.back`` and
             ``.front`` pieces.
         """
-        from .geometry import Dart, DartType
-        from .measurements import WaistDistribution, calculate_waist_distribution, calculate_hip_distribution
-
         if config is None:
             config = PatternConfig()
 
         grid = TopGrid.from_measurements(meas=meas, model=model, config=config)
 
+        # ── 1. Build geometry for each piece independently ───────────────────
+        back_geom  = _build_back_geometry(grid, meas, model, config)
+        front_geom = _build_front_geometry(grid, meas, back_geom)
+
+        # ── 2. Compute waist / hip distribution ──────────────────────────────
+        wd = calculate_waist_distribution(
+            meas,
+            pt_waist_cf=intersect(grid.center_front, grid.waist)[0],
+            pt_waist_sf=intersect(grid.side_front,   grid.waist)[0],
+            pt_waist_sb=intersect(grid.side_back,    grid.waist)[0],
+            pt_waist_cb=back_geom.waist_center_back_adj,
+        )
+        hd = calculate_hip_distribution(
+            meas,
+            pt_hip_cf=intersect(grid.center_front, grid.hip)[0],
+            pt_hip_sf=intersect(grid.side_front,   grid.hip)[0],
+            pt_hip_sb=intersect(grid.side_back,    grid.hip)[0],
+            pt_hip_cb=back_geom.hip_center_back_adj,
+        )
+
+        # ── 3. Build shared side-seam geometry ───────────────────────────────
+        sides = _build_side_seams(grid, meas, model, back_geom, front_geom, wd, hd)
+
+        # ── 4. Assemble pieces and extract darts ─────────────────────────────
         block_back  = PatternPart(name=back_name)
         block_front = PatternPart(name=front_name)
 
-        # ── Grid intersections ───────────────────────────────────────────────
-        pt1  = config.anchor
-        pt2  = pt1.translate(0, model.MoL)
-        pt4  = pt1.translate(0, meas.RüL)
-        pt5  = intersect(grid.center_back, grid.hip)[0]
-        pt6  = pt4.translate(model.BeckenAdjustment, 0)
-        pt8  = pt5.translate(model.BeckenAdjustment, 0)
-        pt9  = pt2.translate(model.BeckenAdjustment, 0)
-        pt10 = intersect(grid.sleeve_back,  grid.chest)[0]
-        pt11 = intersect(grid.side_back,    grid.chest)[0]
-        pt12 = intersect(grid.side_front,   grid.chest)[0]
-        pt13 = intersect(grid.sleeve_front, grid.chest)[0]
-        pt14 = intersect(grid.center_front, grid.chest)[0]
-        pt16 = intersect(grid.sleeve_back,  grid.shoulder_back)[0]
-        pt17 = intersect(grid.shoulder_back, grid.neck)[0]
-        pt18 = pt16.translate(0, 1.5 * CM)  # TODO don't hard-code
-
-        # ── Shoulder back ────────────────────────────────────────────────────
-        pt_sHlP   = pt17.translate(0, -2 * CM)  # TODO don't hard-code
-        pt_HP     = Segment(pt18, pt10).point_at_t(0.5).translate(1 * CM, 0)
-        shoulder_blade = Line(pt_HP, (1, 0), name="Shoulder Blade")
-        pt_hÄP    = Segment(pt18, pt10).point_at_t(0.75).translate(1.5 * CM, 0)
-        shoulder_back_orig = Segment.from_direction(pt_sHlP, pt18, length=meas.SuB + 1 * CM)
-        shoulder_back      = shoulder_back_orig.offset(-1 * CM)
-        pt29 = intersect(grid.dart_back, shoulder_blade)[0]
-
-        # ── Neckline front ───────────────────────────────────────────────────
-        pt19 = intersect(grid.bust_point, grid.waist)[0]
-        pt20 = intersect(grid.shoulder_front, grid.bust_point)[0]
-        pt_BrP = pt20.translate(0, meas.BrT)
-        pt21   = intersect(grid.center_front, grid.shoulder_front)[0]
-        pt22   = pt21.translate(0, meas.HlB + 1.5 * CM)  # TODO don't hard-code
-        pt_sHlP_front = pt21.translate(-meas.HlB, 0)
-
-        # ── Shoulder front with dart ─────────────────────────────────────────
-        pt_vÄP = pt13.translate(0, -0.25 * meas.ArD)
-        aux_l  = Segment(pt18, pt10).length - 2 * CM
-        pt23   = pt13.translate(0, -aux_l)
-        pt_SuP = Circle(pt13, aux_l).point_along_from(pt23, -meas.BrU / 20 + 0 * CM)
-        pt24   = intersect(Circle(pt_BrP, meas.BrT), Circle(pt_SuP, meas.SuB))[0]
-        shoulder_front_aux = Segment(pt24, pt_SuP)
-        pt25   = shoulder_front_aux.point_along_from(pt24, Segment(pt_sHlP_front, pt20).length)
-        pt26   = pt_BrP.translate(0, -Segment(pt_BrP, pt25).length)
-        shoulder_front_long      = Segment(pt_SuP, pt25).offset(1 * CM)
-        _shoulder_front_short_raw = Segment(pt26, pt_sHlP_front).offset(1 * CM)
-
-        # Neckline front Bézier — split at shoulder_front_short ray
-        neckline_front_full = CubicBezier(
-            pt22, pt22,
-            pt21.translate(-meas.HlB, meas.HlB),
-            pt_sHlP_front,
-        )
-        _short_ray = Ray(_shoulder_front_short_raw.p1, _shoulder_front_short_raw.unit_direction)
-        _neckline_intersections = intersect(neckline_front_full, _short_ray)
-        if _neckline_intersections:
-            _ix = _neckline_intersections[0]
-            shoulder_front_short = Segment(_shoulder_front_short_raw.p1, _ix)
-            _neckline_split = neckline_front_full.split_at_points([_ix])
-            _nf = _neckline_split[0]
-            neckline_front = CubicBezier(_nf.p0, _nf.p1, _nf.p2, _ix)
-            neckline_front_stub = _neckline_split[1] if len(_neckline_split) > 1 else None
-        else:
-            shoulder_front_short = _shoulder_front_short_raw
-            neckline_front = neckline_front_full
-            neckline_front_stub = None
-
-        # ── Sleeve curves ────────────────────────────────────────────────────
-        sleeve_front = CubicBezier(pt_SuP, pt_BrP.translate(-4 * CM, -3 * CM), pt12, pt12)
-        _sleeve_split = sleeve_front.split_at_points([shoulder_front_long.p1])
-        if len(_sleeve_split) > 1:
-            sleeve_front_upper = _sleeve_split[0]
-            sleeve_front_lower = _sleeve_split[1]
-        else:
-            sleeve_front_upper = None
-            sleeve_front_lower = sleeve_front
-
-        sleeve_back = CubicBezier(
-            pt11,
-            pt_hÄP.translate(-0.5 * CM, 3 * CM),
-            pt_hÄP.translate(-1.5 * CM, 3 * CM),
-            shoulder_back.p2,
-        )
-
-        # ── Waist dart distribution ──────────────────────────────────────────
-        waist_offset  = grid.waist.offset(-1 * CM).set_name("Waist Offset")
-        pt_waist_cf   = intersect(grid.center_front, grid.waist)[0]
-        pt_waist_sf   = intersect(grid.side_front,   grid.waist)[0]
-        pt_waist_sb   = intersect(grid.side_back,    grid.waist)[0]
-        wd: WaistDistribution = calculate_waist_distribution(
-            meas,
-            pt_waist_cf=pt_waist_cf,
-            pt_waist_sf=pt_waist_sf,
-            pt_waist_sb=pt_waist_sb,
-            pt_waist_cb=pt6,
-        )
-
-        # ── Hip distribution ─────────────────────────────────────────────────
-        pt_hip_cf = intersect(grid.center_front, grid.hip)[0]
-        pt_hip_sf = intersect(grid.side_front,   grid.hip)[0]
-        pt_hip_sb = intersect(grid.side_back,    grid.hip)[0]
-        pt_hip_cb = pt8
-        hd = calculate_hip_distribution(
-            meas,
-            pt_hip_cf=pt_hip_cf,
-            pt_hip_sf=pt_hip_sf,
-            pt_hip_sb=pt_hip_sb,
-            pt_hip_cb=pt_hip_cb,
-        )
-
-        # ── Raised waist + hip side points ───────────────────────────────────
-        pt_waist_sb_raised = intersect(grid.side_back,  waist_offset)[0].translate(-wd.SaEinzug, 0)
-        pt_waist_sf_raised = intersect(grid.side_front, waist_offset)[0].translate( wd.SaEinzug, 0)
-
-        side_seam_back_upper  = Segment(pt_waist_sb_raised, pt11, name="Side Seam Back Upper")
-        side_seam_front_upper = Segment(pt_waist_sf_raised, pt12, name="Side Seam Front Upper")
-
-        side_back_offset  = grid.side_back.offset(  hd.Fehlbetrag)
-        side_front_offset = grid.side_front.offset(-hd.Fehlbetrag)
-        pt37       = intersect(grid.hip, side_back_offset )[0]
-        pt37_front = intersect(grid.hip, side_front_offset)[0]
-
-        side_back_curved = CubicBezier(
-            pt_waist_sb_raised,
-            intersect(grid.side_back, waist_offset)[0].translate(-hd.Fehlbetrag, 15 * CM),
-            pt37, pt37,
-            name="Side Hip Curve Back",
-        )
-        side_front_curved = CubicBezier(
-            pt_waist_sf_raised,
-            intersect(grid.side_front, waist_offset)[0].translate(hd.Fehlbetrag, 15 * CM),
-            pt37_front, pt37_front,
-            name="Side Hip Curve Front",
-        )
-
-        # ── Darts ────────────────────────────────────────────────────────────
-        pt28 = intersect(grid.waist, grid.dart_back)[0]
-
-        waist_dart_back = Dart.from_tip_center_width(
-            tip=intersect(grid.dart_back, grid.chest)[0],
-            center=pt28,
-            width=wd.hAbI,
-            dart_type=DartType.RHOMBUS,
-            second_tip=pt28.translate(0, 16 * CM),
-        ).set_name("Waist Dart Back")
-
-        pt19_waist = intersect(grid.bust_point, grid.waist)[0]
-        waist_dart_front = Dart.from_tip_center_width(
-            tip=pt_BrP,
-            center=pt19_waist,
-            width=wd.vAbI,
-            dart_type=DartType.RHOMBUS,
-            second_tip=pt19_waist.translate(0, 12 * CM),
-        ).set_name("Waist Dart Front")
-
-        shoulder_dart_front = Dart.from_tip_and_legs(
-            pt_BrP,
-            shoulder_front_short.p1,
-            shoulder_front_long.p2,
-        ).set_name("Shoulder Dart Front")
-
-        # ── Assemble back piece ──────────────────────────────────────────────
+        # Append the sleeve first so we have the edge element for the shoulder dart
         sleeve_back_elem = block_back.append(
-            sleeve_back.set_name("Sleeve Back"), style=STYLE_STITCH, is_outline=True,
-        )
-        shoulder_dart_back = Dart.from_edge_at_legs(
-            sleeve_back_elem,
-            leg_a=pt_HP,
-            leg_b=sleeve_back.point_along_from(pt_HP, 1.5 * CM),
-            tip=pt29,
-            name="Shoulder Dart Back",
-        )
-        block_back.append(Segment(pt1, pt6, name="Center Back"),     style=STYLE_STITCH,   is_outline=True)
-        block_back.append(Segment(pt6, pt9, name="Center Back Hem"), style=STYLE_STITCH,   is_outline=True)
-        block_back.append(
-            CubicBezier(pt1, pt1, pt17, shoulder_back.p1, name="Neckline Back"),
-            style=StyleOptions(dash_array=[5.0, 2.0], corner_join="bevel"),
+            back_geom.sleeve_back.set_name("Sleeve Back"),
+            style=STYLE_STITCH,
             is_outline=True,
         )
-        block_back.append(shoulder_back_orig.set_name("Shoulder Back Orig"), is_construction=True)
-        block_back.append(shoulder_blade, is_construction=True)
-        block_back.append(shoulder_back.set_name("Shoulder Back"), style=STYLE_STITCH, is_outline=True)
-        block_back.add_dart(shoulder_dart_back)
-        block_back.append(side_seam_back_upper, style=STYLE_STITCH, is_outline=True)
-        block_back.add_dart(waist_dart_back)
-        block_back.append(waist_offset, is_construction=True)
-        block_back.append(side_back_curved, is_outline=True, style=STYLE_STITCH)
-        block_back.append(
-            Segment(pt37, pt37.translate(0, Segment(pt8, pt9).length)),
-            style=STYLE_STITCH, is_outline=True,
-        )
-        block_back.append(
-            Segment(intersect(grid.hem, side_back_offset)[0], pt9),
-            style=STYLE_HEM, is_outline=True,
-        )
-        if model.seam_allowance > 0:
-            block_back.add_seam_allowance(model.seam_allowance)
-        block_back.add_notches(pt_hÄP, seam_edge=sleeve_back)
+        darts, shoulder_dart_back = _build_darts(grid, meas, back_geom, front_geom, sleeve_back_elem, wd)
 
-        # ── Assemble front piece ─────────────────────────────────────────────
-        block_front.append(
-            Segment(pt22, intersect(grid.center_front, grid.hem)[0], name="Center Front"),
-            style=StyleOptions(dash_array=[5.0, 2.0], corner_join="bevel"),
-            is_outline=True,
-        )
-        block_front.append(neckline_front.set_name("Neckline Front"), style=STYLE_STITCH, is_outline=True)
-        if neckline_front_stub is not None:
-            block_front.append(neckline_front_stub.set_name("Neckline Front Stub"), is_construction=True)
-        block_front.append(Segment(pt_SuP, pt25, name="Shoulder Front Orig"), is_construction=True)
-        block_front.append(Segment(pt_sHlP_front, pt26, name="Shoulder Front Dart Orig"), is_construction=True)
-        block_front.append(shoulder_front_long.set_name("Shoulder Front"),      style=STYLE_STITCH, is_outline=True)
-        block_front.append(shoulder_front_short.set_name("Shoulder Front Dart"), style=STYLE_STITCH, is_outline=True)
-        block_front.add_dart(shoulder_dart_front)
-        block_front.append(side_seam_front_upper, style=STYLE_STITCH, is_outline=True)
-        if sleeve_front_upper is not None:
-            block_front.append(sleeve_front_upper.set_name("Sleeve Front Upper"), is_construction=True)
-        block_front.append(sleeve_front_lower.set_name("Sleeve Front"), style=STYLE_STITCH, is_outline=True)
-        block_front.add_dart(waist_dart_front)
-        block_front.append(side_front_curved, is_outline=True, style=STYLE_STITCH)
-        block_front.append(
-            Segment(pt37_front, pt37_front.translate(0, Segment(pt8, pt9).length)),
-            style=STYLE_STITCH, is_outline=True,
-        )
-        block_front.append(
-            Segment(
-                intersect(grid.hem, side_front_offset)[0],
-                intersect(grid.hem, grid.center_front)[0],
-            ),
-            style=STYLE_HEM, is_outline=True,
-        )
-        if model.seam_allowance > 0:
-            block_front.add_seam_allowance(model.seam_allowance)
-        block_front.add_notches(pt_vÄP, seam_edge=sleeve_front_lower)
+        _assemble_back_part(block_back,  back_geom,  sides, darts, shoulder_dart_back, model)
+        _assemble_front_part(block_front, front_geom, sides, darts, grid, model)
 
-        # ── Pack and return ──────────────────────────────────────────────────
+        # ── 5. Pack into public dataclasses and return ────────────────────────
         back = TopBlockBack(
             part=block_back,
-            sleeve_back=sleeve_back,
-            shoulder_back=shoulder_back,
-            side_seam_back_upper=side_seam_back_upper,
-            waist_dart_back=waist_dart_back,
-            shoulder_dart_back=shoulder_dart_back,
-            pt_hÄP=pt_hÄP,
-            pt_waist_sb_raised=pt_waist_sb_raised,
-            pt37=pt37,
-            pt_armscye=pt11,
+            sleeve=back_geom.sleeve_back,
+            neckline=back_geom.neckline_back,
+            shoulder=back_geom.shoulder_back,
+            side_chest_waist=sides.side_chest_waist_back,
+            side_waist_hip=sides.side_waist_hip_back,
+            side_hip_hem=sides.side_hip_hem_back,
+            waist_dart=darts.waist_dart_back,
+            shoulder_dart=shoulder_dart_back,
+            sleeve_control=back_geom.sleeve_control,
+            waist_indent=sides.waist_indent_back,
+            hip_outset=sides.hip_side_back,
         )
         front = TopBlockFront(
             part=block_front,
-            sleeve_front_lower=sleeve_front_lower,
-            shoulder_front_long=shoulder_front_long,
-            shoulder_front_short=shoulder_front_short,
-            side_seam_front_upper=side_seam_front_upper,
-            waist_dart_front=waist_dart_front,
-            shoulder_dart_front=shoulder_dart_front,
-            pt_vÄP=pt_vÄP,
-            pt_waist_sf_raised=pt_waist_sf_raised,
-            pt37_front=pt37_front,
-            pt_BrP=pt_BrP,
-            pt_armscye=pt12,
+            sleeve=front_geom.sleeve_front_lower,
+            neckline=front_geom.neckline_front,
+            shoulder_sleeve=front_geom.shoulder_sleeve,
+            shoulder_neckline=front_geom.shoulder_neckline,
+            side_chest_waist=sides.side_chest_waist_front,
+            side_waist_hip=sides.side_waist_hip_front,
+            side_hip_hem=sides.side_hip_hem_front,
+            waist_dart=darts.waist_dart_front,
+            shoulder_dart=darts.shoulder_dart_front,
+            sleeve_control=front_geom.sleeve_control,
+            waist_indent=sides.waist_indent_front,
+            hip_outset=sides.hip_side_front,
+            bust_point=front_geom.bust_point,
         )
         return cls(back=back, front=front)
 

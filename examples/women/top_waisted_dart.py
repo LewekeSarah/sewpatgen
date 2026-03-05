@@ -101,7 +101,7 @@ if __name__ == "__main__":
     pattern = make_blouse(measurements, model_config)
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
-    grid_parts = [] # [Part.GRID]
+    grid_parts = [Part.GRID]
 
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         height_mm=DinA0.height,
         filename=str(Path(__file__).parent / "top_waisted_dart_grid.svg"),
         parts=grid_parts + pattern_parts,
-        show_bezier_control_points=False,
+        show_bezier_control_points=True,
         show_construction=True,
         show_seam_allowance=True
     )
