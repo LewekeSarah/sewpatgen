@@ -329,11 +329,6 @@ def _build_front_geometry(
     # Sleeve front curve — split at shoulder_sleeve.p1 (the offset shoulder-
     # seam point that projects onto the armscye curve), separating the short
     # construction cap (upper) from the visible stitch armscye (lower).
-    #
-    # p2 is offset upward from side_front_chest so the curve arrives at the
-    # side-chest point with a proper downward tangent (aligned with the side
-    # seam).  Previously p2 == p3 == side_front_chest produced a degenerate
-    # zero tangent that broke the SA corner calculation at this junction.
     sleeve_front_full = CubicBezier(
         shoulder_upper_pt,
         bust_point.translate(_SLEEVE_FRONT_CP_X, _SLEEVE_FRONT_CP_Y),
