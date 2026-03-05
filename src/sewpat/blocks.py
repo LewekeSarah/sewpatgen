@@ -337,7 +337,7 @@ def _build_front_geometry(
     sleeve_front_full = CubicBezier(
         shoulder_upper_pt,
         bust_point.translate(_SLEEVE_FRONT_CP_X, _SLEEVE_FRONT_CP_Y),
-        side_front_chest.translate( meas.ArD * 0.03, 0),
+        side_front_chest.translate( meas.ArD * 0.05, 0),
         side_front_chest,
     )
     _sleeve_split = sleeve_front_full.split_at_points([shoulder_sleeve.p1])
