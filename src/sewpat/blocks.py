@@ -79,7 +79,7 @@ _ARMSCYE_BACK_AUX_OFFSET: float = 1.5 * CM
 _ARMSCYE_BACK_OFFSET: float = 1 * CM
 
 #: Back armscye Bézier control-point offsets (cp1_x, cp2_x, cp_y).
-_ARMSCYE_BACK_CP_X:  float =0.5 * CM
+_ARMSCYE_BACK_CP_X:  float = 1 * CM
 _ARMSCYE_BACK_CP_Y:  float =  1 * CM
 
 
@@ -229,7 +229,7 @@ def _build_back_geometry(
     # Armscye curve — two cubics joined at armscye_control.
     armscye_lower = CubicBezier(
         side_chest,
-        side_chest.translate((armscye_control.x-side_chest.x) / 3, - _ARMSCYE_BACK_CP_X),
+        side_chest.translate((armscye_control.x-side_chest.x) / 3, - _ARMSCYE_BACK_CP_Y / 2),
         armscye_control.translate(_ARMSCYE_BACK_CP_X, armscye_control.distance_to_segment(grid.chest) - _ARMSCYE_BACK_CP_Y),
         armscye_control,
         name="Armscye Back Lower",
