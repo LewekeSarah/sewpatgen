@@ -6,7 +6,6 @@ from sewpat.geometry import Point
 from sewpat.measurements import HipDistribution, calculate_hip_distribution
 from sewpat.units import CM
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -57,40 +56,48 @@ class TestHipDistributionGeometry:
     def test_hub_equals_vhub_plus_hhub(self):
         fhw = 26.0 * CM
         bhw = 26.0 * CM
-        hw  = 99.0 * CM
+        hw = 99.0 * CM
         meas = _make_meas(hw)
-        pts  = _make_points(fhw, bhw)
-        hd   = calculate_hip_distribution(meas, *pts)
+        pts = _make_points(fhw, bhw)
+        hd = calculate_hip_distribution(meas, *pts)
 
         assert hd.front_hip_width == pytest.approx(fhw, rel=1e-5)
-        assert hd.back_hip_width  == pytest.approx(bhw, rel=1e-5)
+        assert hd.back_hip_width == pytest.approx(bhw, rel=1e-5)
         assert hd.total_hip_width == pytest.approx(fhw + bhw, rel=1e-5)
 
     def test_fehlbetrag_formula(self):
         fhw = 26.0 * CM
         bhw = 26.0 * CM
-        hw  = 99.0 * CM
+        hw = 99.0 * CM
         meas = _make_meas(hw)
-        pts  = _make_points(fhw, bhw)
-        hd   = calculate_hip_distribution(meas, *pts)
+        pts = _make_points(fhw, bhw)
+        hd = calculate_hip_distribution(meas, *pts)
 
         expected = (fhw + bhw) - hw / 2
         assert hd.hip_shortfall == pytest.approx(expected, rel=1e-5)
 
     def test_fehlbetrag_positive_when_pattern_wider_than_half_measurement(self):
         """Pattern wider than hip_width/2 → positive hip_shortfall."""
-        hd = calculate_hip_distribution(_make_meas(99.0 * CM), *_make_points(30.0 * CM, 30.0 * CM))
+        hd = calculate_hip_distribution(
+            _make_meas(99.0 * CM), *_make_points(30.0 * CM, 30.0 * CM)
+        )
         assert hd.hip_shortfall > 0
 
     def test_fehlbetrag_negative_when_pattern_narrower_than_half_measurement(self):
         """Pattern narrower than hip_width/2 → negative hip_shortfall."""
-        hd = calculate_hip_distribution(_make_meas(99.0 * CM), *_make_points(20.0 * CM, 20.0 * CM))
+        hd = calculate_hip_distribution(
+            _make_meas(99.0 * CM), *_make_points(20.0 * CM, 20.0 * CM)
+        )
         assert hd.hip_shortfall < 0
 
     def test_fehlbetrag_zero_when_pattern_matches_half_measurement(self):
-        hd = calculate_hip_distribution(_make_meas(99.0 * CM), *_make_points(24.75 * CM, 24.75 * CM))
+        hd = calculate_hip_distribution(
+            _make_meas(99.0 * CM), *_make_points(24.75 * CM, 24.75 * CM)
+        )
         assert hd.hip_shortfall == pytest.approx(0.0, abs=1e-9)
 
     def test_returns_hip_distribution_instance(self):
-        hd = calculate_hip_distribution(_make_meas(99.0 * CM), *_make_points(26.0 * CM, 26.0 * CM))
+        hd = calculate_hip_distribution(
+            _make_meas(99.0 * CM), *_make_points(26.0 * CM, 26.0 * CM)
+        )
         assert isinstance(hd, HipDistribution)

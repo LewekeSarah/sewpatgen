@@ -18,7 +18,6 @@ from sewpat.geometry import (
 )
 from sewpat.measurements import (
     TrouserEase,
-    TrouserConfig,
     TrouserMeasurements,
     make_measurements_trouser,
 )
@@ -56,9 +55,9 @@ def make_person() -> Person:
 
 def make_ease() -> TrouserEase:
     return TrouserEase(
-        body_rise_ease=3 * CM,   # baby 4.5 * CM,
-        inseam_ease=-3 * CM,     # baby -2 * CM,
-        hip_ease=5.5 * CM,       # baby 4 * CM,
+        body_rise_ease=3 * CM,  # baby 4.5 * CM,
+        inseam_ease=-3 * CM,  # baby -2 * CM,
+        hip_ease=5.5 * CM,  # baby 4 * CM,
     )
 
 
@@ -150,9 +149,10 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
     pattern_boy_trousers.add_part(front)
 
     # Leg-grid midpoints (not on grid lines, keep as computed)
-    pt9 = Point(pt0.x + 0.5 * meas.front_trouser_width, pt1.y)  # grain centre at body_rise
-    pt10 = Point(pt0.x + 0.5 * meas.front_trouser_width, pt3.y)  # grain centre at knee_height
-    pt11 = Point(pt0.x + 0.5 * meas.front_trouser_width, pt2.y)  # grain centre at inseam
+    _cx = pt0.x + 0.5 * meas.front_trouser_width
+    pt9 = Point(_cx, pt1.y)  # grain centre at body_rise
+    pt10 = Point(_cx, pt3.y)  # grain centre at knee_height
+    pt11 = Point(_cx, pt2.y)  # grain centre at inseam
     pt12 = Point(pt11.x - (model.hem_width / 2 + 0.5 * CM), pt11.y)  # side hem
     pt13 = Point(pt11.x + (model.hem_width / 2 + 0.5 * CM), pt11.y)  # inner hem
 
@@ -191,12 +191,12 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
     )
     front.append(Segment(pt33, pt32), style=STYLE_HEM, is_outline=True)
     front.append(Segment(pt32, pt15), style=STYLE_STITCH, is_outline=True)
-    front_inner_leg = front.append(
+    front.append(
         CubicBezier(pt8, bz_control, pt15.translate(0.1 * CM, -2 * CM), pt15),
         style=STYLE_STITCH,
         is_outline=True,
     )
-    front_curve = front.append(
+    front.append(
         CubicBezier(pt7, bz_control3, bz_control2, pt8),
         style=STYLE_STITCH,
         is_outline=True,
@@ -222,8 +222,9 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
 
     # Leg-grid midpoints for back
     back_pt9 = Point(back_pt0.x + 0.5 * meas.front_trouser_width, back_pt1.y)
-    back_pt10 = Point(back_pt0.x + 0.5 * meas.front_trouser_width, intersect(bg_hm, bg_kni)[0].y)
-    back_pt11 = Point(back_pt0.x + 0.5 * meas.front_trouser_width, intersect(bg_hm, bg_mol)[0].y)
+    back_pt11 = Point(
+        back_pt0.x + 0.5 * meas.front_trouser_width, intersect(bg_hm, bg_mol)[0].y
+    )
     back_pt12 = Point(back_pt11.x - (model.hem_width / 2 + 0.5 * CM), back_pt11.y)
     back_pt13 = Point(back_pt11.x + (model.hem_width / 2 + 0.5 * CM), back_pt11.y)
 

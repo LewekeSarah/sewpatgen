@@ -35,7 +35,6 @@ import pandas as pd
 
 from .units import CM
 
-
 # ---------------------------------------------------------------------------
 # CSV loader — executed once at import time
 # ---------------------------------------------------------------------------
@@ -44,19 +43,20 @@ _CSV_PATH = Path(__file__).parent / "data" / "fitclass.csv"
 
 #: Ease fields exposed on FitClass (matches CSV column level-0 names).
 EASE_FIELDS = (
-    "back_width_ease",      # RüB   — Rückenbreite-Zugabe
-    "armscye_width_ease",   # ArD   — Armdurchmesser-Zugabe
-    "chest_width_ease",     # BrB   — Brustbreite-Zugabe
-    "armscye_depth_ease",   # AlT   — Armlochtiefe-Zugabe
-    "waist_ease",           # TaU   — Taillenumfang-Zugabe
-    "hip_ease",             # HüU   — Hüftumfang-Zugabe
-    "bust_point_ease",      # ZuBrA — Zugabe Brustpunktabstand
+    "back_width_ease",  # RüB   — Rückenbreite-Zugabe
+    "armscye_width_ease",  # ArD   — Armdurchmesser-Zugabe
+    "chest_width_ease",  # BrB   — Brustbreite-Zugabe
+    "armscye_depth_ease",  # AlT   — Armlochtiefe-Zugabe
+    "waist_ease",  # TaU   — Taillenumfang-Zugabe
+    "hip_ease",  # HüU   — Hüftumfang-Zugabe
+    "bust_point_ease",  # ZuBrA — Zugabe Brustpunktabstand
     "shoulder_width_ease",  # SuB   — Schulterbreite-Zugabe
 )
 
 
 class _Range(NamedTuple):
     """Published [lo, hi] range for a single ease field at a given PK."""
+
     lo: float
     hi: float
 
@@ -80,6 +80,7 @@ _TABLE: dict[int, dict[str, _Range]] = _load_table()
 # ---------------------------------------------------------------------------
 # FitClass
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class FitClass:
@@ -112,35 +113,35 @@ class FitClass:
 
     pk: int
     # Private overrides — use the public properties to read resolved values.
-    _back_width_ease:    float | None = None  # RüB  — Rückenbreite-Zugabe
+    _back_width_ease: float | None = None  # RüB  — Rückenbreite-Zugabe
     _armscye_width_ease: float | None = None  # ArD  — Armdurchmesser-Zugabe
-    _chest_width_ease:   float | None = None  # BrB  — Brustbreite-Zugabe
+    _chest_width_ease: float | None = None  # BrB  — Brustbreite-Zugabe
     _armscye_depth_ease: float | None = None  # AlT  — Armlochtiefe-Zugabe
-    _waist_ease:         float | None = None  # TaU  — Taillenumfang-Zugabe
-    _hip_ease:           float | None = None  # HüU  — Hüftumfang-Zugabe
-    _bust_point_ease:    float | None = None  # ZuBrA — Zugabe Brustpunktabstand
+    _waist_ease: float | None = None  # TaU  — Taillenumfang-Zugabe
+    _hip_ease: float | None = None  # HüU  — Hüftumfang-Zugabe
+    _bust_point_ease: float | None = None  # ZuBrA — Zugabe Brustpunktabstand
     _shoulder_width_ease: float | None = None  # ScB  — Schulterbreite-Zugabe
 
     def __init__(
         self,
         pk: int,
-        back_width_ease:    float | None = None,
+        back_width_ease: float | None = None,
         armscye_width_ease: float | None = None,
-        chest_width_ease:   float | None = None,
+        chest_width_ease: float | None = None,
         armscye_depth_ease: float | None = None,
-        waist_ease:         float | None = None,
-        hip_ease:           float | None = None,
-        bust_point_ease:    float | None = None,
+        waist_ease: float | None = None,
+        hip_ease: float | None = None,
+        bust_point_ease: float | None = None,
         shoulder_width_ease: float | None = None,
     ) -> None:
         self.pk = pk
-        self._back_width_ease    = back_width_ease
+        self._back_width_ease = back_width_ease
         self._armscye_width_ease = armscye_width_ease
-        self._chest_width_ease   = chest_width_ease
+        self._chest_width_ease = chest_width_ease
         self._armscye_depth_ease = armscye_depth_ease
-        self._waist_ease         = waist_ease
-        self._hip_ease           = hip_ease
-        self._bust_point_ease    = bust_point_ease
+        self._waist_ease = waist_ease
+        self._hip_ease = hip_ease
+        self._bust_point_ease = bust_point_ease
         self._shoulder_width_ease = shoulder_width_ease
         self.__post_init__()
 
@@ -159,8 +160,9 @@ class FitClass:
                 r = row[ef]
                 if not (r.lo - 1e-9 <= override <= r.hi + 1e-9):
                     raise ValueError(
-                        f"FitClass pk={self.pk}: {ef}={override/CM:.2f} cm is outside "
-                        f"the valid range [{r.lo/CM:.2f}, {r.hi/CM:.2f}] cm."
+                        f"FitClass pk={self.pk}: {ef}={override / CM:.2f} cm is "
+                        f"outside the valid range "
+                        f"[{r.lo / CM:.2f}, {r.hi / CM:.2f}] cm."
                     )
 
     def _resolve(self, field_name: str) -> float:
@@ -218,9 +220,7 @@ class FitClass:
     def bust_width_ease(self) -> float:
         """BrW-Zugabe — always derived: 2 × (back + armscye_width + chest)."""
         return 2.0 * (
-            self.back_width_ease
-            + self.armscye_width_ease
-            + self.chest_width_ease
+            self.back_width_ease + self.armscye_width_ease + self.chest_width_ease
         )
 
     def range(self, field_name: str) -> _Range:

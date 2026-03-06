@@ -8,10 +8,10 @@ as ``.part`` for adding to a :class:`~sewpat.pattern.Pattern`.
 
 from dataclasses import dataclass
 
-from .geometry import Segment
 from .fitclass import FitClass
+from .geometry import Segment
 from .measurements import BlouseMeasurements, GarmentConfig
-from .pattern import ConstructionGrid, PatternConfig, ConstructionGridPart
+from .pattern import ConstructionGrid, ConstructionGridPart, PatternConfig
 
 
 @dataclass(frozen=True)
@@ -91,18 +91,20 @@ class TopGrid:
         """
 
         bust_point_ease = fit_class.bust_point_ease
-        length          = config.length
-        seam_allowance  = config.seam_allowance
+        length = config.length
 
         layout = layout or PatternConfig()
 
-        hip_adj  = hip_offset * meas.armscye_depth / meas.back_length
+        hip_adj = hip_offset * meas.armscye_depth / meas.back_length
         bust_pos = meas.bust / 10 + bust_point_ease
 
         cg = ConstructionGrid(
             anchor=layout.anchor,
             horizontals=[
-                ("Shoulder Front", meas.back_length - meas.front_length),  # TODO check front_length vs VL2
+                (
+                    "Shoulder Front",
+                    meas.back_length - meas.front_length,
+                ),  # TODO check front_length vs VL2
                 ("Shoulder Back", 0),
                 ("Chest", meas.armscye_depth),
                 ("Waist", meas.back_length),
@@ -116,15 +118,33 @@ class TopGrid:
                 ("Dart Back", hip_adj + meas.back_width / 2),
                 ("Armscye Back", hip_adj + meas.back_width),
                 ("Side Back", hip_adj + meas.back_width + meas.armscye_width * 2 / 3),
-                ("Side Front", hip_adj + meas.back_width + meas.armscye_width * 2 / 3 + layout.margin),
-                ("Armscye Front", hip_adj + meas.back_width + meas.armscye_width + layout.margin),
+                (
+                    "Side Front",
+                    hip_adj
+                    + meas.back_width
+                    + meas.armscye_width * 2 / 3
+                    + layout.margin,
+                ),
+                (
+                    "Armscye Front",
+                    hip_adj + meas.back_width + meas.armscye_width + layout.margin,
+                ),
                 (
                     "Bustpoint",
-                    hip_adj + meas.back_width + meas.armscye_width + meas.chest_width - bust_pos + layout.margin,
+                    hip_adj
+                    + meas.back_width
+                    + meas.armscye_width
+                    + meas.chest_width
+                    - bust_pos
+                    + layout.margin,
                 ),
                 (
                     "Center Front",
-                    hip_adj + meas.back_width + meas.armscye_width + meas.chest_width + layout.margin,
+                    hip_adj
+                    + meas.back_width
+                    + meas.armscye_width
+                    + meas.chest_width
+                    + layout.margin,
                 ),
             ],
             part_name="Grid",
@@ -172,13 +192,11 @@ def _check_chest_width(grid: "TopGrid", expected_half_width: float) -> None:
     Raises:
         ValueError: if the constraint is violated beyond floating-point tolerance.
     """
-    actual = (
-        (grid.side_back.p1.x    - grid.hip_adj.p1.x) +
-        (grid.center_front.p1.x - grid.side_front.p1.x)
+    actual = (grid.side_back.p1.x - grid.hip_adj.p1.x) + (
+        grid.center_front.p1.x - grid.side_front.p1.x
     )
     if abs(actual - expected_half_width) > 1e-6:
         raise ValueError(
             f"Chest-width control failed: hip_adj→side_back + side_front→center_front "
             f"= {actual:.4f} but expected {expected_half_width:.4f}."
         )
-

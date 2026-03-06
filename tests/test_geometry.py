@@ -9,7 +9,16 @@ import unittest
 
 import numpy as np
 
-from sewpat.geometry import Circle, CubicBezier, Point, Ray, Segment, intersect
+from sewpat.geometry import (
+    Circle,
+    CubicBezier,
+    Point,
+    Ray,
+    Segment,
+    intersect,
+    miter_corner,
+    round_corner,
+)
 
 
 class TestPoint(unittest.TestCase):
@@ -131,7 +140,8 @@ class TestPoint(unittest.TestCase):
         self.assertAlmostEqual(mid.y, 3)
 
     def test_add_non_point_returns_not_implemented(self):
-        """Adding a non-Point returns NotImplemented (no TypeError from Point itself)."""
+        """Adding a non-Point returns NotImplemented
+        (no TypeError from Point itself)."""
         p = Point(1, 2)
         result = p.__add__(42)
         self.assertIs(result, NotImplemented)
@@ -199,7 +209,8 @@ class TestPointMoveTowards(unittest.TestCase):
         bez = CubicBezier(Point(0, 0), Point(33, 0), Point(66, 0), Point(100, 0))
         p = bez.point_at_t(0.3)  # ≈ 30 mm along
         result = p.move_towards(bez, 20)
-        # Should land near x=50; allow 0.5 mm tolerance for round-trip arc-length accumulation
+        # Should land near x=50; allow 0.5 mm tolerance for
+        # round-trip arc-length accumulation
         self.assertAlmostEqual(result.x, 50.0, places=0)
         self.assertAlmostEqual(result.y, 0.0, places=3)
 
@@ -257,7 +268,8 @@ class TestPointMoveTowards(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_circle_ccw(self):
-        """Moving CCW along a circle by π*r (half circumference) reaches the antipode."""
+        """Moving CCW along a circle by π*r (half circumference)
+        reaches the antipode."""
         c = Circle(Point(0, 0), 10)
         p = c.point_at_angle(0)  # (10, 0)
         half_circ = math.pi * 10
@@ -926,8 +938,8 @@ class TestCubicBezierNewMethods(unittest.TestCase):
     def test_length_is_property(self):
         """length must be accessible as a property (no call parentheses)."""
         b = self._curve()
-        l = b.length  # must not raise TypeError
-        self.assertGreater(l, 0.0)
+        curve_len = b.length  # must not raise TypeError
+        self.assertGreater(curve_len, 0.0)
 
     # ── normal_at_t ─────────────────────────────────────────────────────────
 
@@ -1369,9 +1381,6 @@ class TestCubicBezierConsistencyMethods(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-from sewpat.geometry import miter_corner, round_corner
-
-
 class TestMiterCornerReflex(unittest.TestCase):
     """Tests for the reflex-corner (concave) detection in miter_corner()."""
 
@@ -1391,7 +1400,6 @@ class TestMiterCornerReflex(unittest.TestCase):
 
     def test_convex_corner_miter_extends_outward(self):
         """A convex 90° corner must produce a miter point outside the original seams."""
-        geoms = self._rect_offset_geoms()
         # Corner between top (→) and right (↓): expected miter at (110, -10)
         # which is the exact intersection — gap is 0 but we test conceptually.
         # Use two perpendicular segments that meet at a gap:
@@ -1409,8 +1417,6 @@ class TestMiterCornerReflex(unittest.TestCase):
         ga goes left (←) and gb goes right (→) — a 180°-reversal / hairpin,
         which is the extreme reflex case.
         """
-        ga = Segment(Point(50, 5), Point(0, 5))  # going left, end at (0,5)
-        gb = Segment(Point(0, 5), Point(50, 5))  # going right, start at (0,5)
         # For a less extreme case: ga ends at (10,0) going right, gb starts at
         # (10, 20) going right — the miter intersection would be far behind.
         ga2 = Segment(Point(0, 0), Point(10, 0))  # → end=(10,0)
@@ -1500,7 +1506,8 @@ class TestRoundCorner(unittest.TestCase):
             self.assertLess(
                 radial_err,
                 tolerance,
-                f"t={k / 20:.2f}: radial error {radial_err:.5f} mm > {tolerance:.5f} mm",
+                f"t={k / 20:.2f}: radial error "
+                f"{radial_err:.5f} mm > {tolerance:.5f} mm",
             )
 
     def test_reflex_corner_returns_point(self):

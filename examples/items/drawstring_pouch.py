@@ -55,7 +55,6 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     # Named grid lines
     g_top = grid_part.get_element("Oberkante").geometry
     g_ds_top = grid_part.get_element("Tunnelzug oben").geometry
-    g_ds_bot = grid_part.get_element("Tunnelzug unten").geometry
     g_bot = grid_part.get_element("Unterkante").geometry
     g_left = grid_part.get_element("linke Kante").geometry
     g_right = grid_part.get_element("rechte Kante").geometry
@@ -72,7 +71,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     body = PatternPart(name="body")
     pattern.add_part(body)
 
-    left_edge = body.append(
+    body.append(
         Segment(bottom_left, top_left),
         style=STYLE_STITCH,
         is_outline=True,
@@ -82,7 +81,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
         style=STYLE_HEM,
         is_outline=True,
     )
-    right_edge = body.append(
+    body.append(
         Segment(top_right, bottom_right),
         style=STYLE_STITCH,
         is_outline=True,

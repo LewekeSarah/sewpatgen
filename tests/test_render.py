@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from sewpat.element import PatternElement
 from sewpat.geometry import (
     Circle,
     CubicBezier,
@@ -22,8 +23,6 @@ from sewpat.geometry import (
     Segment,
     Triangle,
 )
-from sewpat.pattern import Pattern, PatternPart
-from sewpat.element import PatternElement
 from sewpat.render import (
     _build_svg,
     _resolve_styles,
@@ -400,7 +399,8 @@ class TestRenderConstruction(unittest.TestCase):
         self.assertIn("aux", svg)
 
     def test_point_always_rendered(self):
-        """Points are regular elements — rendered unless is_construction=True hides them."""
+        """Points are regular elements — rendered unless
+        is_construction=True hides them."""
         part = PatternPart(name="p")
         part.elements.append(PatternElement(Point(5, 5)))
         svg = _build_svg(
@@ -427,7 +427,6 @@ class TestRenderConstruction(unittest.TestCase):
             show_bezier_control_points=False,
         )
         self.assertIn(">A<", svg)
-
 
 
 class TestRenderInfoBox(unittest.TestCase):

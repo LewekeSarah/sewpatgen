@@ -142,14 +142,16 @@ def demonstrate_circles():
     test_point = Point(3, 4)  # 3-4-5 triangle – lies on circle 1
     print(f"Is point {test_point} on circle 1? {circle1.contains_point(test_point)}")
     print(
-        f"Is point {test_point} inside circle 1? {circle1.contains_point_inside(test_point)}"
+        f"Is point {test_point} inside circle 1? "
+            f"{circle1.contains_point_inside(test_point)}"
     )
 
     # Circle–circle intersection
     intersections = intersect(circle1, circle2)
     if len(intersections) == 2:
         print(
-            f"Circle 1 and circle 2 intersect at: {intersections[0]} and {intersections[1]}"
+            f"Circle 1 and circle 2 intersect at: "
+            f"{intersections[0]} and {intersections[1]}"
         )
     elif len(intersections) == 1:
         print(f"Circle 1 and circle 2 touch at: {intersections[0]}")
@@ -161,7 +163,8 @@ def demonstrate_circles():
     intersections = intersect(circle1, line)
     if len(intersections) == 2:
         print(
-            f"Circle 1 and horizontal segment intersect at: {intersections[0]} and {intersections[1]}"
+            f"Circle 1 and horizontal segment intersect at: "
+            f"{intersections[0]} and {intersections[1]}"
         )
     elif len(intersections) == 1:
         print(f"Circle 1 and horizontal segment touch at: {intersections[0]}")

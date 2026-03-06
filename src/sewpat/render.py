@@ -4,6 +4,7 @@ from typing import Any, Callable
 
 import numpy as np
 
+from sewpat.element import PatternElement
 from sewpat.geometry import (
     Circle,
     CubicBezier,
@@ -17,7 +18,6 @@ from sewpat.geometry import (
     geom_end,
     geom_start,
 )
-from sewpat.element import PatternElement
 from sewpat.markers import ARROW_DEFS, SCISSOR_BLADE_OVERHANG
 from sewpat.pattern import (
     Block,
@@ -119,8 +119,10 @@ def _render_cubic_bezier(
         c_width = 0.3
         for p_start, p_end in [(element.p0, element.p1), (element.p2, element.p3)]:
             nodes.append(
-                f'<line x1="{p_start.x}" y1="{p_start.y}" x2="{p_end.x}" y2="{p_end.y}" '
-                f'stroke="{c_stroke}" stroke-width="{c_width}mm" fill="none" stroke-dasharray="2,2" />'
+                f'<line x1="{p_start.x}" y1="{p_start.y}" '
+                f'x2="{p_end.x}" y2="{p_end.y}" '
+                f'stroke="{c_stroke}" stroke-width="{c_width}mm" '
+                f'fill="none" stroke-dasharray="2,2" />'
             )
         for pt in [element.p0, element.p1, element.p2, element.p3]:
             nodes.append(
@@ -304,7 +306,10 @@ def _render_rect(element: Rect, style_dict: dict[str, Any]) -> list[str]:
     w, h = element.width, element.height
 
     # Unique clip id — use integer representation of coords to avoid dots in ids
-    clip_id = f"rc_{int(round(x * 100))}_{int(round(y * 100))}_{int(round(w * 100))}_{int(round(h * 100))}"
+    clip_id = (
+        f"rc_{int(round(x * 100))}_{int(round(y * 100))}"
+        f"_{int(round(w * 100))}_{int(round(h * 100))}"
+    )
 
     nodes.append(
         f'<clipPath id="{clip_id}">'
@@ -351,20 +356,23 @@ def _make_renderers(
 ) -> dict[type, Callable[[Any, dict[str, Any]], list[str]]]:
     """Build a mapping from geometry type to its render callable."""
     return {
-        CubicBezier: lambda el, sd: _render_cubic_bezier(el, sd, show_bezier_control_points),
-        Segment:     lambda el, sd: _render_segment(el, sd),
-        Line:        lambda el, sd: _render_line(el, sd),
-        Ray:         lambda el, sd: _render_ray(el, sd),
-        Circle:      lambda el, sd: _render_circle(el, sd),
-        Triangle:    lambda el, sd: _render_triangle(el, sd),
-        InfoBox:     lambda el, sd: _render_info_box(el, sd),
-        Rect:        lambda el, sd: _render_rect(el, sd),
-        Point:       lambda el, sd: _render_point(el, sd),
+        CubicBezier: lambda el, sd: _render_cubic_bezier(
+            el, sd, show_bezier_control_points
+        ),
+        Segment: lambda el, sd: _render_segment(el, sd),
+        Line: lambda el, sd: _render_line(el, sd),
+        Ray: lambda el, sd: _render_ray(el, sd),
+        Circle: lambda el, sd: _render_circle(el, sd),
+        Triangle: lambda el, sd: _render_triangle(el, sd),
+        InfoBox: lambda el, sd: _render_info_box(el, sd),
+        Rect: lambda el, sd: _render_rect(el, sd),
+        Point: lambda el, sd: _render_point(el, sd),
     }
 
 
 def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
-    """Serialize a sorted chain of Segment/CubicBezier objects into an SVG path string."""
+    """Serialize a sorted chain of Segment/CubicBezier objects
+    into an SVG path string."""
     if not geoms:
         return ""
 
@@ -389,7 +397,8 @@ def _render_seam_allowance_chain(
     sa_elements: list["PatternElement"],
     style_dict: dict[str, Any],
 ) -> list[str]:
-    """Render all SA Segment/CubicBezier elements as one ``<path>`` for clean linejoin corners."""
+    """Render all SA Segment/CubicBezier elements as one ``<path>``
+    for clean linejoin corners."""
     geoms: list[Segment | CubicBezier] = [
         e.geometry
         for e in sa_elements
@@ -462,20 +471,14 @@ def _render_elements(
         if renderer is not None:
             original_name = getattr(element, "name", None)
             try:
-                (
+                if isinstance(element, Point):
                     object.__setattr__(element, "name", effective_name)
-                    if isinstance(element, Point)
-                    else setattr(element, "name", effective_name)
-                )
             except (AttributeError, TypeError):
                 pass
             svg_nodes.extend(renderer(element, style.as_dict()))
             try:
-                (
+                if isinstance(element, Point):
                     object.__setattr__(element, "name", original_name)
-                    if isinstance(element, Point)
-                    else setattr(element, "name", original_name)
-                )
             except (AttributeError, TypeError):
                 pass
 
@@ -492,7 +495,8 @@ def _render_elements(
 def _resolve_styles(
     style_map: dict[str, StyleOptions] | None,
 ) -> dict[str, StyleOptions]:
-    """Merge *style_map* overrides into ``_DEFAULT_STYLES``; unknown keys raise ``ValueError``."""
+    """Merge *style_map* overrides into ``_DEFAULT_STYLES``;
+    unknown keys raise ``ValueError``."""
     styles = {**_DEFAULT_STYLES}
     if style_map:
         for k, v in style_map.items():

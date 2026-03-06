@@ -69,7 +69,9 @@ class TrouserMeasurements:
             else self.front_trouser_width
         )
         if self.gender in [Gender.boy, Gender.girl]:
-            self.knee_height = 0.5 * self.inseam if self.knee_height is None else self.knee_height
+            self.knee_height = (
+                0.5 * self.inseam if self.knee_height is None else self.knee_height
+            )
             self.sTaH = self.inseam + self.body_rise
         elif self.gender == Gender.female:
             self.knee_height = (
@@ -103,11 +105,15 @@ class BlouseMeasurements:
     gender: Gender = Gender.female
 
     def __post_init__(self):
-        if abs(self.bust_width / 2 - (self.back_width + self.armscye_width + self.chest_width)) > 1e-6:
+        if abs(
+            self.bust_width / 2
+            - (self.back_width + self.armscye_width + self.chest_width)
+        ) > 1e-6:
             raise ValueError(
                 f"Bust width components do not match bust_width: "
                 f"bust_width/2={self.bust_width/2:.6f} != "
-                f"back+armscye+chest={self.back_width+self.armscye_width+self.chest_width:.6f}"
+                f"back+armscye+chest="
+                f"{self.back_width+self.armscye_width+self.chest_width:.6f}"
             )
 
 
@@ -116,9 +122,11 @@ class GarmentConfig:
     """Pure garment-design choices — independent of body measurements and fit.
 
     Attributes:
-        length:                Modell-Länge (MoL) — finished garment length (hem to nape).
+        length:                Modell-Länge (MoL) — finished garment length
+                               (hem to nape).
         seam_allowance:        Nahtzugabe — seam allowance width added to all seams.
-        hem_width:             Saumweite (SaW) — hem width (optional; used for trousers).
+        hem_width:             Saumweite (SaW) — hem width (optional; used for
+                               trousers).
         shoulder_gather:       Schulter-Weite — gather/ease added to the shoulder seam
                                length.  Lengthens the shoulder seam on both pieces so
                                fabric can be eased or gathered at the sleeve head.
@@ -136,8 +144,8 @@ class GarmentConfig:
     hem_width: float | None = None            # SaW — Saumweite
     shoulder_gather: float = 1 * CM           # Schulter-Weite — shoulder seam gather
     armscye_fit: float = 0.0                  # Armlochpassform — 0 regular, 1 tight
-    waist_dart_back_tip: float = 16 * CM      # hAbI-Spitze — back waist dart lower tip depth
-    waist_dart_front_tip: float = 12 * CM     # vAbI-Spitze — front waist dart lower tip depth
+    waist_dart_back_tip: float = 16 * CM      # hAbI-Spitze — back waist dart lower tip
+    waist_dart_front_tip: float = 12 * CM     # vAbI-Spitze — front waist dart lower tip
 
     def __post_init__(self) -> None:
         if not (0.0 - 1e-9 <= self.armscye_fit <= 1.0 * CM + 1e-9):
@@ -147,8 +155,8 @@ class GarmentConfig:
             )
         if not (13.0 * CM - 1e-9 <= self.waist_dart_back_tip <= 16.0 * CM + 1e-9):
             raise ValueError(
-                f"waist_dart_back_tip={self.waist_dart_back_tip / CM:.2f} cm is outside "
-                f"the valid range [13, 16] cm."
+                f"waist_dart_back_tip={self.waist_dart_back_tip / CM:.2f} cm is "
+                f"outside the valid range [13, 16] cm."
             )
 
 
@@ -176,7 +184,8 @@ class WaistDistribution:
         side_seam_intake:  Side-seam take-in per side (clamped to 0–2 cm).
         front_dart_width:  Front waist dart intake (clamped to 1–3 cm).
         back_dart_width:   Back waist dart intake (clamped to 2–4 cm).
-        remainder:         Undistributed excess after clamping (0 if perfectly distributed).
+        remainder:         Undistributed excess after clamping
+                           (0 if perfectly distributed).
     """
 
     front_waist_width: float   # vTaB — vordere Taillenbreite
@@ -306,7 +315,8 @@ def make_top_measurements(
 
     Args:
         person:    A :class:`~sewpat.person.BalancedPerson` — use
-                   :meth:`~sewpat.person.PersonAnalyser.get_balanced_person` to obtain one.
+                   :meth:`~sewpat.person.PersonAnalyser.get_balanced_person`
+                   to obtain one.
         fit_class: :class:`~sewpat.fitclass.FitClass` providing all ease values.
     """
     measurements = {k: v for k, v in person.person.__dict__.items() if v is not None}
@@ -352,7 +362,10 @@ def make_measurements_trouser(
             if key in measurements:
                 measurements[key] += val
 
-    trouser_keys = ["waist", "hip", "hip_depth", "body_rise", "inseam", "waist_width", "hip_width"]
+    trouser_keys = [
+        "waist", "hip", "hip_depth", "body_rise",
+        "inseam", "waist_width", "hip_width",
+    ]
     trouser_dict = {k: v for k, v in measurements.items() if k in trouser_keys}
     trouser_dict["gender"] = person.gender
     return TrouserMeasurements(**trouser_dict)

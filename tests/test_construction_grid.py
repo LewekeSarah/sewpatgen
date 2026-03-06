@@ -12,8 +12,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from sewpat.geometry import Point, Segment, Triangle
 from sewpat.element import PatternElement
+from sewpat.geometry import Point, Segment, Triangle
 from sewpat.pattern import (
     ConstructionGrid,
     ConstructionGridPart,

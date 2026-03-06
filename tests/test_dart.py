@@ -1,18 +1,13 @@
 """Tests for Dart geometry and PatternPart.add_dart()."""
 
 import math
-
-import pytest
 import warnings
 
-from sewpat import CM, MM, Dart, DartResult, DartType, Point, Segment
-from sewpat.geometry import CubicBezier
+from sewpat import Dart, DartResult, DartType, Point, Segment
 from sewpat.element import PatternElement
 from sewpat.pattern import PatternPart
 from sewpat.style import STYLE_DART_FOLD, STYLE_DART_STITCH, StyleOptions
 
-
-# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
@@ -218,7 +213,10 @@ class TestDartSecondTipWarning:
     def test_direct_init_triangle_warns(self) -> None:
         with pytest.warns(UserWarning, match="second_tip"):
             Dart(
-                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
+                Point(50, 0),
+                Point(50, 80),
                 dart_type=DartType.TRIANGLE,
                 second_tip=self._second_tip,
             )
@@ -226,7 +224,9 @@ class TestDartSecondTipWarning:
     def test_from_tip_center_width_triangle_warns(self) -> None:
         with pytest.warns(UserWarning, match="second_tip"):
             Dart.from_tip_center_width(
-                tip=Point(50, 80), center=Point(50, 0), width=20.0,
+                tip=Point(50, 80),
+                center=Point(50, 0),
+                width=20.0,
                 dart_type=DartType.TRIANGLE,
                 second_tip=self._second_tip,
             )
@@ -234,7 +234,9 @@ class TestDartSecondTipWarning:
     def test_from_tip_and_legs_triangle_warns(self) -> None:
         with pytest.warns(UserWarning, match="second_tip"):
             Dart.from_tip_and_legs(
-                Point(50, 80), Point(40, 0), Point(60, 0),
+                Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
                 dart_type=DartType.TRIANGLE,
                 second_tip=self._second_tip,
             )
@@ -242,7 +244,10 @@ class TestDartSecondTipWarning:
     def test_warning_message_mentions_dart_type(self) -> None:
         with pytest.warns(UserWarning, match="triangle"):
             Dart(
-                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
+                Point(50, 0),
+                Point(50, 80),
                 dart_type=DartType.TRIANGLE,
                 second_tip=self._second_tip,
             )
@@ -250,7 +255,10 @@ class TestDartSecondTipWarning:
     def test_warning_is_user_warning(self) -> None:
         with pytest.warns(UserWarning):
             Dart(
-                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
+                Point(50, 0),
+                Point(50, 80),
                 dart_type=DartType.TRIANGLE,
                 second_tip=self._second_tip,
             )
@@ -261,7 +269,10 @@ class TestDartSecondTipWarning:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             Dart(
-                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
+                Point(50, 0),
+                Point(50, 80),
                 dart_type=DartType.RHOMBUS,
                 second_tip=self._second_tip,
             )
@@ -275,7 +286,10 @@ class TestDartSecondTipWarning:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             Dart(
-                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
+                Point(50, 0),
+                Point(50, 80),
                 dart_type=DartType.RHOMBUS,
             )
 
@@ -283,7 +297,9 @@ class TestDartSecondTipWarning:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             Dart.from_tip_center_width(
-                tip=Point(50, 80), center=Point(50, 0), width=20.0,
+                tip=Point(50, 80),
+                center=Point(50, 0),
+                width=20.0,
                 dart_type=DartType.RHOMBUS,
                 second_tip=self._second_tip,
             )
@@ -292,14 +308,19 @@ class TestDartSecondTipWarning:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             Dart.from_tip_and_legs(
-                Point(50, 80), Point(40, 0), Point(60, 0),
+                Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
                 dart_type=DartType.RHOMBUS,
                 second_tip=self._second_tip,
             )
 
     def test_rhombus_with_second_tip(self) -> None:
         d = Dart(
-            Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+            Point(40, 0),
+            Point(60, 0),
+            Point(50, 0),
+            Point(50, 80),
             dart_type=DartType.RHOMBUS,
             second_tip=self._second_tip,
         )
@@ -650,7 +671,6 @@ class TestDartResult:
 
     def test_elements_all_added_to_part(self) -> None:
         part = _square_part()
-        baseline = len(part.elements)
         result = part.add_dart(_simple_dart(), notches=True, precision_tip=True)
         assert all(e in part.elements for e in result.elements)
 

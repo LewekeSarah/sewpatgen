@@ -89,7 +89,10 @@ class Point:
 
     def __str__(self) -> str:
         if self.name:
-            return f"Point(name={self.name}, x={self.coords[0]:.6g}, y={self.coords[1]:.6g})"
+            return (
+                f"Point(name={self.name}, "
+                f"x={self.coords[0]:.6g}, y={self.coords[1]:.6g})"
+            )
         else:
             return f"Point(x={self.coords[0]:.6g}, y={self.coords[1]:.6g})"
 
@@ -205,7 +208,8 @@ class Segment:
         length: float,
         name: str | None = None,
     ) -> "Segment":
-        """Create a segment starting at *start*, pointing towards *through*, with given *length*.
+        """Create a segment starting at *start*, pointing towards *through*,
+        with given *length*.
 
         The direction is determined by the vector from *start* to *through*;
         the actual distance between them does not matter.
@@ -383,7 +387,8 @@ class Segment:
         """Return a point offset perpendicularly from the segment.
 
         Positive *distance* = left of travel direction (p1→p2), negative = right.
-        Position is given by *t* (0–1) or *arc_length* (mm from p1); defaults to midpoint.
+        Position is given by *t* (0–1) or *arc_length* (mm from p1);
+        defaults to midpoint.
 
         Raises:
             ValueError: If both *arc_length* and *t* are given.
@@ -415,17 +420,20 @@ class Segment:
         return foot * 2.0 - point
 
     def contains_point(self, point: Point, tolerance: float = 1e-9) -> bool:
-        """Return True if *point* lies on the segment within *tolerance* mm (uses Shapely GEOS)."""
+        """Return True if *point* lies on the segment within *tolerance* mm
+        (uses Shapely GEOS)."""
         ls = _sg.LineString([(self.p1.x, self.p1.y), (self.p2.x, self.p2.y)])
         return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
     def point_at_length(self, arc_length: float) -> Point:
-        """Return the point at *arc_length* mm from p1. Raises ValueError if out of range."""
+        """Return the point at *arc_length* mm from p1.
+        Raises ValueError if out of range."""
         total = self.length
         return self.point_at_t(arc_length / total)
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
-        """Return the point *arc_length* mm further along this segment from *point* (p1→p2 direction)."""
+        """Return the point *arc_length* mm further along this segment from
+        *point* (p1→p2 direction)."""
         pos = float(np.dot(point.coords - self.p1.coords, self.unit_direction))
         return self.point_at_length(pos + arc_length)
 
@@ -498,7 +506,10 @@ class Ray:
 
     def __str__(self) -> str:
         if self.name:
-            return f"Ray(name={self.name}, origin={self.origin}, direction={self.direction})"
+            return (
+                f"Ray(name={self.name}, origin={self.origin}, "
+                f"direction={self.direction})"
+            )
         else:
             return f"Ray(origin={self.origin}, direction={self.direction})"
 
@@ -539,7 +550,8 @@ class Ray:
         return abs(dot_product - 1.0) < tolerance
 
     def point_perpendicular(self, distance: float, arc_length: float) -> Point:
-        """Return a point offset perpendicularly by *distance* at *arc_length* along the ray.
+        """Return a point offset perpendicularly by *distance* at *arc_length*
+        along the ray.
 
         Positive *distance* = left of direction, negative = right.
         """
@@ -547,7 +559,8 @@ class Ray:
         return Point(*(base + self.unit_normal * distance))
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
-        """Return the point *arc_length* mm further along this ray from *point* (away from origin)."""
+        """Return the point *arc_length* mm further along this ray from *point*
+        (away from origin)."""
         pos = float(np.dot(point.coords - self.origin.coords, self.unit_direction))
         return self.point_at_distance(pos + arc_length)
 
@@ -597,7 +610,10 @@ class Line:
 
     def __str__(self) -> str:
         if self.name:
-            return f"Line(name={self.name}, point={self.point}, direction={self.direction})"
+            return (
+                f"Line(name={self.name}, point={self.point}, "
+                f"direction={self.direction})"
+            )
         else:
             return f"Line(point={self.point}, direction={self.direction})"
 
@@ -637,7 +653,8 @@ class Line:
         return abs(abs(dot_product) - 1.0) < tolerance
 
     def point_perpendicular(self, distance: float, arc_length: float) -> Point:
-        """Return a point offset perpendicularly by *distance* at *arc_length* along the line.
+        """Return a point offset perpendicularly by *distance* at *arc_length*
+        along the line.
 
         Positive *distance* = left of direction, negative = right.
         """
@@ -645,7 +662,8 @@ class Line:
         return Point(*(base + self.unit_normal * distance))
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
-        """Return the point *arc_length* mm further along this line from *point* (positive = line direction)."""
+        """Return the point *arc_length* mm further along this line from *point*
+        (positive = line direction)."""
         pos = float(np.dot(point.coords - self.point.coords, self.unit_direction))
         return self.point_at_distance(pos + arc_length)
 
@@ -678,11 +696,20 @@ class Rect:
 
     def __str__(self) -> str:
         if self.name:
-            return f"Rect(name={self.name}, origin={self.origin}, width={self.width:.6g}, height={self.height:.6g})"
-        return f"Rect(origin={self.origin}, width={self.width:.6g}, height={self.height:.6g})"
+            return (
+                f"Rect(name={self.name}, origin={self.origin}, "
+                f"width={self.width:.6g}, height={self.height:.6g})"
+            )
+        return (
+            f"Rect(origin={self.origin}, "
+            f"width={self.width:.6g}, height={self.height:.6g})"
+        )
 
     def __repr__(self) -> str:
-        return f"Rect(origin={self.origin}, width={self.width:.6g}, height={self.height:.6g})"
+        return (
+            f"Rect(origin={self.origin}, "
+            f"width={self.width:.6g}, height={self.height:.6g})"
+        )
 
     def translate(self, dx: float, dy: float) -> "Rect":
         """Return a copy translated by (dx, dy)."""
@@ -805,7 +832,10 @@ class Circle:
 
     def __str__(self) -> str:
         if self.name:
-            return f"Circle(name={self.name}, center={self.center}, radius={self.radius:.6g})"
+            return (
+                f"Circle(name={self.name}, center={self.center}, "
+                f"radius={self.radius:.6g})"
+            )
         else:
             return f"Circle(center={self.center}, radius={self.radius:.6g})"
 
@@ -854,7 +884,8 @@ class Circle:
         return self
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
-        """Return the point *arc_length* mm further along this circle from *point* (CCW positive)."""
+        """Return the point *arc_length* mm further along this circle from *point*
+        (CCW positive)."""
         angle0 = math.atan2(point.y - self.center.y, point.x - self.center.x)
         return self.point_at_angle(angle0 + arc_length / self.radius)
 
@@ -940,7 +971,10 @@ class CubicBezier:
         self.name = name
 
     def __str__(self) -> str:
-        return f"CubicBezier(name={self.name}, p0={self.p0}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
+        return (
+            f"CubicBezier(name={self.name}, p0={self.p0}, p1={self.p1}, "
+            f"p2={self.p2}, p3={self.p3})"
+        )
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -1013,7 +1047,8 @@ class CubicBezier:
 
     @property
     def length(self) -> float:
-        """Exact arc length via Gauss-Legendre quadrature (delegated to svgpathtools)."""
+        """Exact arc length via Gauss-Legendre quadrature
+        (delegated to svgpathtools)."""
         return self._svg().length()
 
     def tangent_at_t(self, t: float) -> np.ndarray:
@@ -1051,7 +1086,8 @@ class CubicBezier:
                 return np.array([-dy / length, dx / length])
 
     def point_at_length(self, arc_length: float) -> Point:
-        """Return the point at *arc_length* mm from p0 (uses svgpathtools.ilength). Raises ValueError if out of range."""
+        """Return the point at *arc_length* mm from p0 (uses svgpathtools.ilength).
+        Raises ValueError if out of range."""
         total = self.length
         if arc_length < 0 or arc_length > total + 1e-9:
             raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
@@ -1059,14 +1095,16 @@ class CubicBezier:
         return self.point_at_t(t)
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
-        """Return the point *arc_length* mm further along this curve from *point* (p0→p3 direction)."""
+        """Return the point *arc_length* mm further along this curve from *point*
+        (p0→p3 direction)."""
         svg = self._svg()
         t0 = _bezier_closest_t(svg, complex(point.x, point.y))
         pos = float(svg.length(t1=t0))
         return self.point_at_length(pos + arc_length)
 
     def split(self, t: float) -> tuple["CubicBezier", "CubicBezier"]:
-        """Split at *t* into (left, right) using de Casteljau (delegated to svgpathtools)."""
+        """Split at *t* into (left, right) using de Casteljau
+        (delegated to svgpathtools)."""
         left, right = self._svg().split(t)
         return (
             CubicBezier(
@@ -1139,7 +1177,8 @@ class CubicBezier:
         return sub_curves
 
     def bounding_box(self) -> tuple[Point, Point]:
-        """Compute the axis-aligned bounding box by finding B'(t)=0 extrema (not the control-point hull)."""
+        """Compute the axis-aligned bounding box by finding B'(t)=0 extrema
+        (not the control-point hull)."""
         # Seed with the two curve endpoints only (they are always on the curve)
         x_coords = [self.p0.x, self.p3.x]
         y_coords = [self.p0.y, self.p3.y]
@@ -1186,7 +1225,8 @@ class CubicBezier:
         return Point(pt.x + distance * nor[0], pt.y + distance * nor[1])
 
     def contains_point(self, point: Point, tolerance: float = 0.01) -> bool:
-        """Return True if *point* is within *tolerance* mm of the curve (Shapely GEOS on 64-segment discretisation)."""
+        """Return True if *point* is within *tolerance* mm of the curve
+        (Shapely GEOS on 64-segment discretisation)."""
         ls = _bezier_shapely(self)  # 64-segment discretisation
         return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
@@ -1257,7 +1297,8 @@ class CubicBezier:
         return approx
 
     def offset_error(self, distance: float, center: Point | None = None) -> float:
-        """Return the Hausdorff distance (mm) between the hodograph approximation and the true parallel offset.
+        """Return the Hausdorff distance (mm) between the hodograph approximation
+        and the true parallel offset.
 
         Values well below *distance* indicate a reliable approximation;
         values above ``1.5 × distance`` suggest the curve is too tightly curved.
@@ -1282,7 +1323,8 @@ class CubicBezier:
         _depth: int = 0,
         _max_depth: int = 8,
     ) -> "list[CubicBezier]":
-        """Return the offset curve as a list of Béziers, recursively split until Hausdorff error < *eps* mm.
+        """Return the offset curve as a list of Béziers, recursively split
+        until Hausdorff error < *eps* mm.
 
         Keeps splitting at t=0.5 until every sub-segment is within *eps* of the
         true parallel offset.  Hard depth cap of *_max_depth* (default 8 = up to
@@ -1378,7 +1420,8 @@ def geom_to_shapely(g: Segment | CubicBezier) -> _sg.LineString:
 
 
 def _true_offset_ls(b: CubicBezier, d: float, n: int = 64) -> _sg.LineString:
-    """Sample the true parallel offset of *b* at signed distance *d* into a Shapely LineString."""
+    """Sample the true parallel offset of *b* at signed distance *d*
+    into a Shapely LineString."""
     pts = []
     for i in range(n + 1):
         t = i / n
@@ -1474,7 +1517,8 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
 def segment_to_intersection(
     start: Point, dir: np.ndarray, obj: GEOMETRIC_TYPE
 ) -> tuple[Point, Segment]:
-    """Create a Segment from start to the first intersection with obj in direction dir."""
+    """Create a Segment from start to the first intersection with obj
+    in direction dir."""
     pt = intersect(Ray(start, dir), obj)[0]
     return pt, Segment(start, pt)
 
@@ -1500,7 +1544,8 @@ def edge_tangent(g: Segment | CubicBezier, at_end: bool) -> np.ndarray:
     """Unit tangent of *g* in the direction of travel at its start or end.
 
     Args:
-        at_end: ``True`` → tangent at t=1 (arriving); ``False`` → tangent at t=0 (leaving).
+        at_end: ``True`` → tangent at t=1 (arriving);
+            ``False`` → tangent at t=0 (leaving).
     """
     import numpy as _np
 
@@ -2201,7 +2246,8 @@ class Dart:
 
     @property
     def mirror_tip(self) -> Point:
-        """Tip reflected across the mouth line — default second apex for rhombus darts."""
+        """Tip reflected across the mouth line —
+        default second apex for rhombus darts."""
         return Segment(self.leg_a, self.leg_b).reflect_point(self.tip)
 
     @property

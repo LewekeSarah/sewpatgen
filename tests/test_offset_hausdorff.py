@@ -126,7 +126,8 @@ def test_offset_negative_distance():
     # Both offsets must move away from the original midpoint
     assert mid_pos.distance_to(mid_orig) > 1.0
     assert mid_neg.distance_to(mid_orig) > 1.0
-    # The two offsets must be on opposite sides (further apart than either from original)
+    # The two offsets must be on opposite sides
+    # (further apart than either from original)
     assert mid_pos.distance_to(mid_neg) > mid_pos.distance_to(mid_orig)
     assert mid_pos.distance_to(mid_neg) > mid_neg.distance_to(mid_orig)
 
@@ -161,7 +162,7 @@ def test_offset_adaptive_each_segment_within_eps():
     # Resolve signed distance (no center → positive = left of travel)
     d = distance
 
-    result = curve.split(0.5)  # pre-split for the tight S
+    curve.split(0.5)  # pre-split for the tight S
     segments = curve.offset_adaptive(d, eps=eps)
     for seg in segments:
         # We cannot compute _true_offset_ls for a sub-segment of the original

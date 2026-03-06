@@ -287,7 +287,7 @@ def example_03_inner_dart_rhombus() -> None:
     pattern, pts = _build_block("Beispiel 3 – Innennaht-Abnäher (Raute)")
     part = PatternPart("Vorderteil")
     pattern.add_part(part)
-    segs = _add_outline(part, pts)
+    _add_outline(part, pts)
 
     bust_line_elem = PatternElement(
         Segment(pts["bust_cf"], pts["bust_side"]), style=_STITCH
@@ -637,10 +637,10 @@ def example_07_dart_with_seam_allowance() -> None:
         seam_allowance=SA,
     )
 
-    cf = part.append(
+    part.append(
         Segment(pts["hem_cf"], pts["shoulder_cf"]), style=_FOLD_SA, is_outline=True
     )
-    shldr = part.append(
+    part.append(
         Segment(pts["shoulder_cf"], pts["shoulder_side"]),
         style=_SA_STITCH,
         is_outline=True,
@@ -650,7 +650,7 @@ def example_07_dart_with_seam_allowance() -> None:
         style=_SA_STITCH,
         is_outline=True,
     )
-    hem = part.append(
+    part.append(
         Segment(pts["hem_side"], pts["hem_cf"]), style=_SA_STITCH, is_outline=True
     )
 

@@ -10,20 +10,32 @@ from sewpat.grids import TopGrid
 from sewpat.measurements import GarmentConfig, make_top_measurements
 from sewpat.pages import DinA0
 from sewpat.pattern import Pattern, PatternConfig
-from sewpat.person import BalanceAdjustments, BalancedPerson, Person, PersonalAdjustments, PersonAnalyser, load_person
+from sewpat.person import (
+    BalanceAdjustments,
+    BalancedPerson,
+    PersonalAdjustments,
+    PersonAnalyser,
+    load_person,
+)
 from sewpat.render import export_pattern_svg_mm
 from sewpat.units import CM
 
 
 class Part(GarmentPart):
     """Pattern parts for the waisted top with darts."""
-    GRID        = "Grid"
-    BLOCK_BACK  = "Block Back"
+
+    GRID = "Grid"
+    BLOCK_BACK = "Block Back"
     BLOCK_FRONT = "Block Front"
 
 
-def create_block(person: BalancedPerson, fit_class: FitClass, adjustments: PersonalAdjustments, config: GarmentConfig) -> Pattern:
-    """ Creates block pattern for a waisted top with darts.
+def create_block(
+    person: BalancedPerson,
+    fit_class: FitClass,
+    adjustments: PersonalAdjustments,
+    config: GarmentConfig,
+) -> Pattern:
+    """Creates block pattern for a waisted top with darts.
 
     Args:
         person:     Balanced person — obtain via PersonAnalyser.get_balanced_person().
@@ -39,7 +51,13 @@ def create_block(person: BalancedPerson, fit_class: FitClass, adjustments: Perso
     layout = PatternConfig()
     pattern = Pattern(name="Waisted Top with Darts Block", anchor=layout.anchor)
 
-    grid = TopGrid.from_measurements(meas=meas, fit_class=fit_class, hip_offset=adjustments.hip_offset, config=config, layout=layout)
+    grid = TopGrid.from_measurements(
+        meas=meas,
+        fit_class=fit_class,
+        hip_offset=adjustments.hip_offset,
+        config=config,
+        layout=layout,
+    )
     pattern.add_part(grid.part)
 
     block = TopBlock.from_measurements(
@@ -59,17 +77,17 @@ def create_block(person: BalancedPerson, fit_class: FitClass, adjustments: Perso
 
 
 if __name__ == "__main__":
-    person      = load_person("Sarah", date="2025-07-30")
-    fit_class   = FitClass(pk=4, hip_ease=6 * CM)
+    person = load_person("Sarah", date="2025-07-30")
+    fit_class = FitClass(pk=4, hip_ease=6 * CM)
     adjustments = PersonalAdjustments(
         hip_offset=1 * CM,
         balance=BalanceAdjustments(front_length=-0.9 * CM),
     )
-    config      = GarmentConfig(length=75 * CM)
+    config = GarmentConfig(length=75 * CM)
 
     person_balanced = PersonAnalyser(person, adjustments.balance).get_balanced_person()
 
-    pattern     = create_block(person_balanced, fit_class, adjustments, config)
+    pattern = create_block(person_balanced, fit_class, adjustments, config)
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
     grid_parts    = [] #[Part.GRID]

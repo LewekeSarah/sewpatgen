@@ -4,13 +4,9 @@ import pytest
 
 from sewpat.geometry import Point
 from sewpat.measurements import (
-    WaistDistribution,
-    _FRONT_FRACTION,
-    _SN_FRACTION,
     calculate_waist_distribution,
 )
 from sewpat.units import CM
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -63,22 +59,22 @@ class TestWaistDistributionGeometry:
     def test_tab_equals_vtab_plus_htab(self):
         fww = 22.0 * CM
         bww = 18.0 * CM
-        ww  = 78.0 * CM
+        ww = 78.0 * CM
         meas = _make_meas(ww)
-        pts  = _make_points(fww, bww)
-        wd   = calculate_waist_distribution(meas, *pts)
+        pts = _make_points(fww, bww)
+        wd = calculate_waist_distribution(meas, *pts)
 
         assert wd.front_waist_width == pytest.approx(fww, rel=1e-5)
-        assert wd.back_waist_width  == pytest.approx(bww, rel=1e-5)
+        assert wd.back_waist_width == pytest.approx(bww, rel=1e-5)
         assert wd.total_waist_width == pytest.approx(fww + bww, rel=1e-5)
 
     def test_ausfallbetrag_formula(self):
         fww = 22.0 * CM
         bww = 18.0 * CM
-        ww  = 78.0 * CM
+        ww = 78.0 * CM
         meas = _make_meas(ww)
-        pts  = _make_points(fww, bww)
-        wd   = calculate_waist_distribution(meas, *pts)
+        pts = _make_points(fww, bww)
+        wd = calculate_waist_distribution(meas, *pts)
 
         expected = (fww + bww) - ww / 2
         assert wd.hip_shortfall == pytest.approx(expected, rel=1e-5)
@@ -89,7 +85,7 @@ class TestWaistDistributionRanges:
 
     def _wd(self, front=22 * CM, back=18 * CM, ww=60 * CM):
         meas = _make_meas(ww)
-        pts  = _make_points(front, back)
+        pts = _make_points(front, back)
         return calculate_waist_distribution(meas, *pts)
 
     def test_saeinzug_within_range(self):
@@ -122,31 +118,36 @@ class TestWaistDistributionBalance:
         """2·side_seam_intake + front_dart + back_dart + remainder == hip_shortfall."""
         fww = 22.0 * CM
         bww = 18.0 * CM
-        ww  = 78.0 * CM
+        ww = 78.0 * CM
         meas = _make_meas(ww)
-        pts  = _make_points(fww, bww)
-        wd   = calculate_waist_distribution(meas, *pts)
+        pts = _make_points(fww, bww)
+        wd = calculate_waist_distribution(meas, *pts)
 
-        total = 2 * wd.side_seam_intake + wd.front_dart_width + wd.back_dart_width + wd.remainder
+        total = (
+            2 * wd.side_seam_intake
+            + wd.front_dart_width
+            + wd.back_dart_width
+            + wd.remainder
+        )
         assert total == pytest.approx(wd.hip_shortfall, abs=1e-9)
 
     def test_no_negative_remainder(self):
         for ww in [60 * CM, 70 * CM, 80 * CM, 90 * CM]:
             meas = _make_meas(ww)
-            pts  = _make_points(22 * CM, 18 * CM)
-            wd   = calculate_waist_distribution(meas, *pts)
+            pts = _make_points(22 * CM, 18 * CM)
+            wd = calculate_waist_distribution(meas, *pts)
             assert wd.remainder >= 0.0
 
 
 class TestWaistDistributionClamping:
     def test_remainder_is_non_negative(self):
         meas = _make_meas(10 * CM)
-        pts  = _make_points(40 * CM, 40 * CM)
-        wd   = calculate_waist_distribution(meas, *pts)
+        pts = _make_points(40 * CM, 40 * CM)
+        wd = calculate_waist_distribution(meas, *pts)
         assert wd.remainder >= 0.0
 
     def test_normal_excess_no_remainder(self):
         meas = _make_meas(78 * CM)
-        pts  = _make_points(22 * CM, 18 * CM)
-        wd   = calculate_waist_distribution(meas, *pts)
+        pts = _make_points(22 * CM, 18 * CM)
+        wd = calculate_waist_distribution(meas, *pts)
         assert wd.remainder < 0.5 * CM

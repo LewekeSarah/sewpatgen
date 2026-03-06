@@ -1,6 +1,8 @@
 """Sewpat — a Python library for generating sewing patterns."""
 
+from .blocks import TopBlock, TopBlockBack, TopBlockFront
 from .element import PatternElement, PrecisionPoint
+from .fitclass import FitClass
 from .geometry import (
     Circle,
     CubicBezier,
@@ -18,7 +20,6 @@ from .geometry import (
     seam_length,
     segment_to_intersection,
 )
-from .fitclass import FitClass
 from .measurements import (
     BlouseMeasurements,
     GarmentConfig,
@@ -29,20 +30,10 @@ from .measurements import (
     WaistDistribution,
     calculate_hip_distribution,
     calculate_waist_distribution,
-    make_top_measurements,
     make_measurements_trouser,
-)
-from .person import (
-    BalanceAdjustments,
-    BalancedPerson,
-    Gender,
-    Person,
-    PersonalAdjustments,
-    PersonAnalyser,
-    load_person,
+    make_top_measurements,
 )
 from .pages import DinA0, DinA1, DinA2, DinA4
-from .blocks import TopBlock, TopBlockBack, TopBlockFront
 from .pattern import (
     Block,
     ConstructionGrid,
@@ -52,6 +43,15 @@ from .pattern import (
     OverlayPart,
     Pattern,
     PatternPart,
+)
+from .person import (
+    BalanceAdjustments,
+    BalancedPerson,
+    Gender,
+    Person,
+    PersonalAdjustments,
+    PersonAnalyser,
+    load_person,
 )
 from .style import (
     DEFAULT_STROKE_WIDTH,
@@ -124,9 +124,13 @@ __all__ = [
     "TrouserEase",
     "GarmentConfig",
     "TrouserConfig",
+    "HipDistribution",
+    "WaistDistribution",
     "FitClass",
     "make_top_measurements",
     "make_measurements_trouser",
+    "calculate_hip_distribution",
+    "calculate_waist_distribution",
     # Person
     "Person",
     "BalancedPerson",

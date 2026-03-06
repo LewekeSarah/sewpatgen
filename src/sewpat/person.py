@@ -13,11 +13,23 @@ _PERSONS_CSV = Path(__file__).parent / "data" / "persons.csv"
 
 # Float measurement columns — all values stored in cm, converted to mm on load.
 _FLOAT_COLS = (
-    "height", "bust", "waist", "hip", "hip_depth", "bust_depth",
-    "neck_size", "bust_span", "shoulder_width",
-    "back_length", "front_length",
-    "body_rise", "inseam",
-    "back_width", "armscye_depth", "armscye_width", "chest_width",
+    "height",
+    "bust",
+    "waist",
+    "hip",
+    "hip_depth",
+    "bust_depth",
+    "neck_size",
+    "bust_span",
+    "shoulder_width",
+    "back_length",
+    "front_length",
+    "body_rise",
+    "inseam",
+    "back_width",
+    "armscye_depth",
+    "armscye_width",
+    "chest_width",
 )
 
 
@@ -77,29 +89,31 @@ class Gender(Enum):
 
 @dataclass
 class Person:
-    bust: float | None = None            # BrU — Brustumfang
-    waist: float | None = None           # TaU — Taillenumfang
-    hip: float | None = None             # HüU — Hüftumfang
-    hip_depth: float | None = None       # HüT — Hüfttiefe
-    bust_depth: float | None = None      # BrT — Brusttiefe
-    neck_size: float | None = None       # HlB — Halslochbreite
-    bust_span: float | None = None       # BrPA — Brustpunktabstand
+    bust: float | None = None  # BrU — Brustumfang
+    waist: float | None = None  # TaU — Taillenumfang
+    hip: float | None = None  # HüU — Hüftumfang
+    hip_depth: float | None = None  # HüT — Hüfttiefe
+    bust_depth: float | None = None  # BrT — Brusttiefe
+    neck_size: float | None = None  # HlB — Halslochbreite
+    bust_span: float | None = None  # BrPA — Brustpunktabstand
     shoulder_width: float | None = None  # SuB — Schulterbreite
-    back_length: float | None = None     # RüL — Rückenlänge
-    front_length: float | None = None    # VL  — Vorderlänge (VL2 variant: balancing, future feature)
-    body_rise: float | None = None       # SiH — Sitzhöhe
-    inseam: float | None = None          # SrH — Schritthöhe
-    back_width: float | None = None      # RüB — Rückenbreite
-    armscye_depth: float | None = None   # AlT — Armlochtiefe
-    armscye_width: float | None = None   # ArD — Armdurchmesser
-    chest_width: float | None = None     # BrB — Brustbreite
-    height: float | None = None          # KöH — Körperhöhe
-    gender: Gender = Gender.female       # Geschlecht
+    back_length: float | None = None  # RüL — Rückenlänge
+    front_length: float | None = (
+        None  # VL  — Vorderlänge (VL2 variant: balancing, future feature)
+    )
+    body_rise: float | None = None  # SiH — Sitzhöhe
+    inseam: float | None = None  # SrH — Schritthöhe
+    back_width: float | None = None  # RüB — Rückenbreite
+    armscye_depth: float | None = None  # AlT — Armlochtiefe
+    armscye_width: float | None = None  # ArD — Armdurchmesser
+    chest_width: float | None = None  # BrB — Brustbreite
+    height: float | None = None  # KöH — Körperhöhe
+    gender: Gender = Gender.female  # Geschlecht
 
 
 @dataclass
 class BalanceAdjustments:
-    back_length: float = 0.0   # RüL — Rückenlänge
+    back_length: float = 0.0  # RüL — Rückenlänge
     front_length: float = 0.0  # VL  — Vorderlänge
 
 
@@ -123,8 +137,8 @@ class PersonalAdjustments:
         balance:        Front/back length balance corrections.
     """
 
-    hip_offset:    float = 2.0 * CM   # Becken-Korrektur
-    shoulder_drop: float = 1.5 * CM   # Schulterabfall
+    hip_offset: float = 2.0 * CM  # Becken-Korrektur
+    shoulder_drop: float = 1.5 * CM  # Schulterabfall
     balance: BalanceAdjustments = field(default_factory=BalanceAdjustments)
 
     def __post_init__(self) -> None:
@@ -142,7 +156,8 @@ class PersonalAdjustments:
 
 
 class BalancedPerson:
-    """A :class:`Person` that has been validated and balanced by :class:`PersonAnalyser`.
+    """A :class:`Person` that has been validated and balanced
+    by :class:`PersonAnalyser`.
 
     This type can only be created by :meth:`PersonAnalyser.get_balanced_person`.
     Passing a ``BalancedPerson`` instead of a raw :class:`Person` to construction
@@ -151,7 +166,9 @@ class BalancedPerson:
     Access the underlying :class:`Person` via the ``.person`` attribute.
     """
 
-    def __init__(self, person: Person) -> None:  # private — only PersonAnalyser calls this
+    def __init__(
+        self, person: Person
+    ) -> None:  # private — only PersonAnalyser calls this
         self._person = person
 
     @property
@@ -187,7 +204,8 @@ class PersonAnalyser:
             )
         if self.person.armscye_depth is None:
             raise NotImplementedError(
-                "Matching armscye_depth formula for given bustline is not yet implemented."
+                "Matching armscye_depth formula for given bustline "
+                "is not yet implemented."
             )
 
     def _set_armscye_width(self):
@@ -199,7 +217,8 @@ class PersonAnalyser:
             )
         if self.person.armscye_width is None:
             raise NotImplementedError(
-                "Matching armscye_width formula for given bustline is not yet implemented."
+                "Matching armscye_width formula for given bustline "
+                "is not yet implemented."
             )
 
     def _set_chest_width(self):
@@ -211,7 +230,8 @@ class PersonAnalyser:
             )
         if self.person.chest_width is None:
             raise NotImplementedError(
-                "Matching chest_width formula for given bustline is not yet implemented."
+                "Matching chest_width formula for given bustline "
+                "is not yet implemented."
             )
 
     def _set_back_width(self):
@@ -241,8 +261,12 @@ class PersonAnalyser:
                     key, person_balanced.__getattribute__(key) + val
                 )
         if person_balanced.gender == Gender.female:
-            if (person_balanced.front_length - person_balanced.back_length) > self.optimal_balance:
-                raise ValueError("front_length and back_length are not properly balanced")
+            if (
+                person_balanced.front_length - person_balanced.back_length
+            ) > self.optimal_balance:
+                raise ValueError(
+                    "front_length and back_length are not properly balanced"
+                )
             else:
                 self.person_balanced = BalancedPerson(person_balanced)
 

@@ -168,7 +168,8 @@ class PatternPart(NamedAccessMixin):
         is_outline: bool = False,
         is_construction: bool = False,
     ) -> PatternElement:
-        """Wrap *geometry* in a PatternElement, stamp ``is_construction``, and append it.
+        """Wrap *geometry* in a PatternElement, stamp ``is_construction``,
+        and append it.
 
         The element's name is taken from ``geometry.name``; set it on the
         geometry object before calling (e.g. ``seg.set_name("Center Back")``).
@@ -193,7 +194,7 @@ class PatternPart(NamedAccessMixin):
             style=style,
             is_outline=is_outline,
             is_construction=construction,
-            name=geometry.name
+            name=geometry.name,
         )
         self.elements.append(elem)
         return elem
@@ -310,12 +311,14 @@ class PatternPart(NamedAccessMixin):
                 resolved.extend(matches)
             else:
                 raise TypeError(
-                    f"Expected Segment, CubicBezier, PatternElement, or str; got {type(item).__name__}"
+                    f"Expected Segment, CubicBezier, PatternElement, or str; "
+                    f"got {type(item).__name__}"
                 )
         return _geom_seam_length(resolved)
 
     def contains_point(self, point: Point) -> bool:
-        """Return True if *point* lies strictly inside the outline polygon (boundary = False)."""
+        """Return True if *point* lies strictly inside the outline polygon
+        (boundary = False)."""
         poly = self._outline_polygon()
         if poly is None or poly.is_empty:
             return False
@@ -357,7 +360,8 @@ class PatternPart(NamedAccessMixin):
         name: str = "grainline / Fadenlauf",
         style: StyleOptions | None = None,
     ) -> PatternElement:
-        """Add a grainline segment, nudging outside endpoints inward along the grain axis.
+        """Add a grainline segment, nudging outside endpoints inward along
+        the grain axis.
 
         Each endpoint is nudged toward the opposite one, so the grainline stays
         perfectly straight even when an endpoint sits on the outline boundary.
@@ -498,7 +502,8 @@ class PatternPart(NamedAccessMixin):
         style: StyleOptions | None = None,
         corner_join: str = "miter",
     ) -> list[PatternElement]:
-        """Offset the outline outward by *distance* mm and add the result as SA elements.
+        """Offset the outline outward by *distance* mm and add the result
+        as SA elements.
 
         Three code paths: **Rect** outlines expand uniformly; **pure-segment**
         outlines use ``Shapely.Polygon.buffer()``; **mixed/Bézier** outlines
@@ -653,7 +658,6 @@ class PatternPart(NamedAccessMixin):
             # explicitly requested (covers zero-gap corners where offsets diverge,
             # e.g. a Bézier with a degenerate start control point).
             if gap > 0.01 or effective_cj == "bevel":
-
                 if effective_cj == "miter":
                     corner = miter_corner(ga, gb, distance)
                     offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), corner)
@@ -669,8 +673,10 @@ class PatternPart(NamedAccessMixin):
                     else:
                         offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), arc)
                         offset_groups[j][0] = with_endpoints(gb, arc, geom_end(gb))
-                else:  # bevel — clipped miter: use tangent intersection capped at 3.0× SA
-                    corner = miter_corner(ga, gb, distance, miter_limit=3.0, check_reflex=False)
+                else:  # bevel — clipped miter: tangent intersection capped at 3× SA
+                    corner = miter_corner(
+                        ga, gb, distance, miter_limit=3.0, check_reflex=False
+                    )
                     offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), corner)
                     offset_groups[j][0] = with_endpoints(gb, corner, geom_end(gb))
 
@@ -717,7 +723,8 @@ class PatternPart(NamedAccessMixin):
             return min(sa_geoms, key=lambda g: sp.distance(geom_to_shapely(g)))
 
         candidates = [
-            e for e in self.elements
+            e
+            for e in self.elements
             if e.role in ("dart_notch", "dart_center_notch")
             and not e.is_seam_allowance
             and not e.is_seam_notch
@@ -742,13 +749,17 @@ class PatternPart(NamedAccessMixin):
             # For dart_center_notch use _sa_center (dart.tip) as inward ref,
             # not the centroid which can be on the wrong side of the roof.
             _notch_inward = getattr(seam_elem, "_sa_center", None)
-            _effective_inward = _notch_inward if _notch_inward is not None else inward_ref
+            _effective_inward = (
+                _notch_inward if _notch_inward is not None else inward_ref
+            )
 
             if seam_elem.role == "dart_center_notch":
                 # Intersect the fold line (extended past dart.roof) with every
                 # SA edge to find a point exactly on the fold line.
                 import numpy as _np_cn
-                from .geometry import Ray as _Ray, intersect as _intersect_geom
+
+                from .geometry import Ray as _Ray
+                from .geometry import intersect as _intersect_geom
 
                 _dart = getattr(seam_elem, "_dart_ref", None)
                 _fold_sa_pt: Point | None = None
@@ -773,13 +784,23 @@ class PatternPart(NamedAccessMixin):
                 # Preserve orientation from the seam-line triangle.
                 orig_along = tri.p2 - tri.p1
                 _oa_norm = float(_np_cn.linalg.norm(orig_along.coords))
-                orig_along_u = orig_along.coords / _oa_norm if _oa_norm > 1e-12 else orig_along.coords
+                orig_along_u = (
+                    orig_along.coords / _oa_norm
+                    if _oa_norm > 1e-12
+                    else orig_along.coords
+                )
                 orig_normal = tri.p3 - base_centre
                 _on_norm = float(_np_cn.linalg.norm(orig_normal.coords))
-                orig_normal_u = orig_normal.coords / _on_norm if _on_norm > 1e-12 else orig_normal.coords
+                orig_normal_u = (
+                    orig_normal.coords / _on_norm
+                    if _on_norm > 1e-12
+                    else orig_normal.coords
+                )
 
                 if _fold_sa_pt is None:
-                    _fold_sa_pt, _, _ = project_onto_edge(sa_edge, base_centre, _effective_inward)
+                    _fold_sa_pt, _, _ = project_onto_edge(
+                        sa_edge, base_centre, _effective_inward
+                    )
 
                 sa_pt = _fold_sa_pt
                 along_pt = Point(*orig_along_u)
@@ -791,10 +812,18 @@ class PatternPart(NamedAccessMixin):
 
                 orig_along_l = tri.p2 - tri.p1
                 _oal_n = float(_np_leg_sa.linalg.norm(orig_along_l.coords))
-                orig_along_lu = orig_along_l.coords / _oal_n if _oal_n > 1e-12 else orig_along_l.coords
+                orig_along_lu = (
+                    orig_along_l.coords / _oal_n
+                    if _oal_n > 1e-12
+                    else orig_along_l.coords
+                )
                 orig_normal_l = tri.p3 - base_centre
                 _onl_n = float(_np_leg_sa.linalg.norm(orig_normal_l.coords))
-                orig_normal_lu = orig_normal_l.coords / _onl_n if _onl_n > 1e-12 else orig_normal_l.coords
+                orig_normal_lu = (
+                    orig_normal_l.coords / _onl_n
+                    if _onl_n > 1e-12
+                    else orig_normal_l.coords
+                )
 
                 _leg_pt_l = getattr(seam_elem, "_leg_pt", None)
                 _proj_ref = _leg_pt_l if _leg_pt_l is not None else base_centre
@@ -803,26 +832,22 @@ class PatternPart(NamedAccessMixin):
                 normal_pt = Point(*orig_normal_lu)
 
             # Center notch is never a back (double) notch.
-            is_back = (
-                seam_elem.role != "dart_center_notch"
-                and any(
-                    e is not seam_elem
-                    and e.role == "dart_notch"
-                    and not e.is_seam_allowance
-                    and not e.is_seam_notch
-                    and isinstance(e.geometry, Triangle)
-                    and Point(
-                        (e.geometry.p1.x + e.geometry.p2.x) / 2,
-                        (e.geometry.p1.y + e.geometry.p2.y) / 2,
-                    ).distance_to(base_centre) < 1.0
-                    for e in self.elements
-                )
+            is_back = seam_elem.role != "dart_center_notch" and any(
+                e is not seam_elem
+                and e.role == "dart_notch"
+                and not e.is_seam_allowance
+                and not e.is_seam_notch
+                and isinstance(e.geometry, Triangle)
+                and Point(
+                    (e.geometry.p1.x + e.geometry.p2.x) / 2,
+                    (e.geometry.p1.y + e.geometry.p2.y) / 2,
+                ).distance_to(base_centre)
+                < 1.0
+                for e in self.elements
             )
 
             gap = half_w * 2 * 0.5
-            offsets = (
-                [-(half_w + gap / 2), +(half_w + gap / 2)] if is_back else [0.0]
-            )
+            offsets = [-(half_w + gap / 2), +(half_w + gap / 2)] if is_back else [0.0]
 
             sa_role = seam_elem.role  # preserve "dart_center_notch" vs "dart_notch"
             for offset in offsets:
@@ -961,7 +986,11 @@ class PatternPart(NamedAccessMixin):
                 if edge_name:
                     seg = seg.set_name(edge_name)
                 stub = PatternElement(
-                    seg, name=edge_name, style=src_style, is_outline=True, role="dart_edge_stub"
+                    seg,
+                    name=edge_name,
+                    style=src_style,
+                    is_outline=True,
+                    role="dart_edge_stub",
                 )
                 self.elements.insert(idx + i, stub)
                 created.append(stub)
@@ -1024,10 +1053,12 @@ class PatternPart(NamedAccessMixin):
                 cn_bl = roof - along_pt_cn * half_w_cn
                 cn_br = roof + along_pt_cn * half_w_cn
                 cn_tip_pt = roof + normal_pt_cn * nkw_len
-                cn_elem = _add(PatternElement(
-                    Triangle(cn_bl, cn_br, cn_tip_pt),
-                    role="dart_center_notch",
-                ))
+                cn_elem = _add(
+                    PatternElement(
+                        Triangle(cn_bl, cn_br, cn_tip_pt),
+                        role="dart_center_notch",
+                    )
+                )
                 cn_elem._sa_center = dart.tip
                 cn_elem._dart_ref = dart
 
@@ -1076,10 +1107,12 @@ class PatternPart(NamedAccessMixin):
                     ln_bl = leg_pt - along_pt_l * half_w_l
                     ln_br = leg_pt + along_pt_l * half_w_l
                     ln_tip = leg_pt + normal_pt_l * nkw_len_l
-                    ln_elem = _add(PatternElement(
-                        Triangle(ln_bl, ln_br, ln_tip),
-                        role="dart_notch",
-                    ))
+                    ln_elem = _add(
+                        PatternElement(
+                            Triangle(ln_bl, ln_br, ln_tip),
+                            role="dart_notch",
+                        )
+                    )
                     ln_elem._dart_ref = dart
                     ln_elem._leg_pt = leg_pt
 
@@ -1116,7 +1149,8 @@ class PatternPart(NamedAccessMixin):
         name: str | None = None,
         style: StyleOptions | None = None,
     ) -> PatternElement:
-        """Append a construction-grid line (never ``is_outline``; defaults to grid style).
+        """Append a construction-grid line (never ``is_outline``;
+        defaults to grid style.
 
         *name* is applied directly to *geometry* so it is the single source of
         truth and can be retrieved via :meth:`~sewpat.pattern.PatternPart.get_element`.
@@ -1177,7 +1211,8 @@ class PatternPart(NamedAccessMixin):
             )
 
         def _is_corner_endpoint(pt: Point) -> bool:
-            """True when *pt* is within *tolerance* of a sharp corner or free endpoint."""
+            """True when *pt* is within *tolerance* of a sharp corner
+            or free endpoint."""
             for oe in outline_elems:
                 for ep in (geom_start(oe.geometry), geom_end(oe.geometry)):
                     if pt.distance_to(ep) >= tolerance:
@@ -1459,7 +1494,8 @@ class Pattern:
         style: StyleOptions | None = None,
         part: PatternPart | None = None,
     ) -> PatternElement:
-        """Add a print-scale verification square, clamped inside the bounding box with 2 mm padding.
+        """Add a print-scale verification square, clamped inside the
+        bounding box with 2 mm padding.
 
         Args:
             origin: Preferred top-left corner.
