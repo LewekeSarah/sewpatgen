@@ -117,13 +117,14 @@ class PersonalAdjustments:
                         (negative).  Range: 1 cm (nach hinten gekipptes
                         Becken) to 3 cm (Hohlkreuz / flacher Po).
                         (BeckenAdjustment — Becken-Korrektur)
-        shoulder_raise: Vertical raise applied at the armscye-shoulder
-                        intersection.  Range: 1–1.5 cm.
+        shoulder_drop:  Vertical drop applied at the armscye-shoulder
+                        intersection (positive Y = downward in SVG).
+                        Range: 1–1.5 cm.
         balance:        Front/back length balance corrections.
     """
 
-    hip_offset:     float = 2.0 * CM   # BeckenAdjustment — Becken-Korrektur
-    shoulder_raise: float = 1.5 * CM   # Schultererhöhung
+    hip_offset:    float = 2.0 * CM   # Becken-Korrektur
+    shoulder_drop: float = 1.5 * CM   # Schulterabfall
     balance: BalanceAdjustments = field(default_factory=BalanceAdjustments)
 
     def __post_init__(self) -> None:
@@ -133,9 +134,9 @@ class PersonalAdjustments:
                 f"range [1.0, 3.0] cm.  "
                 f"1 cm = nach hinten gekipptes Becken, 3 cm = Hohlkreuz / flacher Po."
             )
-        if not (1.0 * CM - 1e-9 <= self.shoulder_raise <= 1.5 * CM + 1e-9):
+        if not (1.0 * CM - 1e-9 <= self.shoulder_drop <= 1.5 * CM + 1e-9):
             raise ValueError(
-                f"shoulder_raise={self.shoulder_raise / CM:.2f} cm is outside the "
+                f"shoulder_drop={self.shoulder_drop / CM:.2f} cm is outside the "
                 f"valid range [1.0, 1.5] cm."
             )
 

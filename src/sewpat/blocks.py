@@ -52,12 +52,11 @@ from .units import CM
 # These are pattern-drafting constants that encode standard ease/lift values.
 # ---------------------------------------------------------------------------
 
-
-#: Back neck depth — how far the back neckline drops below the shoulder line, always constant.
-_NECK_DEPTH: float = 2.0 * CM
-
-#: Ease added to / subtracted from the shoulder seam, always constant.
+#: Ease added to / subtracted from the shoulder (front / back) seam as parallel offset, always constant.
 _SHOULDER_EASE: float = 1.0 * CM
+
+#: Shoulder raise at back neckline ending point, applied as vertical offset to the shoulder seam.
+_SHOULDER_RAISE: float = 2.0 * CM
 
 #: Front neckline offset added to the measured neck-to-bust depth.
 _NECKLINE_EASE: float = 1.5 * CM
@@ -65,20 +64,17 @@ _NECKLINE_EASE: float = 1.5 * CM
 #: Armscye-front control-point offsets (X, Y).
 _ARMSCYE_FRONT_CP_X: float = -5.0 * CM
 _ARMSCYE_FRONT_CP_Y: float = -3.0 * CM
+_ARMSCYE_FRONT_OFFSET: float = 2.0 * CM
 
 #: Length of the control-point tangent for the side-hip Bézier curves.
 _SIDE_HIP_TANGENT: float = 15.0 * CM
 
-#: Distance from the waist dart centre to its lower (hem-side) tip — back.
-_WAIST_DART_BACK_LOWER_TIP: float = 16.0 * CM
-
-#: Distance from the waist dart centre to its lower (hem-side) tip — front.
-_WAIST_DART_FRONT_LOWER_TIP: float = 12.0 * CM
 
 #: How far the waist construction line is raised above the actual waist grid line.
 _WAIST_OFFSET: float = 1.0 * CM
 
 #: Checkpoint for the back armscye curve, placed on the shoulder hight at a fixed distance from the armscye line, (german: HP)
+_ARMSCYE_BACK_AUX_OFFSET: float = 1 * CM
 _ARMSCYE_BACK_OFFSET: float = 1 * CM
 
 #: Back armscye Bézier control-point offsets (cp1_x, cp2_x, cp_y).
@@ -106,7 +102,7 @@ class _BackGeometry:
     armscye_back_chest: Point
     side_back_chest: Point
     armscye_back_shoulder: Point
-    armscye_back_shoulder_raised: Point
+    armscye_back_shoulder_dropped: Point
     neck_back_shoulder: Point
     shoulder_back_neckline: Point
     shoulder_dart_notch: Point
@@ -189,7 +185,7 @@ def _build_back_geometry(
     meas: BlouseMeasurements,
     anchor: Point,
     hip_offset: float,
-    shoulder_raise: float,
+    shoulder_drop: float,
     shoulder_gather: float,
 ) -> _BackGeometry:
     """Compute all key points and curves for the back piece."""
@@ -205,24 +201,24 @@ def _build_back_geometry(
     side_chest           = intersect(grid.side_back,     grid.chest)[0]
     armscye_shoulder     = intersect(grid.armscye_back,  grid.shoulder_back)[0]
     neck_shoulder        = intersect(grid.shoulder_back, grid.neck)[0]
-    armscye_shoulder_raised = armscye_shoulder.translate(0, shoulder_raise)
+    armscye_shoulder_dropped = armscye_shoulder.translate(0, shoulder_drop)
 
     # Shoulder seam
-    shoulder_neckline    = neck_shoulder.translate(0, -_NECK_DEPTH)
+    shoulder_neckline    = neck_shoulder.translate(0, -_SHOULDER_RAISE)
     dart_notch           = (
-        Segment(armscye_shoulder_raised, armscye_chest)
+        Segment(armscye_shoulder_dropped, armscye_chest)
         .point_at_t(0.5)
-        .translate(_ARMSCYE_BACK_OFFSET, 0)
+        .translate(_ARMSCYE_BACK_AUX_OFFSET, 0)
     )
     shoulder_blade = Line(dart_notch, (1, 0), name="Shoulder Blade")
     armscye_control = (
-        Segment(armscye_shoulder_raised, armscye_chest)
+        Segment(armscye_shoulder_dropped, armscye_chest)
         .point_at_t(0.75)
-        .translate(_NECKLINE_EASE, 0)
+        .translate(_ARMSCYE_BACK_OFFSET, 0)
     )
     shoulder_orig = Segment.from_direction(
         shoulder_neckline,
-        armscye_shoulder_raised,
+        armscye_shoulder_dropped,
         length=meas.shoulder_width + shoulder_gather,
     )
     shoulder = shoulder_orig.offset(-_SHOULDER_EASE)
@@ -257,7 +253,7 @@ def _build_back_geometry(
         armscye_back_chest=armscye_chest,
         side_back_chest=side_chest,
         armscye_back_shoulder=armscye_shoulder,
-        armscye_back_shoulder_raised=armscye_shoulder_raised,
+        armscye_back_shoulder_dropped=armscye_shoulder_dropped,
         neck_back_shoulder=neck_shoulder,
         shoulder_back_neckline=shoulder_neckline,
         shoulder_dart_notch=dart_notch,
@@ -275,6 +271,7 @@ def _build_front_geometry(
     grid: TopGrid,
     meas: BlouseMeasurements,
     back: _BackGeometry,
+    armscye_fit: float,
 ) -> _FrontGeometry:
     """Compute all key points and curves for the front piece."""
 
@@ -293,12 +290,12 @@ def _build_front_geometry(
     # Armscye / shoulder construction
     armscye_control = armscye_front_chest.translate(0, -0.25 * meas.armscye_width)
     arm_seam_length = (
-        Segment(back.armscye_back_shoulder_raised, back.armscye_back_chest).length
-        - 2 * CM # fixed constant
+        Segment(back.armscye_back_shoulder_dropped, back.armscye_back_chest).length
+        - _ARMSCYE_FRONT_OFFSET
     )
     armscye_front_chest_upper = armscye_front_chest.translate(0, -arm_seam_length)
     shoulder_upper_pt = Circle(armscye_front_chest, arm_seam_length).point_along_from(
-        armscye_front_chest_upper, -(meas.bust / 20 + _ARMSCYE_FIT) # _ARMSCYE_FIT in 0, 1. o regular 1 tight fit
+        armscye_front_chest_upper, -(meas.bust / 20 + armscye_fit)
     )
     shoulder_front_pivot = intersect(
         Circle(bust_point, meas.bust_depth),
@@ -456,6 +453,7 @@ def _build_darts(
     front: _FrontGeometry,
     armscye_back_elem: "PatternPart",
     wd: "WaistDistribution",
+    config: GarmentConfig,
 ) -> "_Darts":
     """Build all dart objects for both pieces."""
 
@@ -466,7 +464,7 @@ def _build_darts(
         center=waist_dart_back_center,
         width=wd.back_dart_width,
         dart_type=DartType.RHOMBUS,
-        second_tip=waist_dart_back_center.translate(0, _WAIST_DART_BACK_LOWER_TIP),
+        second_tip=waist_dart_back_center.translate(0, config.waist_dart_back_tip),
     ).set_name("Waist Dart Back")
 
     # Front waist dart
@@ -476,7 +474,7 @@ def _build_darts(
         center=bust_point_waist,
         width=wd.front_dart_width,
         dart_type=DartType.RHOMBUS,
-        second_tip=bust_point_waist.translate(0, _WAIST_DART_FRONT_LOWER_TIP),
+        second_tip=bust_point_waist.translate(0, config.waist_dart_front_tip),
     ).set_name("Waist Dart Front")
 
     # Front shoulder dart
@@ -490,7 +488,7 @@ def _build_darts(
     shoulder_dart_back = Dart.from_edge_at_legs(
         armscye_back_elem,
         leg_a=back.shoulder_dart_notch,
-        leg_b=back.armscye_back.point_along_from(back.shoulder_dart_notch, _NECKLINE_EASE),
+        leg_b=back.armscye_back.point_along_from(back.shoulder_dart_notch, _NECKLINE_EASE), # TODO fix
         tip=back.shoulder_blade_dart_tip,
         name="Shoulder Dart Back",
     )
@@ -714,7 +712,7 @@ class TopBlock:
             meas:        Blouse measurements (ease already included).
             fit_class:   :class:`~sewpat.fitclass.FitClass` for construction offsets.
             adjustments: :class:`~sewpat.person.PersonalAdjustments` — provides
-                         ``hip_offset`` and ``shoulder_raise``.
+                         ``hip_offset`` and ``shoulder_drop``.
             config:      Garment-design choices (length, seam allowance).
             layout:      Pattern layout config (anchor, inter-piece margin).
             back_name:   Name for the back part.
@@ -735,8 +733,8 @@ class TopBlock:
         )
 
         # ── 1. Build geometry for each piece independently ───────────────────
-        back_geom  = _build_back_geometry(grid, meas, layout.anchor, adj.hip_offset, adj.shoulder_raise, config.shoulder_gather)
-        front_geom = _build_front_geometry(grid, meas, back_geom)
+        back_geom  = _build_back_geometry(grid, meas, layout.anchor, adj.hip_offset, adj.shoulder_drop, config.shoulder_gather)
+        front_geom = _build_front_geometry(grid, meas, back_geom, config.armscye_fit)
 
         # ── 2. Compute waist / hip distribution ──────────────────────────────
         wd = calculate_waist_distribution(
@@ -767,7 +765,7 @@ class TopBlock:
             style=STYLE_STITCH,
             is_outline=True,
         )
-        darts, shoulder_dart_back = _build_darts(grid, meas, back_geom, front_geom, armscye_back_elem, wd)
+        darts, shoulder_dart_back = _build_darts(grid, meas, back_geom, front_geom, armscye_back_elem, wd, config)
 
         _assemble_back_part(block_back,  back_geom,  sides, darts, shoulder_dart_back, seam_allowance)
         _assemble_front_part(block_front, front_geom, sides, darts, grid, seam_allowance)

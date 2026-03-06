@@ -110,25 +110,48 @@ class BlouseMeasurements:
             )
 
 
-@dataclass(frozen=True)
+@dataclass
 class GarmentConfig:
     """Pure garment-design choices — independent of body measurements and fit.
 
     Attributes:
-        length:           Modell-Länge (MoL) — finished garment length (hem to nape).
-        seam_allowance:   Nahtzugabe — seam allowance width added to all seams.
-        hem_width:        Saumweite (SaW) — hem width (optional; used for trousers).
-        shoulder_gather:  Schulter-Weite — gather/ease added to the shoulder seam
-                          length.  Lengthens the shoulder seam on both pieces so
-                          fabric can be eased or gathered at the sleeve head.
+        length:                Modell-Länge (MoL) — finished garment length (hem to nape).
+        seam_allowance:        Nahtzugabe — seam allowance width added to all seams.
+        hem_width:             Saumweite (SaW) — hem width (optional; used for trousers).
+        shoulder_gather:       Schulter-Weite — gather/ease added to the shoulder seam
+                               length.  Lengthens the shoulder seam on both pieces so
+                               fabric can be eased or gathered at the sleeve head.
+        armscye_fit:           Controls how tightly the front armscye fits around the
+                               upper arm.  Range 0–1 cm: 0 = regular fit, 1 = tight fit.
+                               Shifts the front armscye shoulder point inward, reducing
+                               the armhole circumference.
+        waist_dart_back_tip:   Distance from the waist dart centre to its lower
+                               (hem-side) tip on the back piece.  Range: 13–16 cm.
+        waist_dart_front_tip:  Distance from the waist dart centre to its lower
+                               (hem-side) tip on the front piece.
     """
-    length: float                        # MoL — Modell-Länge
+    length: float                             # MoL — Modell-Länge
     seam_allowance: float = 1 * CM
-    hem_width: float | None = None       # SaW — Saumweite
-    shoulder_gather: float = 1 * CM      # Schulter-Weite — easestitch / shoulder seam gather on the back
+    hem_width: float | None = None            # SaW — Saumweite
+    shoulder_gather: float = 1 * CM           # Schulter-Weite — shoulder seam gather
+    armscye_fit: float = 0.0                  # Armlochpassform — 0 regular, 1 tight
+    waist_dart_back_tip: float = 16 * CM      # hAbI-Spitze — back waist dart lower tip depth
+    waist_dart_front_tip: float = 12 * CM     # vAbI-Spitze — front waist dart lower tip depth
+
+    def __post_init__(self) -> None:
+        if not (0.0 - 1e-9 <= self.armscye_fit <= 1.0 * CM + 1e-9):
+            raise ValueError(
+                f"armscye_fit={self.armscye_fit / CM:.2f} cm is outside the valid "
+                f"range [0, 1] cm.  0 = regular fit, 1 cm = tight fit."
+            )
+        if not (13.0 * CM - 1e-9 <= self.waist_dart_back_tip <= 16.0 * CM + 1e-9):
+            raise ValueError(
+                f"waist_dart_back_tip={self.waist_dart_back_tip / CM:.2f} cm is outside "
+                f"the valid range [13, 16] cm."
+            )
 
 
-@dataclass(frozen=True)
+@dataclass
 class TrouserConfig(GarmentConfig):
     """Garment-design choices specific to trousers.
 
