@@ -122,12 +122,38 @@ class PersonalAdjustments:
     balance: BalanceAdjustments = field(default_factory=BalanceAdjustments)
 
 
+class BalancedPerson:
+    """A :class:`Person` that has been validated and balanced by :class:`PersonAnalyser`.
+
+    This type can only be created by :meth:`PersonAnalyser.get_balanced_person`.
+    Passing a ``BalancedPerson`` instead of a raw :class:`Person` to construction
+    functions signals — at the type level — that balancing has already been done.
+
+    Access the underlying :class:`Person` via the ``.person`` attribute.
+    """
+
+    def __init__(self, person: Person) -> None:  # private — only PersonAnalyser calls this
+        self._person = person
+
+    @property
+    def person(self) -> Person:
+        return self._person
+
+    # Delegate attribute access to the wrapped Person so callers can read
+    # measurements directly (e.g. balanced.bust) without going via .person.
+    def __getattr__(self, name: str):
+        return getattr(self._person, name)
+
+    def __repr__(self) -> str:
+        return f"BalancedPerson({self._person!r})"
+
+
 class PersonAnalyser:
     def __init__(
         self, person: Person, balance_adjustments: BalanceAdjustments | None = None
     ):
         self.person = person
-        self.person_balanced: Person | None = None
+        self.person_balanced: BalancedPerson | None = None
         self.balance = balance_adjustments
         self.optimal_balance = self.get_optimal_balance()
         self.calculate_measurements()
@@ -199,9 +225,9 @@ class PersonAnalyser:
             if (person_balanced.front_length - person_balanced.back_length) > self.optimal_balance:
                 raise ValueError("front_length and back_length are not properly balanced")
             else:
-                self.person_balanced = person_balanced
+                self.person_balanced = BalancedPerson(person_balanced)
 
-    def get_balanced_person(self) -> Person:
+    def get_balanced_person(self) -> BalancedPerson:
         return self.person_balanced
 
     def get_optimal_balance(self) -> float:

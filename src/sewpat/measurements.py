@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from sewpat.person import BalanceAdjustments, Gender, Person, PersonalAdjustments, PersonAnalyser
+from sewpat.person import BalanceAdjustments, BalancedPerson, Gender, Person
 from sewpat.units import CM
 
 if TYPE_CHECKING:
@@ -21,40 +21,31 @@ def _clamp(value: float, lo: float, hi: float) -> float:
 _SN_FRACTION: float = 0.25    # fraction of hip_shortfall → each side seam
 _FRONT_FRACTION: float = 0.40  # fraction of residual → front waist dart
 
+# Map from FitClass resolved property names → body measurement field names.
+_BODY_EASE_MAP: dict[str, str] = {
+    "back_width_ease":    "back_width",
+    "armscye_width_ease": "armscye_width",
+    "chest_width_ease":   "chest_width",
+    "armscye_depth_ease": "armscye_depth",
+}
+
 
 @dataclass
-class Allowance:
-    back_width_ease: float | None = None      # RüB — Rückenbreite-Zugabe
-    armscye_width_ease: float | None = None   # ArD — Armdurchmesser-Zugabe
-    chest_width_ease: float | None = None     # BrB — Brustbreite-Zugabe
-    armscye_depth_ease: float | None = None   # AlT — Armlochtiefe-Zugabe
-    waist_ease: float | None = None           # TaU — Taillenumfang-Zugabe
-    hip_ease: float | None = None             # HüU — Hüftumfang-Zugabe
-    bust_ease: float | None = None            # BrU — Brustumfang-Zugabe (derived)
-    body_rise_ease: float | None = None       # SiH — Sitzhöhe-Zugabe
-    inseam_ease: float | None = None          # SrH — Schritthöhe-Zugabe
+class TrouserEase:
+    """Explicit ease additions for trouser construction.
 
-    def __post_init__(self):
-        if (
-            self.back_width_ease is not None
-            and self.armscye_width_ease is not None
-            and self.chest_width_ease is not None
-        ):
-            self.bust_ease = 2 * (
-                self.back_width_ease + self.armscye_width_ease + self.chest_width_ease
-            )
+    Used when no fit-class PK table entry is available for the garment type
+    (e.g. children's shorts, sportswear).  All values in mm.
 
-    @classmethod
-    def from_fit_class(cls, fc: "FitClass") -> "Allowance":
-        """Derive standard allowances from a :class:`~sewpat.fitclass.FitClass`."""
-        return cls(
-            back_width_ease=fc.resolved_back_width_ease,
-            armscye_width_ease=fc.resolved_armscye_width_ease,
-            chest_width_ease=fc.resolved_chest_width_ease,
-            armscye_depth_ease=fc.resolved_armscye_depth_ease,
-            waist_ease=fc.resolved_waist_ease,
-            hip_ease=fc.resolved_hip_ease,
-        )
+    Attributes:
+        body_rise_ease: Added to body rise (SiH).
+        inseam_ease:    Added to inside-leg length (SrH).
+        hip_ease:       Added to hip circumference (HüU).
+    """
+    body_rise_ease: float = 0.0   # SiH — Sitzhöhe-Zugabe
+    inseam_ease:    float = 0.0   # SrH — Schritthöhe-Zugabe
+    hip_ease:       float = 0.0   # HüU — Hüftumfang-Zugabe
+    waist_ease:     float = 0.0   # TaU — Taillenumfang-Zugabe
 
 
 @dataclass
@@ -190,7 +181,7 @@ class HipDistribution:
 
 
 def calculate_hip_distribution(
-    meas: "BlouseMeasurements",
+    meas: BlouseMeasurements,
     pt_hip_cf: "Point",
     pt_hip_sf: "Point",
     pt_hip_sb: "Point",
@@ -224,7 +215,7 @@ def calculate_hip_distribution(
 
 
 def calculate_waist_distribution(
-    meas: "BlouseMeasurements",
+    meas: BlouseMeasurements,
     pt_waist_cf: "Point",
     pt_waist_sf: "Point",
     pt_waist_sb: "Point",
@@ -279,93 +270,59 @@ def calculate_waist_distribution(
     )
 
 
-def make_blouse_measurements(
-    person: Person,
-    fit_class_or_allowance: "FitClass | Allowance | None" = None,
-    adjustments: "PersonalAdjustments | None" = None,
-) -> "BlouseMeasurements":
-    """Build ease-included blouse measurements from body measurements and fit.
+def make_top_measurements(
+    person: BalancedPerson,
+    fit_class: "FitClass",
+) -> BlouseMeasurements:
+    """Build ease-included top measurements from a balanced person and fit class.
 
     Args:
-        person: Body measurements.
-        fit_class_or_allowance: :class:`~sewpat.fitclass.FitClass` or explicit
-            :class:`Allowance`.
-        adjustments: Personal body-deviation corrections.
+        person:    A :class:`~sewpat.person.BalancedPerson` — use
+                   :meth:`~sewpat.person.PersonAnalyser.get_balanced_person` to obtain one.
+        fit_class: :class:`~sewpat.fitclass.FitClass` providing all ease values.
     """
-    from sewpat.fitclass import FitClass  # local import to avoid circularity
+    measurements = {k: v for k, v in person.person.__dict__.items() if v is not None}
 
-    if isinstance(fit_class_or_allowance, FitClass):
-        resolved_allowance = Allowance.from_fit_class(fit_class_or_allowance)
-    elif fit_class_or_allowance is not None:
-        resolved_allowance = fit_class_or_allowance
-    else:
-        raise TypeError("Provide a FitClass or Allowance as the second argument.")
+    for fc_attr, body_key in _BODY_EASE_MAP.items():
+        if body_key in measurements:
+            measurements[body_key] += getattr(fit_class, fc_attr)
 
-    resolved_balance = (
-        adjustments.balance if isinstance(adjustments, PersonalAdjustments)
-        else BalanceAdjustments()
-    )
-
-    person = PersonAnalyser(person, resolved_balance).get_balanced_person()
-
-    measurements = {k: v for k, v in person.__dict__.items() if v is not None}
-    allowances   = {k: v for k, v in resolved_allowance.__dict__.items() if v is not None}
-
-    # Map allowance field name → body measurement field name for additive ease.
-    # Circumference fields (bust/waist/hip) are handled separately below.
-    _body_ease_map = {
-        "back_width_ease":    "back_width",
-        "armscye_width_ease": "armscye_width",
-        "chest_width_ease":   "chest_width",
-        "armscye_depth_ease": "armscye_depth",
-        "body_rise_ease":     "body_rise",
-        "inseam_ease":        "inseam",
-    }
-    for ease_key, body_key in _body_ease_map.items():
-        if ease_key in allowances and body_key in measurements:
-            measurements[body_key] += allowances[ease_key]
-
-    # Finished widths: body circumference + full-circumference ease
-    _circ_ease_map = {"waist": "waist_ease", "bust": "bust_ease", "hip": "hip_ease"}
-    _circ_finished = {"waist": "waist_width", "bust": "bust_width", "hip": "hip_width"}
-    for body, ease_key in _circ_ease_map.items():
-        measurements[_circ_finished[body]] = measurements[body] + allowances.get(ease_key, 0.0)
+    measurements["bust_width"]  = measurements["bust"]  + fit_class.bust_width_ease
+    measurements["waist_width"] = measurements["waist"] + fit_class.waist_ease
+    measurements["hip_width"]   = measurements["hip"]   + fit_class.hip_ease
 
     measurements.pop("height", None)
-
     return BlouseMeasurements(**measurements)
 
 
 def make_measurements_trouser(
     person: Person,
-    allowance: Allowance,
+    ease: TrouserEase,
     balance: BalanceAdjustments = None,
 ) -> TrouserMeasurements:
-    """Build ease-included trouser measurements."""
+    """Build ease-included trouser measurements.
+
+    Args:
+        person:  Body measurements.
+        ease:    :class:`TrouserEase` with trouser-specific ease additions.
+        balance: Optional front/back length corrections.
+    """
     measurements = {k: v for k, v in person.__dict__.items() if v is not None}
-    allowances   = {k: v for k, v in allowance.__dict__.items() if v is not None}
 
-    _body_ease_map = {
-        "back_width_ease":    "back_width",
-        "armscye_width_ease": "armscye_width",
-        "chest_width_ease":   "chest_width",
-        "armscye_depth_ease": "armscye_depth",
-        "body_rise_ease":     "body_rise",
-        "inseam_ease":        "inseam",
-    }
-    for ease_key, body_key in _body_ease_map.items():
-        if ease_key in allowances and body_key in measurements:
-            measurements[body_key] += allowances[ease_key]
+    if ease.body_rise_ease and "body_rise" in measurements:
+        measurements["body_rise"] += ease.body_rise_ease
+    if ease.inseam_ease and "inseam" in measurements:
+        measurements["inseam"] += ease.inseam_ease
 
-    for body, finished in [("waist", "waist_width"), ("hip", "hip_width")]:
-        _ease_map = {"waist": "waist_ease", "hip": "hip_ease"}
-        measurements[finished] = measurements[body] + allowances.get(_ease_map[body], 0.0)
+    measurements["waist_width"] = measurements["waist"] + ease.waist_ease
+    measurements["hip_width"]   = measurements["hip"]   + ease.hip_ease
 
     measurements.pop("height", None)
 
     if balance is not None:
         for key, val in balance.__dict__.items():
-            measurements[key] += getattr(balance, key)
+            if key in measurements:
+                measurements[key] += val
 
     trouser_keys = ["waist", "hip", "hip_depth", "body_rise", "inseam", "waist_width", "hip_width"]
     trouser_dict = {k: v for k, v in measurements.items() if k in trouser_keys}

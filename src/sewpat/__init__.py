@@ -20,20 +20,21 @@ from .geometry import (
 )
 from .fitclass import FitClass
 from .measurements import (
-    Allowance,
     BlouseMeasurements,
     GarmentConfig,
     HipDistribution,
     TrouserConfig,
+    TrouserEase,
     TrouserMeasurements,
     WaistDistribution,
     calculate_hip_distribution,
     calculate_waist_distribution,
-    make_blouse_measurements,
+    make_top_measurements,
     make_measurements_trouser,
 )
 from .person import (
     BalanceAdjustments,
+    BalancedPerson,
     Gender,
     Person,
     PersonalAdjustments,
@@ -118,16 +119,17 @@ __all__ = [
     "DinA1",
     "DinA0",
     # Measurements
-    "Allowance",
     "BlouseMeasurements",
     "TrouserMeasurements",
+    "TrouserEase",
     "GarmentConfig",
     "TrouserConfig",
     "FitClass",
-    "make_blouse_measurements",
+    "make_top_measurements",
     "make_measurements_trouser",
     # Person
     "Person",
+    "BalancedPerson",
     "Gender",
     "BalanceAdjustments",
     "PersonalAdjustments",

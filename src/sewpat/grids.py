@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from .geometry import Segment
 from .measurements import BlouseMeasurements, GarmentConfig
 from .pattern import ConstructionGrid, PatternConfig, ConstructionGridPart
-from .person import PersonalAdjustments
 
 
 @dataclass(frozen=True)
@@ -75,27 +74,25 @@ class TopGrid:
     def from_measurements(
         cls,
         meas: BlouseMeasurements,
-        fit_class_or_model: "FitClass | None" = None,
-        adjustments: PersonalAdjustments | None = None,
+        fit_class: "FitClass | None" = None,
+        hip_offset: float = 0.0,
         config: GarmentConfig | None = None,
         layout: PatternConfig | None = None,
     ) -> "TopGrid":
         """Build and return a :class:`TopGrid` from the given measurements.
 
         Args:
-            meas: Blouse measurements (ease already included).
-            fit_class_or_model: :class:`~sewpat.fitclass.FitClass`.
-            adjustments: Personal body-deviation corrections.
-            config: Garment-design choices (length, seam allowance).
-            layout: Pattern layout configuration.
+            meas:       Blouse measurements (ease already included).
+            fit_class:  :class:`~sewpat.fitclass.FitClass` for construction offsets.
+            hip_offset: Hip adjustment offset (BeckenAdjustment) in mm.
+            config:     Garment-design choices (length, seam allowance).
+            layout:     Pattern layout configuration.
         """
         from .fitclass import FitClass  # local import to avoid circularity
 
-        fc = fit_class_or_model
-        bust_point_ease  = fc.ZuBrA if isinstance(fc, FitClass) else 0.5 * CM
-        hip_offset       = adjustments.hip_offset if adjustments is not None else 0.0
-        length           = config.length if config is not None else 75 * CM
-        seam_allowance   = config.seam_allowance if config is not None else 1 * CM
+        bust_point_ease = fit_class.bust_point_ease if isinstance(fit_class, FitClass) else 0.5 * CM
+        length          = config.length if config is not None else 75 * CM
+        seam_allowance  = config.seam_allowance if config is not None else 1 * CM
 
         layout = layout or PatternConfig()
 

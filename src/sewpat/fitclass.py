@@ -27,7 +27,7 @@ Source: Mueller & Sohn, Rundschau / Modenähen drafting system.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
@@ -91,30 +91,53 @@ class FitClass:
     ``bust_width_ease`` is always derived and cannot be set directly.
 
     Args:
-        pk: Integer 0–12 describing garment fit tightness.
-        back_width_ease:    RüB  — Rückenbreite-Zugabe (override, mm).
-        armscye_width_ease: ArD  — Armdurchmesser-Zugabe (override, mm).
-        chest_width_ease:   BrB  — Brustbreite-Zugabe (override, mm).
-        armscye_depth_ease: AlT  — Armlochtiefe-Zugabe (override, mm).
-        waist_ease:         TaU  — Taillenumfang-Zugabe (override, mm).
-        hip_ease:           HüU  — Hüftumfang-Zugabe (override, mm).
-        bust_point_ease:    ZuBrA — Zugabe Brustpunktabstand (override, mm).
+        pk:                 Integer 0–12 describing garment fit tightness.
+        back_width_ease:    RüB  — override in mm.
+        armscye_width_ease: ArD  — override in mm.
+        chest_width_ease:   BrB  — override in mm.
+        armscye_depth_ease: AlT  — override in mm.
+        waist_ease:         TaU  — override in mm.
+        hip_ease:           HüU  — override in mm.
+        bust_point_ease:    ZuBrA — override in mm.
 
     Examples::
 
-        fc = FitClass(pk=4)                          # all upper-bound defaults
-        fc = FitClass(pk=4, back_width_ease=0.7*CM)  # override one field
-        fc.bust_width_ease                           # always derived
+        fc = FitClass(pk=4)                         # all upper-bound defaults
+        fc = FitClass(pk=4, back_width_ease=0.7*CM) # override one field
+        fc.back_width_ease                          # → resolved value (mm)
+        fc.bust_width_ease                          # → always derived
     """
 
     pk: int
-    back_width_ease:    float | None = None  # RüB  — Rückenbreite-Zugabe
-    armscye_width_ease: float | None = None  # ArD  — Armdurchmesser-Zugabe
-    chest_width_ease:   float | None = None  # BrB  — Brustbreite-Zugabe
-    armscye_depth_ease: float | None = None  # AlT  — Armlochtiefe-Zugabe
-    waist_ease:         float | None = None  # TaU  — Taillenumfang-Zugabe
-    hip_ease:           float | None = None  # HüU  — Hüftumfang-Zugabe
-    bust_point_ease:    float | None = None  # ZuBrA — Zugabe Brustpunktabstand
+    # Private overrides — use the public properties to read resolved values.
+    _back_width_ease:    float | None = None  # RüB  — Rückenbreite-Zugabe
+    _armscye_width_ease: float | None = None  # ArD  — Armdurchmesser-Zugabe
+    _chest_width_ease:   float | None = None  # BrB  — Brustbreite-Zugabe
+    _armscye_depth_ease: float | None = None  # AlT  — Armlochtiefe-Zugabe
+    _waist_ease:         float | None = None  # TaU  — Taillenumfang-Zugabe
+    _hip_ease:           float | None = None  # HüU  — Hüftumfang-Zugabe
+    _bust_point_ease:    float | None = None  # ZuBrA — Zugabe Brustpunktabstand
+
+    def __init__(
+        self,
+        pk: int,
+        back_width_ease:    float | None = None,
+        armscye_width_ease: float | None = None,
+        chest_width_ease:   float | None = None,
+        armscye_depth_ease: float | None = None,
+        waist_ease:         float | None = None,
+        hip_ease:           float | None = None,
+        bust_point_ease:    float | None = None,
+    ) -> None:
+        self.pk = pk
+        self._back_width_ease    = back_width_ease
+        self._armscye_width_ease = armscye_width_ease
+        self._chest_width_ease   = chest_width_ease
+        self._armscye_depth_ease = armscye_depth_ease
+        self._waist_ease         = waist_ease
+        self._hip_ease           = hip_ease
+        self._bust_point_ease    = bust_point_ease
+        self.__post_init__()
 
     def __post_init__(self) -> None:
         if not (0 <= self.pk <= 12):
@@ -126,7 +149,7 @@ class FitClass:
             )
         row = _TABLE[self.pk]
         for ef in EASE_FIELDS:
-            override = getattr(self, ef)
+            override = getattr(self, f"_{ef}")
             if override is not None:
                 r = row[ef]
                 if not (r.lo - 1e-9 <= override <= r.hi + 1e-9):
@@ -135,55 +158,59 @@ class FitClass:
                         f"the valid range [{r.lo/CM:.2f}, {r.hi/CM:.2f}] cm."
                     )
 
-    def _resolved(self, field_name: str) -> float:
+    def _resolve(self, field_name: str) -> float:
         """Return override if set, otherwise the table upper bound (hi)."""
-        override = getattr(self, field_name)
+        override = getattr(self, f"_{field_name}")
         if override is not None:
             return override
         return _TABLE[self.pk][field_name].hi
 
+    # ------------------------------------------------------------------
+    # Public properties — no prefix needed, always return resolved value
+    # ------------------------------------------------------------------
+
     @property
-    def resolved_back_width_ease(self) -> float:
+    def back_width_ease(self) -> float:
         """RüB — Rückenbreite-Zugabe (override or table hi)."""
-        return self._resolved("back_width_ease")
+        return self._resolve("back_width_ease")
 
     @property
-    def resolved_armscye_width_ease(self) -> float:
+    def armscye_width_ease(self) -> float:
         """ArD — Armdurchmesser-Zugabe (override or table hi)."""
-        return self._resolved("armscye_width_ease")
+        return self._resolve("armscye_width_ease")
 
     @property
-    def resolved_chest_width_ease(self) -> float:
+    def chest_width_ease(self) -> float:
         """BrB — Brustbreite-Zugabe (override or table hi)."""
-        return self._resolved("chest_width_ease")
+        return self._resolve("chest_width_ease")
 
     @property
-    def resolved_armscye_depth_ease(self) -> float:
+    def armscye_depth_ease(self) -> float:
         """AlT — Armlochtiefe-Zugabe (override or table hi)."""
-        return self._resolved("armscye_depth_ease")
+        return self._resolve("armscye_depth_ease")
 
     @property
-    def resolved_waist_ease(self) -> float:
+    def waist_ease(self) -> float:
         """TaU — Taillenumfang-Zugabe (override or table hi)."""
-        return self._resolved("waist_ease")
+        return self._resolve("waist_ease")
 
     @property
-    def resolved_hip_ease(self) -> float:
+    def hip_ease(self) -> float:
         """HüU — Hüftumfang-Zugabe (override or table hi)."""
-        return self._resolved("hip_ease")
+        return self._resolve("hip_ease")
 
     @property
-    def resolved_bust_point_ease(self) -> float:
+    def bust_point_ease(self) -> float:
         """ZuBrA — Zugabe Brustpunktabstand (override or table hi)."""
-        return self._resolved("bust_point_ease")
+        return self._resolve("bust_point_ease")
 
     @property
     def bust_width_ease(self) -> float:
         """BrW-Zugabe — always derived: 2 × (back + armscye_width + chest)."""
         return 2.0 * (
-            self.resolved_back_width_ease
-            + self.resolved_armscye_width_ease
-            + self.resolved_chest_width_ease
+            self.back_width_ease
+            + self.armscye_width_ease
+            + self.chest_width_ease
         )
 
     def range(self, field_name: str) -> _Range:
@@ -198,12 +225,3 @@ class FitClass:
         if field_name not in _TABLE[self.pk]:
             raise KeyError(f"{field_name!r} is not a recognised ease field.")
         return _TABLE[self.pk][field_name]
-
-    # ------------------------------------------------------------------
-    # Convenience aliases used by Allowance.from_fit_class and grids
-    # ------------------------------------------------------------------
-
-    @property
-    def ZuBrA(self) -> float:
-        """Alias for :attr:`resolved_bust_point_ease` (ZuBrA — Zugabe Brustpunktabstand)."""
-        return self.resolved_bust_point_ease

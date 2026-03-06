@@ -10,13 +10,11 @@ Example::
     from sewpat.blocks import TopBlock
     from sewpat.fitclass import FitClass
     from sewpat.measurements import GarmentConfig
-    from sewpat.person import PersonalAdjustments
 
-    fc  = FitClass(pk=4)
-    adj = PersonalAdjustments(BeckenAdjustment=1 * CM)
-    cfg = GarmentConfig(MoL=75 * CM)
+    fc    = FitClass(pk=4)
+    cfg   = GarmentConfig(length=75 * CM)
 
-    block = TopBlock.from_measurements(meas, fc, adj, cfg)
+    block = TopBlock.from_measurements(meas, fc, hip_offset=1*CM, config=cfg)
     pattern.add_part(block.back.part)
     pattern.add_part(block.front.part)
 
@@ -45,7 +43,7 @@ from .measurements import (
     calculate_waist_distribution,
 )
 from .pattern import PatternConfig, PatternPart
-from .person import PersonalAdjustments
+from .person import Gender
 from .style import STYLE_HEM, STYLE_STITCH, STYLE_STITCH_BEVEL
 from .units import CM
 
@@ -700,8 +698,8 @@ class TopBlock:
     def from_measurements(
         cls,
         meas: BlouseMeasurements,
-        fit_class_or_model: "FitClass | None" = None,
-        adjustments: PersonalAdjustments | None = None,
+        fit_class: FitClass | None = None,
+        hip_offset: float = 2.0,
         config: GarmentConfig | None = None,
         layout: PatternConfig | None = None,
         back_name: str = "Block Back",
@@ -710,12 +708,12 @@ class TopBlock:
         """Build and return a :class:`TopBlock` from measurements.
 
         Args:
-            meas: Blouse measurements (ease already included).
-            fit_class_or_model: :class:`~sewpat.fitclass.FitClass`.
-            adjustments: Personal body-deviation corrections.
-            config: Garment-design choices (length, seam allowance).
-            layout: Pattern layout config (anchor, inter-piece margin).
-            back_name: Name for the back part.
+            meas:       Blouse measurements (ease already included).
+            fit_class:  :class:`~sewpat.fitclass.FitClass` for construction offsets.
+            hip_offset: Hip adjustment offset (BeckenAdjustment) in mm.
+            config:     Garment-design choices (length, seam allowance).
+            layout:     Pattern layout config (anchor, inter-piece margin).
+            back_name:  Name for the back part.
             front_name: Name for the front part.
 
         Returns:
@@ -724,14 +722,13 @@ class TopBlock:
         from .fitclass import FitClass  # local import to avoid circularity
 
         seam_allowance = config.seam_allowance if config is not None else 1 * CM
-        hip_offset     = adjustments.hip_offset if adjustments is not None else 0.0
 
         layout = layout or PatternConfig()
 
         grid = TopGrid.from_measurements(
             meas=meas,
-            fit_class_or_model=fit_class_or_model,
-            adjustments=adjustments,
+            fit_class=fit_class,
+            hip_offset=hip_offset,
             config=config,
             layout=layout,
         )
