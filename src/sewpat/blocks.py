@@ -75,14 +75,12 @@ _SIDE_HIP_TANGENT: float = 15.0 * CM
 _WAIST_OFFSET: float = 1.0 * CM
 
 #: Checkpoint for the back armscye curve, placed on the shoulder hight at a fixed distance from the armscye line, (german: HP)
-_ARMSCYE_BACK_AUX_OFFSET: float = 1 * CM
+_ARMSCYE_BACK_AUX_OFFSET: float = 1.5 * CM
 _ARMSCYE_BACK_OFFSET: float = 1 * CM
 
 #: Back armscye Bézier control-point offsets (cp1_x, cp2_x, cp_y).
-_ARMSCYE_BACK_CP1_X: float = -1.5 * CM
-_ARMSCYE_BACK_CP2_X: float = -1.5 * CM
-_ARMSCYE_BACK_CP1_Y:  float =  0 * CM
-_ARMSCYE_BACK_CP2_Y:  float =  3 * CM
+_ARMSCYE_BACK_CP_X:  float =0.5 * CM
+_ARMSCYE_BACK_CP_Y:  float =  1 * CM
 
 
 # ---------------------------------------------------------------------------
@@ -229,27 +227,18 @@ def _build_back_geometry(
     blade_dart_tip = intersect(grid.dart_back, shoulder_blade)[0]
 
     # Armscye curve — two cubics joined at armscye_control.
-    # Lower: side_chest → armscye_control, passes through dart_notch at t=0.5.
-    # At t=0.5 for a cubic: B(0.5) = (p0+3p1+3p2+p3)/8 = dart_notch
-    # With symmetric CPs (p1, p2): p1 = p2 = (8*dart_notch - side_chest - armscye_control) / 6
-    _cp_lower = Point(
-        (8 * dart_notch.x - side_chest.x - armscye_control.x) / 6,
-        (8 * dart_notch.y - side_chest.y - armscye_control.y) / 6,
-    )
     armscye_lower = CubicBezier(
         side_chest,
-        armscye_control.translate(1 * CM, armscye_control.distance_to_segment(grid.chest)),
-        armscye_control.translate(0, armscye_control.distance_to_segment(grid.chest) - 1 * CM),
-        # _cp_lower,
-        # _cp_lower,
+        side_chest.translate((armscye_control.x-side_chest.x) / 3, - _ARMSCYE_BACK_CP_X),
+        armscye_control.translate(_ARMSCYE_BACK_CP_X, armscye_control.distance_to_segment(grid.chest) - _ARMSCYE_BACK_CP_Y),
         armscye_control,
         name="Armscye Back Lower",
     )
     # Upper: armscye_control → shoulder.p2, using existing CP offsets.
     armscye_upper = CubicBezier(
         armscye_control,
-        armscye_control,
-        shoulder.p2,
+        dart_notch.translate(-(dart_notch.x - armscye_control.x) / 2, 0),
+        dart_notch.translate(-(dart_notch.x - armscye_control.x) / 2, 0),
         shoulder.p2,
         name="Armscye Back Upper",
     )
@@ -400,8 +389,8 @@ def _build_side_seams(
     meas: BlouseMeasurements,
     back: _BackGeometry,
     front: _FrontGeometry,
-    wd: "WaistDistribution",
-    hd: "HipDistribution",
+    wd: WaistDistribution,
+    hd: HipDistribution,
 ) -> _SideSeams:
     """Compute side-seam points and curves for both pieces."""
 
@@ -790,12 +779,12 @@ class TopBlock:
         block_front = PatternPart(name=front_name)
 
         # Append the armscye lower first (dart edge ref), then upper
-        armscye_back_elem = block_back.append(
+        block_back.append(
             back_geom.armscye_back_lower.set_name("Armscye Back Lower"),
             style=STYLE_STITCH,
             is_outline=True,
         )
-        block_back.append(
+        armscye_back_elem = block_back.append(
             back_geom.armscye_back_upper.set_name("Armscye Back Upper"),
             style=STYLE_STITCH,
             is_outline=True,

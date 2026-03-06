@@ -44,13 +44,14 @@ _CSV_PATH = Path(__file__).parent / "data" / "fitclass.csv"
 
 #: Ease fields exposed on FitClass (matches CSV column level-0 names).
 EASE_FIELDS = (
-    "back_width_ease",    # RüB  — Rückenbreite-Zugabe
-    "armscye_width_ease", # ArD  — Armdurchmesser-Zugabe
-    "chest_width_ease",   # BrB  — Brustbreite-Zugabe
-    "armscye_depth_ease", # AlT  — Armlochtiefe-Zugabe
-    "waist_ease",         # TaU  — Taillenumfang-Zugabe
-    "hip_ease",           # HüU  — Hüftumfang-Zugabe
-    "bust_point_ease",    # ZuBrA — Zugabe Brustpunktabstand
+    "back_width_ease",      # RüB   — Rückenbreite-Zugabe
+    "armscye_width_ease",   # ArD   — Armdurchmesser-Zugabe
+    "chest_width_ease",     # BrB   — Brustbreite-Zugabe
+    "armscye_depth_ease",   # AlT   — Armlochtiefe-Zugabe
+    "waist_ease",           # TaU   — Taillenumfang-Zugabe
+    "hip_ease",             # HüU   — Hüftumfang-Zugabe
+    "bust_point_ease",      # ZuBrA — Zugabe Brustpunktabstand
+    "shoulder_width_ease",  # SuB   — Schulterbreite-Zugabe
 )
 
 
@@ -99,6 +100,7 @@ class FitClass:
         waist_ease:         TaU  — override in mm.
         hip_ease:           HüU  — override in mm.
         bust_point_ease:    ZuBrA — override in mm.
+        shoulder_width_ease: ScB  — override in mm.
 
     Examples::
 
@@ -117,6 +119,7 @@ class FitClass:
     _waist_ease:         float | None = None  # TaU  — Taillenumfang-Zugabe
     _hip_ease:           float | None = None  # HüU  — Hüftumfang-Zugabe
     _bust_point_ease:    float | None = None  # ZuBrA — Zugabe Brustpunktabstand
+    _shoulder_width_ease: float | None = None  # ScB  — Schulterbreite-Zugabe
 
     def __init__(
         self,
@@ -128,6 +131,7 @@ class FitClass:
         waist_ease:         float | None = None,
         hip_ease:           float | None = None,
         bust_point_ease:    float | None = None,
+        shoulder_width_ease: float | None = None,
     ) -> None:
         self.pk = pk
         self._back_width_ease    = back_width_ease
@@ -137,6 +141,7 @@ class FitClass:
         self._waist_ease         = waist_ease
         self._hip_ease           = hip_ease
         self._bust_point_ease    = bust_point_ease
+        self._shoulder_width_ease = shoulder_width_ease
         self.__post_init__()
 
     def __post_init__(self) -> None:
@@ -203,6 +208,11 @@ class FitClass:
     def bust_point_ease(self) -> float:
         """ZuBrA — Zugabe Brustpunktabstand (override or table hi)."""
         return self._resolve("bust_point_ease")
+
+    @property
+    def shoulder_width_ease(self) -> float:
+        """ScB — Schulterbreite-Zugabe (override or table hi)."""
+        return self._resolve("shoulder_width_ease")
 
     @property
     def bust_width_ease(self) -> float:

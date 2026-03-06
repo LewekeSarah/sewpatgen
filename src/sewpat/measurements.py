@@ -23,10 +23,11 @@ _FRONT_FRACTION: float = 0.40  # fraction of residual → front waist dart
 
 # Map from FitClass resolved property names → body measurement field names.
 _BODY_EASE_MAP: dict[str, str] = {
-    "back_width_ease":    "back_width",
-    "armscye_width_ease": "armscye_width",
-    "chest_width_ease":   "chest_width",
-    "armscye_depth_ease": "armscye_depth",
+    "back_width_ease":      "back_width",
+    "armscye_width_ease":   "armscye_width",
+    "chest_width_ease":     "chest_width",
+    "armscye_depth_ease":   "armscye_depth",
+    "shoulder_width_ease":  "shoulder_width",
 }
 
 

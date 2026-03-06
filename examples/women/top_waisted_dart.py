@@ -60,7 +60,7 @@ def create_block(person: BalancedPerson, fit_class: FitClass, adjustments: Perso
 
 if __name__ == "__main__":
     person      = load_person("Sarah", date="2025-07-30")
-    fit_class   = FitClass(pk=4)
+    fit_class   = FitClass(pk=4, hip_ease=6 * CM)
     adjustments = PersonalAdjustments(
         hip_offset=1 * CM,
         balance=BalanceAdjustments(front_length=-0.9 * CM),
@@ -72,7 +72,7 @@ if __name__ == "__main__":
     pattern     = create_block(person_balanced, fit_class, adjustments, config)
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
-    grid_parts    = [Part.GRID]
+    grid_parts    = [] #[Part.GRID]
 
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         height_mm=DinA0.height,
         filename=str(Path(__file__).parent / "top_waisted_dart_grid.svg"),
         parts=grid_parts + pattern_parts,
-        show_bezier_control_points=True,
+        show_bezier_control_points=False,
         show_construction=True,
         show_seam_allowance=True
     )
