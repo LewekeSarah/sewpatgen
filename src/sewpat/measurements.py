@@ -115,13 +115,17 @@ class GarmentConfig:
     """Pure garment-design choices — independent of body measurements and fit.
 
     Attributes:
-        length:          Modell-Länge (MoL) — finished garment length (hem to nape).
-        seam_allowance:  Nahtzugabe — seam allowance width added to all seams.
-        hem_width:       Saumweite (SaW) — hem width (optional; used for trousers).
+        length:           Modell-Länge (MoL) — finished garment length (hem to nape).
+        seam_allowance:   Nahtzugabe — seam allowance width added to all seams.
+        hem_width:        Saumweite (SaW) — hem width (optional; used for trousers).
+        shoulder_gather:  Schulter-Weite — gather/ease added to the shoulder seam
+                          length.  Lengthens the shoulder seam on both pieces so
+                          fabric can be eased or gathered at the sleeve head.
     """
     length: float                        # MoL — Modell-Länge
     seam_allowance: float = 1 * CM
     hem_width: float | None = None       # SaW — Saumweite
+    shoulder_gather: float = 1 * CM      # Schulter-Weite — easestitch / shoulder seam gather on the back
 
 
 @dataclass(frozen=True)

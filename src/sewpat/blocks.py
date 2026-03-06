@@ -43,7 +43,7 @@ from .measurements import (
     calculate_waist_distribution,
 )
 from .pattern import PatternConfig, PatternPart
-from .person import Gender
+from .person import Gender, PersonalAdjustments
 from .style import STYLE_HEM, STYLE_STITCH, STYLE_STITCH_BEVEL
 from .units import CM
 
@@ -52,13 +52,11 @@ from .units import CM
 # These are pattern-drafting constants that encode standard ease/lift values.
 # ---------------------------------------------------------------------------
 
-#: Vertical raise applied to the armscye-back/shoulder intersection.
-_SHOULDER_RAISE: float = 1.5 * CM
 
-#: Back neck depth — how far the back neckline drops below the shoulder line.
+#: Back neck depth — how far the back neckline drops below the shoulder line, always constant.
 _NECK_DEPTH: float = 2.0 * CM
 
-#: Ease added to / subtracted from the shoulder seam.
+#: Ease added to / subtracted from the shoulder seam, always constant.
 _SHOULDER_EASE: float = 1.0 * CM
 
 #: Front neckline offset added to the measured neck-to-bust depth.
@@ -79,6 +77,9 @@ _WAIST_DART_FRONT_LOWER_TIP: float = 12.0 * CM
 
 #: How far the waist construction line is raised above the actual waist grid line.
 _WAIST_OFFSET: float = 1.0 * CM
+
+#: Checkpoint for the back armscye curve, placed on the shoulder hight at a fixed distance from the armscye line, (german: HP)
+_ARMSCYE_BACK_OFFSET: float = 1 * CM
 
 #: Back armscye Bézier control-point offsets (cp1_x, cp2_x, cp_y).
 _ARMSCYE_BACK_CP1_X: float = -0.5 * CM
@@ -188,6 +189,8 @@ def _build_back_geometry(
     meas: BlouseMeasurements,
     anchor: Point,
     hip_offset: float,
+    shoulder_raise: float,
+    shoulder_gather: float,
 ) -> _BackGeometry:
     """Compute all key points and curves for the back piece."""
 
@@ -202,14 +205,14 @@ def _build_back_geometry(
     side_chest           = intersect(grid.side_back,     grid.chest)[0]
     armscye_shoulder     = intersect(grid.armscye_back,  grid.shoulder_back)[0]
     neck_shoulder        = intersect(grid.shoulder_back, grid.neck)[0]
-    armscye_shoulder_raised = armscye_shoulder.translate(0, _SHOULDER_RAISE)
+    armscye_shoulder_raised = armscye_shoulder.translate(0, shoulder_raise)
 
     # Shoulder seam
     shoulder_neckline    = neck_shoulder.translate(0, -_NECK_DEPTH)
     dart_notch           = (
         Segment(armscye_shoulder_raised, armscye_chest)
         .point_at_t(0.5)
-        .translate(_SHOULDER_EASE, 0)
+        .translate(_ARMSCYE_BACK_OFFSET, 0)
     )
     shoulder_blade = Line(dart_notch, (1, 0), name="Shoulder Blade")
     armscye_control = (
@@ -220,7 +223,7 @@ def _build_back_geometry(
     shoulder_orig = Segment.from_direction(
         shoulder_neckline,
         armscye_shoulder_raised,
-        length=meas.shoulder_width + _SHOULDER_EASE,
+        length=meas.shoulder_width + shoulder_gather,
     )
     shoulder = shoulder_orig.offset(-_SHOULDER_EASE)
 
@@ -291,11 +294,11 @@ def _build_front_geometry(
     armscye_control = armscye_front_chest.translate(0, -0.25 * meas.armscye_width)
     arm_seam_length = (
         Segment(back.armscye_back_shoulder_raised, back.armscye_back_chest).length
-        - _SHOULDER_EASE
+        - 2 * CM # fixed constant
     )
     armscye_front_chest_upper = armscye_front_chest.translate(0, -arm_seam_length)
     shoulder_upper_pt = Circle(armscye_front_chest, arm_seam_length).point_along_from(
-        armscye_front_chest_upper, -meas.bust / 20
+        armscye_front_chest_upper, -(meas.bust / 20 + _ARMSCYE_FIT) # _ARMSCYE_FIT in 0, 1. o regular 1 tight fit
     )
     shoulder_front_pivot = intersect(
         Circle(bust_point, meas.bust_depth),
@@ -698,43 +701,41 @@ class TopBlock:
     def from_measurements(
         cls,
         meas: BlouseMeasurements,
+        config: GarmentConfig,
         fit_class: FitClass | None = None,
-        hip_offset: float = 2.0,
-        config: GarmentConfig | None = None,
-        layout: PatternConfig | None = None,
+        adjustments: PersonalAdjustments | None = None,
+        layout: PatternConfig = PatternConfig(),
         back_name: str = "Block Back",
         front_name: str = "Block Front",
     ) -> "TopBlock":
         """Build and return a :class:`TopBlock` from measurements.
 
         Args:
-            meas:       Blouse measurements (ease already included).
-            fit_class:  :class:`~sewpat.fitclass.FitClass` for construction offsets.
-            hip_offset: Hip adjustment offset (BeckenAdjustment) in mm.
-            config:     Garment-design choices (length, seam allowance).
-            layout:     Pattern layout config (anchor, inter-piece margin).
-            back_name:  Name for the back part.
-            front_name: Name for the front part.
+            meas:        Blouse measurements (ease already included).
+            fit_class:   :class:`~sewpat.fitclass.FitClass` for construction offsets.
+            adjustments: :class:`~sewpat.person.PersonalAdjustments` — provides
+                         ``hip_offset`` and ``shoulder_raise``.
+            config:      Garment-design choices (length, seam allowance).
+            layout:      Pattern layout config (anchor, inter-piece margin).
+            back_name:   Name for the back part.
+            front_name:  Name for the front part.
 
         Returns:
             A :class:`TopBlock` with fully constructed ``.back`` and ``.front`` pieces.
         """
-        from .fitclass import FitClass  # local import to avoid circularity
-
-        seam_allowance = config.seam_allowance if config is not None else 1 * CM
-
-        layout = layout or PatternConfig()
+        adj              = adjustments or PersonalAdjustments()
+        seam_allowance   = config.seam_allowance
 
         grid = TopGrid.from_measurements(
             meas=meas,
             fit_class=fit_class,
-            hip_offset=hip_offset,
+            hip_offset=adj.hip_offset,
             config=config,
             layout=layout,
         )
 
         # ── 1. Build geometry for each piece independently ───────────────────
-        back_geom  = _build_back_geometry(grid, meas, layout.anchor, hip_offset)
+        back_geom  = _build_back_geometry(grid, meas, layout.anchor, adj.hip_offset, adj.shoulder_raise, config.shoulder_gather)
         front_geom = _build_front_geometry(grid, meas, back_geom)
 
         # ── 2. Compute waist / hip distribution ──────────────────────────────

@@ -9,6 +9,7 @@ as ``.part`` for adding to a :class:`~sewpat.pattern.Pattern`.
 from dataclasses import dataclass
 
 from .geometry import Segment
+from .fitclass import FitClass
 from .measurements import BlouseMeasurements, GarmentConfig
 from .pattern import ConstructionGrid, PatternConfig, ConstructionGridPart
 
@@ -74,9 +75,9 @@ class TopGrid:
     def from_measurements(
         cls,
         meas: BlouseMeasurements,
-        fit_class: "FitClass | None" = None,
+        fit_class: FitClass,
+        config: GarmentConfig,
         hip_offset: float = 0.0,
-        config: GarmentConfig | None = None,
         layout: PatternConfig | None = None,
     ) -> "TopGrid":
         """Build and return a :class:`TopGrid` from the given measurements.
@@ -88,11 +89,10 @@ class TopGrid:
             config:     Garment-design choices (length, seam allowance).
             layout:     Pattern layout configuration.
         """
-        from .fitclass import FitClass  # local import to avoid circularity
 
-        bust_point_ease = fit_class.bust_point_ease if isinstance(fit_class, FitClass) else 0.5 * CM
-        length          = config.length if config is not None else 75 * CM
-        seam_allowance  = config.seam_allowance if config is not None else 1 * CM
+        bust_point_ease = fit_class.bust_point_ease
+        length          = config.length
+        seam_allowance  = config.seam_allowance
 
         layout = layout or PatternConfig()
 

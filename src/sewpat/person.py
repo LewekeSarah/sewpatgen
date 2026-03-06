@@ -112,14 +112,32 @@ class PersonalAdjustments:
     :class:`~sewpat.fitclass.FitClass` may still need different adjustments.
 
     Attributes:
-        hip_offset: Horizontal hip offset — shifts the hip-adjustment
-            vertical grid line outward (positive) or inward (negative).
-            (BeckenAdjustment — Becken-Korrektur)
-        balance: Front/back length balance corrections.
+        hip_offset:     Horizontal hip offset — shifts the hip-adjustment
+                        vertical grid line outward (positive) or inward
+                        (negative).  Range: 1 cm (nach hinten gekipptes
+                        Becken) to 3 cm (Hohlkreuz / flacher Po).
+                        (BeckenAdjustment — Becken-Korrektur)
+        shoulder_raise: Vertical raise applied at the armscye-shoulder
+                        intersection.  Range: 1–1.5 cm.
+        balance:        Front/back length balance corrections.
     """
 
-    hip_offset: float = 2.0  # BeckenAdjustment — Becken-Korrektur
+    hip_offset:     float = 2.0 * CM   # BeckenAdjustment — Becken-Korrektur
+    shoulder_raise: float = 1.5 * CM   # Schultererhöhung
     balance: BalanceAdjustments = field(default_factory=BalanceAdjustments)
+
+    def __post_init__(self) -> None:
+        if not (1.0 * CM - 1e-9 <= self.hip_offset <= 3.0 * CM + 1e-9):
+            raise ValueError(
+                f"hip_offset={self.hip_offset / CM:.2f} cm is outside the valid "
+                f"range [1.0, 3.0] cm.  "
+                f"1 cm = nach hinten gekipptes Becken, 3 cm = Hohlkreuz / flacher Po."
+            )
+        if not (1.0 * CM - 1e-9 <= self.shoulder_raise <= 1.5 * CM + 1e-9):
+            raise ValueError(
+                f"shoulder_raise={self.shoulder_raise / CM:.2f} cm is outside the "
+                f"valid range [1.0, 1.5] cm."
+            )
 
 
 class BalancedPerson:

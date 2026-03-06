@@ -45,7 +45,7 @@ def create_block(person: BalancedPerson, fit_class: FitClass, adjustments: Perso
     block = TopBlock.from_measurements(
         meas=meas,
         fit_class=fit_class,
-        hip_offset=adjustments.hip_offset,
+        adjustments=adjustments,
         config=config,
         layout=layout,
         back_name=Part.BLOCK_BACK,
