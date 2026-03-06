@@ -44,9 +44,10 @@ def create_block(person: BalancedPerson, fit_class: FitClass, adjustments: Perso
 
     block = TopBlock.from_measurements(
         meas=meas,
+        config=config,
         fit_class=fit_class,
         adjustments=adjustments,
-        config=config,
+        grid=grid,
         layout=layout,
         back_name=Part.BLOCK_BACK,
         front_name=Part.BLOCK_FRONT,
@@ -80,8 +81,8 @@ if __name__ == "__main__":
         height_mm=DinA0.height,
         filename=str(Path(__file__).parent / "top_waisted_dart_grid.svg"),
         parts=grid_parts + pattern_parts,
-        show_bezier_control_points=False,
-        show_construction=False,
+        show_bezier_control_points=True,
+        show_construction=True,
         show_seam_allowance=True
     )
 

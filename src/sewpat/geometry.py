@@ -100,6 +100,19 @@ class Point:
         else:
             return float(np.linalg.norm(self.coords - other))
 
+    def distance_to_segment(self, seg: "Segment") -> float:
+        """Return the shortest distance from this point to *seg*.
+
+        If the perpendicular foot lies within the segment the result is the
+        perpendicular distance; otherwise it is the distance to the nearer
+        endpoint.
+        """
+        p1 = seg.p1.coords
+        d  = seg.p2.coords - p1
+        t  = float(np.dot(self.coords - p1, d) / np.dot(d, d))
+        foot = Point(*(p1 + max(0.0, min(1.0, t)) * d))
+        return self.distance_to(foot)
+
     def translate(self, dx: float, dy: float) -> "Point":
         """Return a copy translated by (dx, dy)."""
         return self + Point(dx, dy)

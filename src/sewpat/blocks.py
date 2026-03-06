@@ -57,6 +57,7 @@ _SHOULDER_EASE: float = 1.0 * CM
 
 #: Shoulder raise at back neckline ending point, applied as vertical offset to the shoulder seam.
 _SHOULDER_RAISE: float = 2.0 * CM
+_SHOULDER_DART_WIDTH: float = 1.5 * CM
 
 #: Front neckline offset added to the measured neck-to-bust depth.
 _NECKLINE_EASE: float = 1.5 * CM
@@ -78,9 +79,10 @@ _ARMSCYE_BACK_AUX_OFFSET: float = 1 * CM
 _ARMSCYE_BACK_OFFSET: float = 1 * CM
 
 #: Back armscye Bézier control-point offsets (cp1_x, cp2_x, cp_y).
-_ARMSCYE_BACK_CP1_X: float = -0.5 * CM
+_ARMSCYE_BACK_CP1_X: float = -1.5 * CM
 _ARMSCYE_BACK_CP2_X: float = -1.5 * CM
-_ARMSCYE_BACK_CP_Y:  float =  3.0 * CM
+_ARMSCYE_BACK_CP1_Y:  float =  0 * CM
+_ARMSCYE_BACK_CP2_Y:  float =  3 * CM
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +112,8 @@ class _BackGeometry:
     armscye_control: Point   # armscye notch (pt_hÄP)
 
     # Curves and segments
-    armscye_back: CubicBezier
+    armscye_back_lower: CubicBezier   # side_chest → armscye_control, through dart_notch
+    armscye_back_upper: CubicBezier   # armscye_control → shoulder.p2
     neckline_back: CubicBezier
     shoulder_back: Segment
     shoulder_back_orig: Segment
@@ -225,12 +228,30 @@ def _build_back_geometry(
 
     blade_dart_tip = intersect(grid.dart_back, shoulder_blade)[0]
 
-    # Armscye curve
-    armscye = CubicBezier(
+    # Armscye curve — two cubics joined at armscye_control.
+    # Lower: side_chest → armscye_control, passes through dart_notch at t=0.5.
+    # At t=0.5 for a cubic: B(0.5) = (p0+3p1+3p2+p3)/8 = dart_notch
+    # With symmetric CPs (p1, p2): p1 = p2 = (8*dart_notch - side_chest - armscye_control) / 6
+    _cp_lower = Point(
+        (8 * dart_notch.x - side_chest.x - armscye_control.x) / 6,
+        (8 * dart_notch.y - side_chest.y - armscye_control.y) / 6,
+    )
+    armscye_lower = CubicBezier(
         side_chest,
-        armscye_control.translate(_ARMSCYE_BACK_CP1_X, _ARMSCYE_BACK_CP_Y),
-        armscye_control.translate(_ARMSCYE_BACK_CP2_X, _ARMSCYE_BACK_CP_Y),
+        armscye_control.translate(1 * CM, armscye_control.distance_to_segment(grid.chest)),
+        armscye_control.translate(0, armscye_control.distance_to_segment(grid.chest) - 1 * CM),
+        # _cp_lower,
+        # _cp_lower,
+        armscye_control,
+        name="Armscye Back Lower",
+    )
+    # Upper: armscye_control → shoulder.p2, using existing CP offsets.
+    armscye_upper = CubicBezier(
+        armscye_control,
+        armscye_control,
         shoulder.p2,
+        shoulder.p2,
+        name="Armscye Back Upper",
     )
 
     # Neckline curve
@@ -259,7 +280,8 @@ def _build_back_geometry(
         shoulder_dart_notch=dart_notch,
         shoulder_blade_dart_tip=blade_dart_tip,
         armscye_control=armscye_control,
-        armscye_back=armscye,
+        armscye_back_lower=armscye_lower,
+        armscye_back_upper=armscye_upper,
         neckline_back=neckline,
         shoulder_back=shoulder,
         shoulder_back_orig=shoulder_orig,
@@ -488,7 +510,7 @@ def _build_darts(
     shoulder_dart_back = Dart.from_edge_at_legs(
         armscye_back_elem,
         leg_a=back.shoulder_dart_notch,
-        leg_b=back.armscye_back.point_along_from(back.shoulder_dart_notch, _NECKLINE_EASE), # TODO fix
+        leg_b=back.armscye_back_upper.point_along_from(back.shoulder_dart_notch, _SHOULDER_DART_WIDTH),
         tip=back.shoulder_blade_dart_tip,
         name="Shoulder Dart Back",
     )
@@ -510,20 +532,15 @@ def _assemble_back_part(
 ) -> None:
     """Add all elements to the back PatternPart in drawing order.
 
-    Note: ``back.armscye_back`` is **not** appended here — it was already
-    appended in :meth:`TopBlock.from_measurements` before
-    :func:`_build_darts` is called, so that :class:`~sewpat.geometry.Dart`
+    Note: ``back.armscye_back_lower`` and ``back.armscye_back_upper`` are **not**
+    appended here — they were already appended in :meth:`TopBlock.from_measurements`
+    before :func:`_build_darts` is called, so that :class:`~sewpat.geometry.Dart`
     can reference the live ``PatternElement`` for the in-place edge split.
-    Appending it a second time would corrupt the outline polygon and produce
-    wrong SA corners at the shoulder/armscye junction.
+    Appending them a second time would corrupt the outline polygon.
     """
     part.append(Segment(back.anchor, back.waist_center_back_adj,       name="Center Back"),     style=STYLE_STITCH, is_outline=True)
     part.append(Segment(back.waist_center_back_adj, back.hem_center_back_adj, name="Center Back Hem"), style=STYLE_STITCH, is_outline=True)
-    part.append(
-        back.neckline_back,
-        style=STYLE_STITCH_BEVEL,
-        is_outline=True,
-    )
+    part.append(back.neckline_back, style=STYLE_STITCH_BEVEL, is_outline=True)
     part.append(back.shoulder_back_orig.set_name("Shoulder Back Orig"), is_construction=True)
     part.append(back.shoulder_blade,                                     is_construction=True)
     part.append(back.shoulder_back.set_name("Shoulder Back"),           style=STYLE_STITCH, is_outline=True)
@@ -535,9 +552,13 @@ def _assemble_back_part(
     part.append(sides.side_hip_hem_back,                                style=STYLE_STITCH, is_outline=True)
     part.append(sides.hem_side_to_center_back,                          style=STYLE_HEM, is_outline=True)
 
+    # Construction reference points — visible when show_construction=True
+    part.append(Point(*back.armscye_control.coords, name="Armscye Control Back"),    is_construction=True)
+    part.append(Point(*back.shoulder_dart_notch.coords, name="Shoulder Dart Notch Back"), is_construction=True)
+
     if seam_allowance > 0:
         part.add_seam_allowance(seam_allowance)
-    part.add_notches(back.armscye_control, seam_edge=back.armscye_back)
+    part.add_notches(back.armscye_control, seam_edge=back.armscye_back_lower)
 
 
 def _assemble_front_part(
@@ -593,7 +614,9 @@ class TopBlockBack:
         part: The :class:`~sewpat.pattern.PatternPart` ready to add to a
             :class:`~sewpat.pattern.Pattern`.  It already contains all outline
             segments, darts, and — when *seam_allowance* > 0 — the SA offset.
-        armscye: Armscye curve of the back piece (armscye intersection → shoulder).
+        armscye_lower: Lower armscye curve (side_chest → armscye_control),
+            passes through dart_notch at t=0.5.
+        armscye_upper: Upper armscye curve (armscye_control → shoulder).
         neckline: Neckline Bézier curve of the back piece.
         shoulder: Shoulder seam (parallel-offset construction line).
         side_chest_waist: Straight side-seam segment from raised waist
@@ -612,7 +635,8 @@ class TopBlockBack:
     """
 
     part: PatternPart
-    armscye: CubicBezier
+    armscye_lower: CubicBezier
+    armscye_upper: CubicBezier
     neckline: CubicBezier
     shoulder: Segment
     side_chest_waist: Segment
@@ -702,6 +726,7 @@ class TopBlock:
         config: GarmentConfig,
         fit_class: FitClass | None = None,
         adjustments: PersonalAdjustments | None = None,
+        grid: TopGrid | None = None,
         layout: PatternConfig = PatternConfig(),
         back_name: str = "Block Back",
         front_name: str = "Block Front",
@@ -710,10 +735,14 @@ class TopBlock:
 
         Args:
             meas:        Blouse measurements (ease already included).
+            config:      Garment-design choices (length, seam allowance).
             fit_class:   :class:`~sewpat.fitclass.FitClass` for construction offsets.
             adjustments: :class:`~sewpat.person.PersonalAdjustments` — provides
                          ``hip_offset`` and ``shoulder_drop``.
-            config:      Garment-design choices (length, seam allowance).
+            grid:        Pre-built :class:`~sewpat.grids.TopGrid`.  Pass the grid
+                         already constructed for the same layout to avoid building
+                         it twice and guarantee both are identical.  If ``None``
+                         a new grid is built internally.
             layout:      Pattern layout config (anchor, inter-piece margin).
             back_name:   Name for the back part.
             front_name:  Name for the front part.
@@ -721,16 +750,17 @@ class TopBlock:
         Returns:
             A :class:`TopBlock` with fully constructed ``.back`` and ``.front`` pieces.
         """
-        adj              = adjustments or PersonalAdjustments()
-        seam_allowance   = config.seam_allowance
+        adj            = adjustments or PersonalAdjustments()
+        seam_allowance = config.seam_allowance
 
-        grid = TopGrid.from_measurements(
-            meas=meas,
-            fit_class=fit_class,
-            hip_offset=adj.hip_offset,
-            config=config,
-            layout=layout,
-        )
+        if grid is None:
+            grid = TopGrid.from_measurements(
+                meas=meas,
+                fit_class=fit_class,
+                hip_offset=adj.hip_offset,
+                config=config,
+                layout=layout,
+            )
 
         # ── 1. Build geometry for each piece independently ───────────────────
         back_geom  = _build_back_geometry(grid, meas, layout.anchor, adj.hip_offset, adj.shoulder_drop, config.shoulder_gather)
@@ -759,9 +789,14 @@ class TopBlock:
         block_back  = PatternPart(name=back_name)
         block_front = PatternPart(name=front_name)
 
-        # Append the armscye first so we have the edge element for the shoulder dart
+        # Append the armscye lower first (dart edge ref), then upper
         armscye_back_elem = block_back.append(
-            back_geom.armscye_back.set_name("Armscye Back"),
+            back_geom.armscye_back_lower.set_name("Armscye Back Lower"),
+            style=STYLE_STITCH,
+            is_outline=True,
+        )
+        block_back.append(
+            back_geom.armscye_back_upper.set_name("Armscye Back Upper"),
             style=STYLE_STITCH,
             is_outline=True,
         )
@@ -773,7 +808,8 @@ class TopBlock:
         # ── 5. Pack into public dataclasses and return ────────────────────────
         back = TopBlockBack(
             part=block_back,
-            armscye=back_geom.armscye_back,
+            armscye_lower=back_geom.armscye_back_lower,
+            armscye_upper=back_geom.armscye_back_upper,
             neckline=back_geom.neckline_back,
             shoulder=back_geom.shoulder_back,
             side_chest_waist=sides.side_chest_waist_back,
