@@ -10,25 +10,13 @@ from sewpat.grids import TopGrid
 from sewpat.measurements import GarmentConfig, make_blouse_measurements
 from sewpat.pages import DinA0
 from sewpat.pattern import Pattern, PatternConfig
-from sewpat.person import BalanceAdjustments, Person, PersonalAdjustments
+from sewpat.person import BalanceAdjustments, Person, PersonalAdjustments, load_person
 from sewpat.render import export_pattern_svg_mm
 from sewpat.units import CM
 
 
 def make_person() -> Person:
-    return Person(
-        height=159 * CM,
-        bust=83.5 * CM,
-        waist=69.5 * CM,
-        hip=93 * CM,
-        hip_depth=24 * CM,
-        bust_depth=27.5 * CM,
-        neck_size=6.5 * CM,
-        bust_span=8.3 * CM,
-        shoulder_width=12.1 * CM,
-        back_length=39 * CM,
-        front_length=43.4 * CM,
-    )
+    return load_person("Sarah", date="2025-07-30")
 
 
 def make_fit_class() -> FitClass:

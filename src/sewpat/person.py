@@ -3,8 +3,66 @@
 import copy
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+
+import pandas as pd
 
 from sewpat.units import CM
+
+_PERSONS_CSV = Path(__file__).parent / "data" / "persons.csv"
+
+# Float measurement columns — all values stored in cm, converted to mm on load.
+_FLOAT_COLS = (
+    "height", "bust", "waist", "hip", "hip_depth", "bust_depth",
+    "neck_size", "bust_span", "shoulder_width",
+    "back_length", "front_length",
+    "body_rise", "inseam",
+    "back_width", "armscye_depth", "armscye_width", "chest_width",
+)
+
+
+def load_person(name: str, date: str | None = None) -> "Person":
+    """Load a :class:`Person` from ``persons.csv`` by name.
+
+    Args:
+        name: Person name as stored in the CSV (case-insensitive).
+        date: Optional measurement date (``YYYY-MM-DD``).  If *None* the most
+            recent row for the given name is used.
+
+    Returns:
+        A :class:`Person` with all measured fields populated (unmeasured fields
+        remain ``None``).
+
+    Raises:
+        KeyError: if no matching row is found.
+    """
+    df = pd.read_csv(_PERSONS_CSV, dtype={"date": str})
+    df["name_lower"] = df["name"].str.strip().str.lower()
+
+    mask = df["name_lower"] == name.strip().lower()
+    if date is not None:
+        mask &= df["date"] == date
+    rows = df[mask]
+
+    if rows.empty:
+        raise KeyError(
+            f"No person named {name!r}"
+            + (f" measured on {date!r}" if date else "")
+            + f" found in {_PERSONS_CSV}."
+        )
+
+    row = rows.sort_values("date").iloc[-1]  # most recent if multiple
+
+    kwargs: dict = {}
+    for col in _FLOAT_COLS:
+        val = row.get(col)
+        if pd.notna(val):
+            kwargs[col] = float(val) * CM
+
+    gender_str = str(row.get("gender", "female")).strip().lower()
+    kwargs["gender"] = Gender(gender_str)
+
+    return Person(**kwargs)
 
 
 class Gender(Enum):

@@ -38,6 +38,7 @@ from .person import (
     Person,
     PersonalAdjustments,
     PersonAnalyser,
+    load_person,
 )
 from .pages import DinA0, DinA1, DinA2, DinA4
 from .blocks import TopBlock, TopBlockBack, TopBlockFront
@@ -131,6 +132,7 @@ __all__ = [
     "BalanceAdjustments",
     "PersonalAdjustments",
     "PersonAnalyser",
+    "load_person",
     # Style
     "StyleOptions",
     "Marker",
