@@ -187,7 +187,7 @@ def test_offset_adaptive_each_segment_within_eps():
 def test_offset_adaptive_segments_are_connected():
     """Consecutive segments returned by offset_adaptive must share endpoints."""
     result = _tight().offset_adaptive(10.0, eps=0.1)
-    for a, b in zip(result, result[1:]):
+    for a, b in zip(result, result[1:], strict=False):
         gap = a.p3.distance_to(b.p0)
         assert gap < 1e-6, f"gap between consecutive segments: {gap:.8f} mm"
 

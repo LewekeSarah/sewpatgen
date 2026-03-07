@@ -1176,11 +1176,10 @@ class TestSeamAllowanceReversal(unittest.TestCase):
     def _sa_distances(self, part: PatternPart, global_sa: float) -> list[float]:
         """Return the lengths of all SA segments added to *part*."""
         sa_elems = [e for e in part.elements if e.is_seam_allowance]
-        from sewpat.geometry import CubicBezier as _CB
-        from sewpat.geometry import Segment as _S
 
         return [
-            e.geometry.length for e in sa_elems if isinstance(e.geometry, (_S, _CB))
+            e.geometry.length for e in sa_elems if
+            isinstance(e.geometry, (Segment, CubicBezier))
         ]
 
     def test_reversed_waistband_gets_correct_sa(self):
@@ -1593,7 +1592,7 @@ class TestOverlayPart(unittest.TestCase):
         _, pocket = self._pocket_overlay()
         offset = Point(110, 0)
         result = pocket.explode(offset=offset)
-        for orig, expl in zip(pocket.elements, result.elements):
+        for orig, expl in zip(pocket.elements, result.elements, strict=False):
             orig_s = orig.geometry  # Segment
             expl_s = expl.geometry
             self.assertAlmostEqual(expl_s.p1.x, orig_s.p1.x + 110, places=6)
@@ -1602,7 +1601,7 @@ class TestOverlayPart(unittest.TestCase):
     def test_explode_is_outline_flag_preserved(self):
         _, pocket = self._pocket_overlay()
         result = pocket.explode(offset=Point(110, 0))
-        for orig, expl in zip(pocket.elements, result.elements):
+        for orig, expl in zip(pocket.elements, result.elements, strict=False):
             self.assertEqual(expl.is_outline, orig.is_outline)
 
     def test_explode_is_seam_allowance_flag_preserved(self):

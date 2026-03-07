@@ -697,16 +697,15 @@ class TestAddDartCurved:
     """add_dart() must use stitch_curve_a/b geometry when set."""
 
     def test_curved_stitch_elements_are_not_segments(self) -> None:
-        from sewpat.geometry import CubicBezier as _CB
 
         d = _simple_dart()
         # Replace straight legs with explicit CubicBezier curves
         cp1a = Point(50, 60)
         cp2a = Point(43, 20)
-        curve_a = _CB(d.tip, cp1a, cp2a, d.leg_a)
+        curve_a = CubicBezier(d.tip, cp1a, cp2a, d.leg_a)
         cp1b = Point(50, 60)
         cp2b = Point(57, 20)
-        curve_b = _CB(d.tip, cp1b, cp2b, d.leg_b)
+        curve_b = CubicBezier(d.tip, cp1b, cp2b, d.leg_b)
         d_curved = Dart(
             d.leg_a,
             d.leg_b,
@@ -719,7 +718,7 @@ class TestAddDartCurved:
         result = part.add_dart(d_curved, notches=False, precision_tip=False)
         stitch_geoms = [e.geometry for e in result.elements if e.role == "dart_stitch"]
         assert len(stitch_geoms) == 2
-        assert all(isinstance(g, _CB) for g in stitch_geoms)
+        assert all(isinstance(g, CubicBezier) for g in stitch_geoms)
 
 
 class TestDartSeamAllowance:

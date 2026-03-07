@@ -1,4 +1,4 @@
-"""Person related information required for pattern construction"""
+"""Person related information required for pattern construction."""
 
 import copy
 from dataclasses import dataclass, field
@@ -78,7 +78,7 @@ def load_person(name: str, date: str | None = None) -> Person:
 
 
 class Gender(Enum):
-    """Some pattern have gender-specific adjustments"""
+    """Some pattern have gender-specific adjustments."""
 
     male = "male"
     female = "female"
@@ -187,7 +187,7 @@ class BalancedPerson:
 class PersonAnalyser:
     def __init__(
         self, person: Person, balance_adjustments: BalanceAdjustments | None = None
-    ):
+    ) -> None:
         self.person = person
         self.person_balanced: BalancedPerson | None = None
         self.balance = balance_adjustments
@@ -195,7 +195,7 @@ class PersonAnalyser:
         self.calculate_measurements()
         self.balance_person()
 
-    def _set_armscye_depth(self):
+    def _set_armscye_depth(self) -> None:
         if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
             self.person.armscye_depth = (
                 self.person.bust / 10 + 11 * CM
@@ -208,7 +208,7 @@ class PersonAnalyser:
                 "is not yet implemented."
             )
 
-    def _set_armscye_width(self):
+    def _set_armscye_width(self) -> None:
         if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
             self.person.armscye_width = (
                 self.person.bust / 8 - 1.5 * CM
@@ -221,7 +221,7 @@ class PersonAnalyser:
                 "is not yet implemented."
             )
 
-    def _set_chest_width(self):
+    def _set_chest_width(self) -> None:
         if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
             self.person.chest_width = (
                 self.person.bust / 4 - 4.0 * CM
@@ -234,7 +234,7 @@ class PersonAnalyser:
                 "is not yet implemented."
             )
 
-    def _set_back_width(self):
+    def _set_back_width(self) -> None:
         if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
             self.person.back_width = (
                 self.person.bust / 8 + 5.5 * CM
@@ -246,14 +246,14 @@ class PersonAnalyser:
                 "Matching formula for given bustline is not yet implemented."
             )
 
-    def calculate_measurements(self):
+    def calculate_measurements(self) -> None:
         if self.person.bust is not None:
             self._set_armscye_depth()
             self._set_armscye_width()
             self._set_chest_width()
             self._set_back_width()
 
-    def balance_person(self):
+    def balance_person(self) -> None:
         person_balanced = copy.deepcopy(self.person)
         if self.balance is not None:
             for key, val in self.balance.__dict__.items():

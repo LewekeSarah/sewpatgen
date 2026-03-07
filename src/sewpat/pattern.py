@@ -12,7 +12,7 @@ This module owns:
 
 import copy
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 import numpy as np
 import shapely.geometry as _sg
@@ -63,7 +63,7 @@ class PatternConfig:
     margin: float = 15 * CM
 
 
-class GarmentPart(str, Enum):
+class GarmentPart(StrEnum):
     """Base enum for pattern-part names.
 
     Subclass this in each garment module to define the parts of that pattern.
@@ -582,7 +582,7 @@ class PatternPart(NamedAccessMixin):
             chain = build_chain(geoms)
             buf_coords = buffer_chain(chain, distance, join_style=_CJ[corner_join])
             added: list[PatternElement] = []
-            for (x1, y1), (x2, y2) in zip(buf_coords, buf_coords[1:]):
+            for (x1, y1), (x2, y2) in zip(buf_coords, buf_coords[1:], strict=False):
                 elem = self.append(
                     Segment(Point(x1, y1), Point(x2, y2)), style=sa_style
                 )

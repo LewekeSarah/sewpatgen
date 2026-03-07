@@ -2,14 +2,14 @@
 
 import math
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 import numpy as np
 import shapely.geometry as _sg
 from svgpathtools import CubicBezier as _SvgCubicBezier
 
 
-class DartType(str, Enum):
+class DartType(StrEnum):
     """Shape variant of a :class:`Dart`.
 
     ``str`` mixin allows comparing with plain strings for backward compatibility
@@ -73,7 +73,7 @@ class Point:
     coords: np.ndarray
     name: str | None = None
 
-    def __init__(self, x: float, y: float, name: str | None = None):
+    def __init__(self, x: float, y: float, name: str | None = None) -> None:
         object.__setattr__(self, "coords", np.array([x, y], dtype=float))
         object.__setattr__(self, "name", name)
 
@@ -195,7 +195,7 @@ class Point:
 class Segment:
     """A line segment from p1 to p2."""
 
-    def __init__(self, p1: Point, p2: Point, name: str | None = None):
+    def __init__(self, p1: Point, p2: Point, name: str | None = None) -> None:
         self.p1 = p1
         self.p2 = p2
         self.name = name
@@ -482,7 +482,7 @@ class Ray:
         origin: Point,
         direction: tuple[float, float] | list[float] | np.ndarray,
         name: str | None = None,
-    ):
+    ) -> None:
         """Initialize a ray with an origin point and direction vector.
 
         Args:
@@ -587,7 +587,7 @@ class Line:
         point: Point,
         direction: tuple[float, float] | list[float] | np.ndarray,
         name: str | None = None,
-    ):
+    ) -> None:
         """Initialize a line with a point and direction vector.
 
         Args:
@@ -693,7 +693,7 @@ class Rect:
         width: float,
         height: float,
         name: str | None = None,
-    ):
+    ) -> None:
         self.origin = origin
         self.width = width
         self.height = height
@@ -741,7 +741,7 @@ class Triangle:
         name: Optional label.
     """
 
-    def __init__(self, p1: Point, p2: Point, p3: Point, name: str | None = None):
+    def __init__(self, p1: Point, p2: Point, p3: Point, name: str | None = None) -> None:
         self.p1 = p1
         self.p2 = p2
         self.p3 = p3
@@ -789,7 +789,7 @@ class InfoBox:
         position: Point,
         header: str,
         notes: list[str] | None = None,
-    ):
+    ) -> None:
         self.position = position
         self.header = header
         self.notes: list[str] = notes if notes is not None else []
@@ -817,7 +817,7 @@ class Circle:
         name: Optional, name of the circle.
     """
 
-    def __init__(self, center: Point, radius: float, name: str | None = None):
+    def __init__(self, center: Point, radius: float, name: str | None = None) -> None:
         """Initialize a circle with center point and radius.
 
         Args:
@@ -960,7 +960,7 @@ class CubicBezier:
 
     def __init__(
         self, p0: Point, p1: Point, p2: Point, p3: Point, name: str | None = None
-    ):
+    ) -> None:
         """Initialize a cubic Bezier curve with four control points.
 
         Args:

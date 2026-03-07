@@ -3,11 +3,11 @@
 Kept separate from geometry.py and render.py to avoid circular imports.
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class Marker(str, Enum):
+class Marker(StrEnum):
     """Named markers placed at line endpoints.
 
     String values match ``<marker id="…">`` in render.py.

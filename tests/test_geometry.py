@@ -1105,7 +1105,7 @@ class TestCubicBezierSplitAtPoints(unittest.TestCase):
         subs = b.split_at_points(
             [b.point_at_t(0.2), b.point_at_t(0.6), b.point_at_t(0.9)]
         )
-        for a, c in zip(subs, subs[1:]):
+        for a, c in zip(subs, subs[1:], strict=False):
             self.assertAlmostEqual(a.p3.x, c.p0.x, places=6)
             self.assertAlmostEqual(a.p3.y, c.p0.y, places=6)
 
@@ -1116,7 +1116,7 @@ class TestCubicBezierSplitAtPoints(unittest.TestCase):
         forward = b.split_at_points([pa, pb])
         backward = b.split_at_points([pb, pa])
         self.assertEqual(len(forward), len(backward))
-        for a, c in zip(forward, backward):
+        for a, c in zip(forward, backward, strict=False):
             self.assertAlmostEqual(a.length, c.length, places=4)
 
     def test_split_at_endpoint_produces_no_degenerate_stub(self):
@@ -1263,7 +1263,7 @@ class TestSegmentNewMethods(unittest.TestCase):
         subs = s.split_at_points(
             [s.point_at_t(0.2), s.point_at_t(0.6), s.point_at_t(0.9)]
         )
-        for a, b in zip(subs, subs[1:]):
+        for a, b in zip(subs, subs[1:], strict=False):
             self.assertAlmostEqual(a.p2.x, b.p1.x, places=6)
             self.assertAlmostEqual(a.p2.y, b.p1.y, places=6)
 
@@ -1274,7 +1274,7 @@ class TestSegmentNewMethods(unittest.TestCase):
         forward = s.split_at_points([pa, pb])
         backward = s.split_at_points([pb, pa])
         self.assertEqual(len(forward), len(backward))
-        for a, b in zip(forward, backward):
+        for a, b in zip(forward, backward, strict=False):
             self.assertAlmostEqual(a.length, b.length, places=6)
 
     def test_split_at_endpoint_produces_no_degenerate_stub(self):
