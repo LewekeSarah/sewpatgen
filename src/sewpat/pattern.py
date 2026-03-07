@@ -556,13 +556,13 @@ class PatternPart(NamedAccessMixin):
         # ── Rect fast-path ────────────────────────────────────────────────────
         for elem in outline_elements:
             if isinstance(elem.geometry, Rect):
-                g = elem.geometry
+                rect_geom = elem.geometry
                 new_elem = self.append(
                     Rect(
-                        origin=g.origin.translate(-distance, -distance),
-                        width=g.width + 2 * distance,
-                        height=g.height + 2 * distance,
-                        name=g.name,
+                        origin=rect_geom.origin.translate(-distance, -distance),
+                        width=rect_geom.width + 2 * distance,
+                        height=rect_geom.height + 2 * distance,
+                        name=rect_geom.name,
                     ),
                     style=sa_style,
                 )
