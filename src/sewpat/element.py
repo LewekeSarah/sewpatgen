@@ -72,6 +72,10 @@ class PatternElement:
         # goes away from the tip, which is the physically correct direction
         # regardless of where the centroid is relative to the roof geometry.
         self._sa_center: object | None = None
+        # Internal: set by add_dart() on dart-center/leg notch elements so that
+        # _project_dart_notches_to_sa() can access the parent Dart and leg point.
+        self._dart_ref: Dart | None = None
+        self._leg_pt: Point | None = None
 
     def get_name(self) -> str | None:
         """Return the effective name (element name overrides geometry name)."""
