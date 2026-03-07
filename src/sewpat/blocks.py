@@ -174,7 +174,7 @@ class _SideSeams:
     hem_side_to_center_front: Segment
 
     # Construction lines
-    waist_offset: "Line"
+    waist_offset: Line
 
 
 @dataclass(frozen=True)
@@ -199,7 +199,6 @@ def _build_back_geometry(
     shoulder_gather: float,
 ) -> _BackGeometry:
     """Compute all key points and curves for the back piece."""
-
     hem_center_back          = intersect(grid.center_back, grid.hem)[0]
     waist_center_back        = intersect(grid.center_back, grid.waist)[0]
     hip_center_back          = intersect(grid.center_back, grid.hip)[0]
@@ -297,7 +296,6 @@ def _build_front_geometry(
     armscye_fit: float,
 ) -> _FrontGeometry:
     """Compute all key points and curves for the front piece."""
-
     side_front_chest    = intersect(grid.side_front,   grid.chest)[0]
     armscye_front_chest = intersect(grid.armscye_front, grid.chest)[0]
 
@@ -413,7 +411,6 @@ def _build_side_seams(
     hd: HipDistribution,
 ) -> _SideSeams:
     """Compute side-seam points and curves for both pieces."""
-
     waist_offset = grid.waist.offset(-_WAIST_OFFSET).set_name("Waist Offset")
 
     # Raised waist points (side_seam_intake = side-seam waist take-in)
@@ -498,12 +495,11 @@ def _build_darts(
     meas: BlouseMeasurements,
     back: _BackGeometry,
     front: _FrontGeometry,
-    armscye_back_elem: "PatternPart",
-    wd: "WaistDistribution",
+    armscye_back_elem: PatternPart,
+    wd: WaistDistribution,
     config: GarmentConfig,
-) -> "_Darts":
+) -> _Darts:
     """Build all dart objects for both pieces."""
-
     # Back waist dart
     waist_dart_back_center = intersect(grid.waist, grid.dart_back)[0]
     waist_dart_back = Dart.from_tip_center_width(
@@ -629,7 +625,6 @@ def _assemble_front_part(
     seam_allowance: float,
 ) -> None:
     """Add all elements to the front PatternPart in drawing order."""
-
     part.append(
         Segment(
             front.neckline_front_start,
@@ -814,13 +809,13 @@ class TopBlock:
         cls,
         meas: BlouseMeasurements,
         config: GarmentConfig,
-        fit_class: "FitClass | None" = None,
+        fit_class: FitClass | None = None,
         adjustments: PersonalAdjustments | None = None,
         grid: TopGrid | None = None,
         layout: PatternConfig = PatternConfig(),
         back_name: str = "Block Back",
         front_name: str = "Block Front",
-    ) -> "TopBlock":
+    ) -> TopBlock:
         """Build and return a :class:`TopBlock` from measurements.
 
         Args:

@@ -78,7 +78,7 @@ class PatternElement:
             return self.name
         return getattr(self.geometry, "name", None)
 
-    def split_at_dart(self, dart: "Dart") -> "list[PatternElement]":
+    def split_at_dart(self, dart: Dart) -> list[PatternElement]:
         """Split this element's geometry at both dart legs and return new elements.
 
         This is the standard pattern-making operation of *removing the dart

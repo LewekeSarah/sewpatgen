@@ -1,6 +1,7 @@
 """SVG rendering for sewing patterns."""
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 
@@ -111,7 +112,7 @@ def _render_cubic_bezier(
     nodes.append(f'<path d="{path_data}" {attrs} />')
 
     if getattr(element, "name", None):
-        nodes.append(_svg_text(element.p0.x, element.p0.y, font_size_mm, element.name))
+        nodes.append(_svg_text(element.p0.x, element.p0.y, font_size_mm, str(element.name)))
 
     if show_control_points:
         c_stroke = "red"
@@ -185,7 +186,7 @@ def _render_segment(
                 mid_x,
                 mid_y - font_size_mm * 0.5,
                 font_size_mm,
-                element.name,
+                str(element.name),
                 **{
                     "text-anchor": "middle",
                     "font-weight": style_dict.get("font-weight", "normal"),
@@ -372,7 +373,8 @@ def _make_renderers(
 
 def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
     """Serialize a sorted chain of Segment/CubicBezier objects
-    into an SVG path string."""
+    into an SVG path string.
+    """
     if not geoms:
         return ""
 
@@ -394,11 +396,12 @@ def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
 
 
 def _render_seam_allowance_chain(
-    sa_elements: list["PatternElement"],
+    sa_elements: list[PatternElement],
     style_dict: dict[str, Any],
 ) -> list[str]:
     """Render all SA Segment/CubicBezier elements as one ``<path>``
-    for clean linejoin corners."""
+    for clean linejoin corners.
+    """
     geoms: list[Segment | CubicBezier] = [
         e.geometry
         for e in sa_elements
@@ -416,7 +419,7 @@ def _render_seam_allowance_chain(
 
 
 def _render_elements(
-    elements: list["PatternElement"],
+    elements: list[PatternElement],
     svg_nodes: list[str],
     show_bezier_control_points: bool,
     show_construction: bool,
@@ -439,7 +442,7 @@ def _render_elements(
         Ray: "segment",
     }
 
-    sa_elements: list["PatternElement"] = []
+    sa_elements: list[PatternElement] = []
     sa_style_dict: dict[str, Any] | None = None
 
     renderers = _make_renderers(show_bezier_control_points)
@@ -496,7 +499,8 @@ def _resolve_styles(
     style_map: dict[str, StyleOptions] | None,
 ) -> dict[str, StyleOptions]:
     """Merge *style_map* overrides into ``_DEFAULT_STYLES``;
-    unknown keys raise ``ValueError``."""
+    unknown keys raise ``ValueError``.
+    """
     styles = {**_DEFAULT_STYLES}
     if style_map:
         for k, v in style_map.items():

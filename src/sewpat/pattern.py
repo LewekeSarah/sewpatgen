@@ -14,6 +14,7 @@ import copy
 from dataclasses import dataclass
 from enum import Enum
 
+import numpy as np
 import shapely.geometry as _sg
 
 from .element import PatternElement, PrecisionPoint
@@ -190,11 +191,11 @@ class PatternPart(NamedAccessMixin):
         """
         construction = is_construction or self.is_construction
         elem = PatternElement(
-            geometry=geometry,
+            geometry=geometry,  # type: ignore[arg-type]
             style=style,
             is_outline=is_outline,
             is_construction=construction,
-            name=geometry.name,
+            name=getattr(geometry, "name", None),
         )
         self.elements.append(elem)
         return elem
@@ -318,7 +319,8 @@ class PatternPart(NamedAccessMixin):
 
     def contains_point(self, point: Point) -> bool:
         """Return True if *point* lies strictly inside the outline polygon
-        (boundary = False)."""
+        (boundary = False).
+        """
         poly = self._outline_polygon()
         if poly is None or poly.is_empty:
             return False
@@ -482,7 +484,7 @@ class PatternPart(NamedAccessMixin):
             if seam_edge is not None:
                 notch_pt, along, normal = project_onto_edge(seam_edge, pt, inward_ref)
             else:
-                notch_pt, along, normal = pt, (1.0, 0.0), (0.0, -1.0)
+                notch_pt, along, normal = pt, np.array([1.0, 0.0]), np.array([0.0, -1.0])
             seam_elems = _place_symbol(notch_pt, along, normal, symbol, is_sa=False)
 
             if sa_geoms:
@@ -603,7 +605,7 @@ class PatternPart(NamedAccessMixin):
         # seam_allowance=0.0   → in dict as 0.0 → no offset (fold line)
         # seam_allowance=x > 0 → in dict as x   → custom distance
         elem_sa: dict[frozenset, float] = {
-            _ep_key(e.geometry): getattr(e.style, "seam_allowance")
+            _ep_key(e.geometry): e.style.seam_allowance
             for e in outline_elements
             if isinstance(e.geometry, (Segment, CubicBezier))
             and getattr(e.style, "seam_allowance", None) is not None
@@ -613,8 +615,8 @@ class PatternPart(NamedAccessMixin):
         # as _sa_center so the offset goes away from the tip (outward) rather
         # than away from the part centroid, which can be wrong for inward-
         # pointing geometry like shoulder dart roofs.
-        elem_center: dict[frozenset, "Point"] = {
-            _ep_key(e.geometry): e._sa_center
+        elem_center: dict[frozenset, Point] = {
+            _ep_key(e.geometry): e._sa_center  # type: ignore[misc]
             for e in outline_elements
             if isinstance(e.geometry, (Segment, CubicBezier))
             and getattr(e, "_sa_center", None) is not None
@@ -865,7 +867,7 @@ class PatternPart(NamedAccessMixin):
         self,
         element: PatternElement,
         dart: Dart,
-    ) -> "list[PatternElement]":
+    ) -> list[PatternElement]:
         """Split *element* at both dart legs and append only the outer parts.
 
         This is the standard pattern-making operation of *removing the dart
@@ -1164,7 +1166,7 @@ class PatternPart(NamedAccessMixin):
 
     def add_grid_notches(
         self,
-        grid_part: "PatternPart",
+        grid_part: PatternPart,
         tolerance: float = 1.0,
         min_spacing: float = 8.0,
         corner_clearance: float = 15.0,
@@ -1212,7 +1214,8 @@ class PatternPart(NamedAccessMixin):
 
         def _is_corner_endpoint(pt: Point) -> bool:
             """True when *pt* is within *tolerance* of a sharp corner
-            or free endpoint."""
+            or free endpoint.
+            """
             for oe in outline_elems:
                 for ep in (geom_start(oe.geometry), geom_end(oe.geometry)):
                     if pt.distance_to(ep) >= tolerance:

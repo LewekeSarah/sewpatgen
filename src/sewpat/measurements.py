@@ -63,7 +63,7 @@ class TrouserMeasurements:
     front_trouser_width: float | None = None  # vHoB — Vorderhosenbreite
     gender: Gender = Gender.female
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.front_trouser_width = (
             0.25 * self.hip_width if self.front_trouser_width is None
             else self.front_trouser_width
@@ -104,7 +104,7 @@ class BlouseMeasurements:
     chest_width: float      # BrB — Brustbreite
     gender: Gender = Gender.female
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if abs(
             self.bust_width / 2
             - (self.back_width + self.armscye_width + self.chest_width)
@@ -219,10 +219,10 @@ class HipDistribution:
 
 def calculate_hip_distribution(
     meas: BlouseMeasurements,
-    pt_hip_cf: "Point",
-    pt_hip_sf: "Point",
-    pt_hip_sb: "Point",
-    pt_hip_cb: "Point",
+    pt_hip_cf: Point,
+    pt_hip_sf: Point,
+    pt_hip_sb: Point,
+    pt_hip_cb: Point,
 ) -> HipDistribution:
     """Calculate the hip excess / shortfall at the hip line.
 
@@ -253,10 +253,10 @@ def calculate_hip_distribution(
 
 def calculate_waist_distribution(
     meas: BlouseMeasurements,
-    pt_waist_cf: "Point",
-    pt_waist_sf: "Point",
-    pt_waist_sb: "Point",
-    pt_waist_cb: "Point",
+    pt_waist_cf: Point,
+    pt_waist_sf: Point,
+    pt_waist_sb: Point,
+    pt_waist_cb: Point,
 ) -> WaistDistribution:
     """Calculate how the waist hip_shortfall (Ausfallbetrag) is distributed to darts.
 
@@ -309,7 +309,7 @@ def calculate_waist_distribution(
 
 def make_top_measurements(
     person: BalancedPerson,
-    fit_class: "FitClass",
+    fit_class: FitClass,
 ) -> BlouseMeasurements:
     """Build ease-included top measurements from a balanced person and fit class.
 
@@ -336,7 +336,7 @@ def make_top_measurements(
 def make_measurements_trouser(
     person: Person,
     ease: TrouserEase,
-    balance: BalanceAdjustments = None,
+    balance: BalanceAdjustments | None = None,
 ) -> TrouserMeasurements:
     """Build ease-included trouser measurements.
 

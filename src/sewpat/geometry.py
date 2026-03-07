@@ -79,12 +79,12 @@ class Point:
 
     @property
     def x(self) -> float:
-        """x coordinate."""
+        """X coordinate."""
         return float(self.coords[0])
 
     @property
     def y(self) -> float:
-        """y coordinate."""
+        """Y coordinate."""
         return float(self.coords[1])
 
     def __str__(self) -> str:
@@ -103,7 +103,7 @@ class Point:
         else:
             return float(np.linalg.norm(self.coords - other))
 
-    def distance_to_segment(self, seg: "Segment") -> float:
+    def distance_to_segment(self, seg: Segment) -> float:
         """Return the shortest distance from this point to *seg*.
 
         If the perpendicular foot lies within the segment the result is the
@@ -116,33 +116,33 @@ class Point:
         foot = Point(*(p1 + max(0.0, min(1.0, t)) * d))
         return self.distance_to(foot)
 
-    def translate(self, dx: float, dy: float) -> "Point":
+    def translate(self, dx: float, dy: float) -> Point:
         """Return a copy translated by (dx, dy)."""
         return self + Point(dx, dy)
 
-    def __add__(self, other: "Point") -> "Point":
+    def __add__(self, other: Point) -> Point:
         """Offset by *other* as a displacement vector. Returns a new Point."""
         if not isinstance(other, Point):
             return NotImplemented
         return Point(*(self.coords + other.coords))
 
-    def __sub__(self, other: "Point") -> "Point":
+    def __sub__(self, other: Point) -> Point:
         """Return the difference as a new Point (vector from *other* to *self*)."""
         if not isinstance(other, Point):
             return NotImplemented
         return Point(*(self.coords - other.coords))
 
-    def __mul__(self, scalar: float) -> "Point":
+    def __mul__(self, scalar: float) -> Point:
         """Scale the position vector by *scalar*."""
         if not isinstance(scalar, (int, float)):
             return NotImplemented
         return Point(*(self.coords * scalar))
 
-    def __rmul__(self, scalar: float) -> "Point":
+    def __rmul__(self, scalar: float) -> Point:
         """Scale the position vector by *scalar* (reflected)."""
         return self.__mul__(scalar)
 
-    def __neg__(self) -> "Point":
+    def __neg__(self) -> Point:
         """Return the negated point (-x, -y)."""
         return Point(*(-self.coords))
 
@@ -163,7 +163,7 @@ class Point:
             )
         )
 
-    def rotate(self, center: "Point", angle_rad: float) -> "Point":
+    def rotate(self, center: Point, angle_rad: float) -> Point:
         """Return a copy rotated by *angle_rad* around *center* (counter-clockwise)."""
         cos_a, sin_a = math.cos(angle_rad), math.sin(angle_rad)
         rot = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
@@ -173,7 +173,7 @@ class Point:
         self,
         curve: Segment | CubicBezier | Ray | Line | Circle,
         arc_length: float,
-    ) -> "Point":
+    ) -> Point:
         """Return the point *arc_length* mm from ``self`` along *curve*.
 
         ``self`` must lie on *curve*.  Positive *arc_length* follows the
@@ -207,7 +207,7 @@ class Segment:
         through: Point,
         length: float,
         name: str | None = None,
-    ) -> "Segment":
+    ) -> Segment:
         """Create a segment starting at *start*, pointing towards *through*,
         with given *length*.
 
@@ -248,12 +248,12 @@ class Segment:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def set_name(self, name: str) -> "Segment":
+    def set_name(self, name: str) -> Segment:
         """Set the name of this segment and return ``self`` for fluent chaining."""
         self.name = name
         return self
 
-    def translate(self, dx: float, dy: float) -> "Segment":
+    def translate(self, dx: float, dy: float) -> Segment:
         """Return a copy translated by (dx, dy)."""
         return Segment(
             self.p1.translate(dx, dy), self.p2.translate(dx, dy), name=self.name
@@ -302,7 +302,7 @@ class Segment:
             raise ValueError(f"{t = } expected in [0, 1]")
         return self.p1 * (1.0 - t) + self.p2 * t
 
-    def split(self, t: float) -> "tuple[Segment, Segment]":
+    def split(self, t: float) -> tuple[Segment, Segment]:
         """Split at parameter *t* ∈ (0, 1) and return ``(left, right)``.
 
         Mirrors :meth:`CubicBezier.split` so both geometry types share the
@@ -324,9 +324,9 @@ class Segment:
 
     def split_at_points(
         self,
-        points: list["Point"],
+        points: list[Point],
         tolerance: float = 0.5,
-    ) -> "list[Segment]":
+    ) -> list[Segment]:
         """Split at a list of points that lie on this segment.
 
         Each point is projected onto the segment's axis using
@@ -421,19 +421,22 @@ class Segment:
 
     def contains_point(self, point: Point, tolerance: float = 1e-9) -> bool:
         """Return True if *point* lies on the segment within *tolerance* mm
-        (uses Shapely GEOS)."""
+        (uses Shapely GEOS).
+        """
         ls = _sg.LineString([(self.p1.x, self.p1.y), (self.p2.x, self.p2.y)])
         return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
     def point_at_length(self, arc_length: float) -> Point:
         """Return the point at *arc_length* mm from p1.
-        Raises ValueError if out of range."""
+        Raises ValueError if out of range.
+        """
         total = self.length
         return self.point_at_t(arc_length / total)
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
         """Return the point *arc_length* mm further along this segment from
-        *point* (p1→p2 direction)."""
+        *point* (p1→p2 direction).
+        """
         pos = float(np.dot(point.coords - self.p1.coords, self.unit_direction))
         return self.point_at_length(pos + arc_length)
 
@@ -445,7 +448,7 @@ class Segment:
         max_y = max(self.p1.y, self.p2.y)
         return Point(min_x, min_y), Point(max_x, max_y)
 
-    def offset(self, distance: float, center: Point | None = None) -> "Segment":
+    def offset(self, distance: float, center: Point | None = None) -> Segment:
         """Return a new Segment offset perpendicularly by *distance* mm.
 
         Direction is away from *center* (outward) when given; otherwise the
@@ -560,11 +563,12 @@ class Ray:
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
         """Return the point *arc_length* mm further along this ray from *point*
-        (away from origin)."""
+        (away from origin).
+        """
         pos = float(np.dot(point.coords - self.origin.coords, self.unit_direction))
         return self.point_at_distance(pos + arc_length)
 
-    def translate(self, dx: float, dy: float) -> "Ray":
+    def translate(self, dx: float, dy: float) -> Ray:
         """Return a copy translated by (dx, dy)."""
         return Ray(self.origin.translate(dx, dy), self.direction, name=self.name)
 
@@ -663,11 +667,12 @@ class Line:
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
         """Return the point *arc_length* mm further along this line from *point*
-        (positive = line direction)."""
+        (positive = line direction).
+        """
         pos = float(np.dot(point.coords - self.point.coords, self.unit_direction))
         return self.point_at_distance(pos + arc_length)
 
-    def translate(self, dx: float, dy: float) -> "Line":
+    def translate(self, dx: float, dy: float) -> Line:
         """Return a copy translated by (dx, dy)."""
         return Line(self.point.translate(dx, dy), self.direction, name=self.name)
 
@@ -711,13 +716,13 @@ class Rect:
             f"width={self.width:.6g}, height={self.height:.6g})"
         )
 
-    def translate(self, dx: float, dy: float) -> "Rect":
+    def translate(self, dx: float, dy: float) -> Rect:
         """Return a copy translated by (dx, dy)."""
         return Rect(
             self.origin.translate(dx, dy), self.width, self.height, name=self.name
         )
 
-    def set_name(self, name: str) -> "Rect":
+    def set_name(self, name: str) -> Rect:
         """Set the name of this rectangle and return ``self`` for fluent chaining."""
         self.name = name
         return self
@@ -752,7 +757,7 @@ class Triangle:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def translate(self, dx: float, dy: float) -> "Triangle":
+    def translate(self, dx: float, dy: float) -> Triangle:
         """Return a copy translated by (dx, dy)."""
         return Triangle(
             self.p1.translate(dx, dy),
@@ -761,7 +766,7 @@ class Triangle:
             name=self.name,
         )
 
-    def set_name(self, name: str) -> "Triangle":
+    def set_name(self, name: str) -> Triangle:
         """Set the name of this triangle and return ``self`` for fluent chaining."""
         self.name = name
         return self
@@ -796,7 +801,7 @@ class InfoBox:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def translate(self, dx: float, dy: float) -> "InfoBox":
+    def translate(self, dx: float, dy: float) -> InfoBox:
         """Return a copy translated by (dx, dy)."""
         moved = InfoBox(self.position.translate(dx, dy), self.header, list(self.notes))
         moved.name = self.name
@@ -874,22 +879,23 @@ class Circle:
             )
         )
 
-    def translate(self, dx: float, dy: float) -> "Circle":
+    def translate(self, dx: float, dy: float) -> Circle:
         """Return a copy translated by (dx, dy)."""
         return Circle(self.center.translate(dx, dy), self.radius, name=self.name)
 
-    def set_name(self, name: str) -> "Circle":
+    def set_name(self, name: str) -> Circle:
         """Set the name of this circle and return ``self`` for fluent chaining."""
         self.name = name
         return self
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
         """Return the point *arc_length* mm further along this circle from *point*
-        (CCW positive)."""
+        (CCW positive).
+        """
         angle0 = math.atan2(point.y - self.center.y, point.x - self.center.x)
         return self.point_at_angle(angle0 + arc_length / self.radius)
 
-    def _intersect_with_circle(self, other: "Circle") -> list[Point]:
+    def _intersect_with_circle(self, other: Circle) -> list[Point]:
         """Find intersection points with another circle (exact analytical solution)."""
         d = float(np.linalg.norm(self.center.coords - other.center.coords))
         r1, r2 = self.radius, other.radius
@@ -909,8 +915,8 @@ class Circle:
 
 
 def _intersect_linear_linear(
-    p1: np.ndarray,
-    p2: np.ndarray,
+    p1: np.ndarray | None,
+    p2: np.ndarray | None,
     a: Segment | Ray | Line,
     b: Segment | Ray | Line,
     check1: bool,
@@ -989,7 +995,7 @@ class CubicBezier:
         """End point of the curve (alias for p3)."""
         return self.p3
 
-    def translate(self, dx: float, dy: float) -> "CubicBezier":
+    def translate(self, dx: float, dy: float) -> CubicBezier:
         """Return a copy translated by (dx, dy)."""
         return CubicBezier(
             self.p0.translate(dx, dy),
@@ -999,7 +1005,7 @@ class CubicBezier:
             name=self.name,
         )
 
-    def set_name(self, name: str) -> "CubicBezier":
+    def set_name(self, name: str) -> CubicBezier:
         """Set the name of this curve and return ``self`` for fluent chaining."""
         self.name = name
         return self
@@ -1048,7 +1054,8 @@ class CubicBezier:
     @property
     def length(self) -> float:
         """Exact arc length via Gauss-Legendre quadrature
-        (delegated to svgpathtools)."""
+        (delegated to svgpathtools).
+        """
         return self._svg().length()
 
     def tangent_at_t(self, t: float) -> np.ndarray:
@@ -1087,7 +1094,8 @@ class CubicBezier:
 
     def point_at_length(self, arc_length: float) -> Point:
         """Return the point at *arc_length* mm from p0 (uses svgpathtools.ilength).
-        Raises ValueError if out of range."""
+        Raises ValueError if out of range.
+        """
         total = self.length
         if arc_length < 0 or arc_length > total + 1e-9:
             raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
@@ -1096,15 +1104,17 @@ class CubicBezier:
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
         """Return the point *arc_length* mm further along this curve from *point*
-        (p0→p3 direction)."""
+        (p0→p3 direction).
+        """
         svg = self._svg()
         t0 = _bezier_closest_t(svg, complex(point.x, point.y))
         pos = float(svg.length(t1=t0))
         return self.point_at_length(pos + arc_length)
 
-    def split(self, t: float) -> tuple["CubicBezier", "CubicBezier"]:
+    def split(self, t: float) -> tuple[CubicBezier, CubicBezier]:
         """Split at *t* into (left, right) using de Casteljau
-        (delegated to svgpathtools)."""
+        (delegated to svgpathtools).
+        """
         left, right = self._svg().split(t)
         return (
             CubicBezier(
@@ -1123,9 +1133,9 @@ class CubicBezier:
 
     def split_at_points(
         self,
-        points: list["Point"],
+        points: list[Point],
         tolerance: float = 0.5,
-    ) -> "list[CubicBezier]":
+    ) -> list[CubicBezier]:
         """Split at a list of points that lie on this curve.
 
         Each point is located on the curve via :func:`_bezier_closest_t` (the
@@ -1178,7 +1188,8 @@ class CubicBezier:
 
     def bounding_box(self) -> tuple[Point, Point]:
         """Compute the axis-aligned bounding box by finding B'(t)=0 extrema
-        (not the control-point hull)."""
+        (not the control-point hull).
+        """
         # Seed with the two curve endpoints only (they are always on the curve)
         x_coords = [self.p0.x, self.p3.x]
         y_coords = [self.p0.y, self.p3.y]
@@ -1226,7 +1237,8 @@ class CubicBezier:
 
     def contains_point(self, point: Point, tolerance: float = 0.01) -> bool:
         """Return True if *point* is within *tolerance* mm of the curve
-        (Shapely GEOS on 64-segment discretisation)."""
+        (Shapely GEOS on 64-segment discretisation).
+        """
         ls = _bezier_shapely(self)  # 64-segment discretisation
         return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
 
@@ -1322,7 +1334,7 @@ class CubicBezier:
         eps: float = 0.1,
         _depth: int = 0,
         _max_depth: int = 8,
-    ) -> "list[CubicBezier]":
+    ) -> list[CubicBezier]:
         """Return the offset curve as a list of Béziers, recursively split
         until Hausdorff error < *eps* mm.
 
@@ -1421,7 +1433,8 @@ def geom_to_shapely(g: Segment | CubicBezier) -> _sg.LineString:
 
 def _true_offset_ls(b: CubicBezier, d: float, n: int = 64) -> _sg.LineString:
     """Sample the true parallel offset of *b* at signed distance *d*
-    into a Shapely LineString."""
+    into a Shapely LineString.
+    """
     pts = []
     for i in range(n + 1):
         t = i / n
@@ -1518,7 +1531,8 @@ def segment_to_intersection(
     start: Point, dir: np.ndarray, obj: GEOMETRIC_TYPE
 ) -> tuple[Point, Segment]:
     """Create a Segment from start to the first intersection with obj
-    in direction dir."""
+    in direction dir.
+    """
     pt = intersect(Ray(start, dir), obj)[0]
     return pt, Segment(start, pt)
 
@@ -1566,7 +1580,7 @@ def with_endpoints(
     return CubicBezier(new_start, g.p1, g.p2, new_end, name=g.name)
 
 
-def _reverse_geom(g: "Segment | CubicBezier") -> "Segment | CubicBezier":
+def _reverse_geom(g: Segment | CubicBezier) -> Segment | CubicBezier:
     """Return a copy of *g* with its direction reversed."""
     if isinstance(g, Segment):
         return Segment(g.p2, g.p1, name=g.name)
@@ -1574,8 +1588,8 @@ def _reverse_geom(g: "Segment | CubicBezier") -> "Segment | CubicBezier":
 
 
 def build_chain(
-    geoms: list["Segment | CubicBezier"],
-) -> list["Segment | CubicBezier"]:
+    geoms: list[Segment | CubicBezier],
+) -> list[Segment | CubicBezier]:
     """Sort *geoms* into a single connected chain, reversing pieces as needed.
 
     Grows the chain greedily from **both ends**: after each successful
@@ -1646,7 +1660,6 @@ def miter_corner(
             degenerate start control point) — the intersection is still the
             correct outward corner even though it appears behind the end tangent.
     """
-
     end_a = geom_end(ga)
     start_b = geom_start(gb)
     ta = edge_tangent(ga, at_end=True)
@@ -1690,7 +1703,6 @@ def round_corner(
     90°).  Falls back to a :class:`Point` bevel midpoint for parallel/anti-parallel
     tangents, reflex corners, or degenerate geometry.
     """
-
     end_a = geom_end(ga)
     start_b = geom_start(gb)
     bevel_mid = (end_a + start_b) * 0.5
@@ -1868,7 +1880,10 @@ def offset_adaptive(
     """
     if isinstance(geom, Segment):
         return [geom.offset(distance, center=center)]
-    return geom.offset_adaptive(distance, center=center, eps=eps)
+    result: list[Segment | CubicBezier] = list(
+        geom.offset_adaptive(distance, center=center, eps=eps)
+    )
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1928,8 +1943,8 @@ class Dart:
                 UserWarning,
                 stacklevel=2,
             )
-        self.stitch_curve_a: "Segment | CubicBezier | None" = stitch_curve_a
-        self.stitch_curve_b: "Segment | CubicBezier | None" = stitch_curve_b
+        self.stitch_curve_a: Segment | CubicBezier | None = stitch_curve_a
+        self.stitch_curve_b: Segment | CubicBezier | None = stitch_curve_b
         # Internal: the source PatternElement (carries edge style for roof rendering).
         self._edge_element = _edge_element
 
@@ -1943,10 +1958,10 @@ class Dart:
         tip: Point,
         center: Point,
         width: float,
-        dart_type: "DartType | str" = DartType.TRIANGLE,
+        dart_type: DartType | str = DartType.TRIANGLE,
         name: str | None = None,
         second_tip: Point | None = None,
-    ) -> "Dart":
+    ) -> Dart:
         """Construct a dart from tip, mouth centre and width.
 
         The mouth is placed orthogonally to the fold line (tip→center) at
@@ -1972,13 +1987,13 @@ class Dart:
     @classmethod
     def from_edge_at_legs(
         cls,
-        edge: "object",
+        edge: object,
         leg_a: Point,
         leg_b: Point,
         tip: Point,
-        dart_type: "DartType | str" = DartType.TRIANGLE,
+        dart_type: DartType | str = DartType.TRIANGLE,
         name: str | None = None,
-    ) -> "Dart":
+    ) -> Dart:
         """Place a dart on *edge* with explicitly computed leg points.
 
         Use this when both legs lie on the same edge but are placed
@@ -2015,10 +2030,10 @@ class Dart:
         tip: Point,
         leg_a: Point,
         leg_b: Point,
-        dart_type: "DartType | str" = DartType.TRIANGLE,
+        dart_type: DartType | str = DartType.TRIANGLE,
         name: str | None = None,
         second_tip: Point | None = None,
-    ) -> "Dart":
+    ) -> Dart:
         """Construct a dart from tip and the two explicit mouth endpoints.
 
         The mouth centre is the midpoint of *leg_a* and *leg_b*.
@@ -2056,13 +2071,13 @@ class Dart:
     @classmethod
     def from_edge_at_t(
         cls,
-        edge: "object",
+        edge: object,
         t: float,
         width: float,
         depth: float,
-        dart_type: "DartType | str" = DartType.TRIANGLE,
+        dart_type: DartType | str = DartType.TRIANGLE,
         name: str | None = None,
-    ) -> "Dart":
+    ) -> Dart:
         """Place a dart orthogonally on *edge* at parameter *t*.
 
         The mouth centre is ``edge.point_at_t(t)``.  The tip is placed
@@ -2077,6 +2092,11 @@ class Dart:
         if not (0.0 <= t <= 1.0):
             raise ValueError(f"t must be in [0, 1], got {t}")
         geom, edge_elem = _unwrap_edge(edge)
+        if not isinstance(geom, (Segment, CubicBezier)):
+            raise TypeError(
+                f"from_edge_at_t requires a Segment or CubicBezier edge, "
+                f"got {type(geom).__name__!r}"
+            )
         center = geom.point_at_t(t)
         # CubicBezier has a position-dependent normal; Segment/Ray/Line expose
         # a constant unit_normal property.
@@ -2099,13 +2119,13 @@ class Dart:
     @classmethod
     def from_edge_at_point(
         cls,
-        edge: "object",
+        edge: object,
         point: Point,
         width: float,
         depth: float,
-        dart_type: "DartType | str" = DartType.TRIANGLE,
+        dart_type: DartType | str = DartType.TRIANGLE,
         name: str | None = None,
-    ) -> "Dart":
+    ) -> Dart:
         """Place a dart orthogonally on *edge* at a fixed point on the edge.
 
         The point is projected onto *edge* to find the mouth centre.
@@ -2160,14 +2180,14 @@ class Dart:
     @classmethod
     def from_edge_free_tip(
         cls,
-        edge: "object",
+        edge: object,
         t: float,
         width: float,
         reference_point: Point,
         tip_shortfall: float = 20.0,
-        dart_type: "DartType | str" = DartType.TRIANGLE,
+        dart_type: DartType | str = DartType.TRIANGLE,
         name: str | None = None,
-    ) -> "Dart":
+    ) -> Dart:
         """Place a dart on *edge* at parameter *t* with the tip aimed at a landmark.
 
         The tip is *tip_shortfall* mm short of *reference_point* along the
@@ -2176,6 +2196,11 @@ class Dart:
         if not (0.0 <= t <= 1.0):
             raise ValueError(f"t must be in [0, 1], got {t}")
         geom, edge_elem = _unwrap_edge(edge)
+        if not isinstance(geom, (Segment, CubicBezier)):
+            raise TypeError(
+                f"from_edge_free_tip requires a Segment or CubicBezier edge, "
+                f"got {type(geom).__name__!r}"
+            )
         center = geom.point_at_t(t)
         tip = reference_point.move_towards(
             Segment(reference_point, center), tip_shortfall
@@ -2216,19 +2241,19 @@ class Dart:
         )
 
     @property
-    def fold_line(self) -> "Segment":
+    def fold_line(self) -> Segment:
         """Fold/crease line from mouth centre to tip."""
         return Segment(self.center, self.tip)
 
     @property
-    def stitch_line_a(self) -> "Segment | CubicBezier":
+    def stitch_line_a(self) -> Segment | CubicBezier:
         """Stitch line from tip to leg_a (straight or curved)."""
         if self.stitch_curve_a is not None:
             return self.stitch_curve_a
         return Segment(self.tip, self.leg_a)
 
     @property
-    def stitch_line_b(self) -> "Segment | CubicBezier":
+    def stitch_line_b(self) -> Segment | CubicBezier:
         """Stitch line from tip to leg_b (straight or curved)."""
         if self.stitch_curve_b is not None:
             return self.stitch_curve_b
@@ -2247,7 +2272,8 @@ class Dart:
     @property
     def mirror_tip(self) -> Point:
         """Tip reflected across the mouth line —
-        default second apex for rhombus darts."""
+        default second apex for rhombus darts.
+        """
         return Segment(self.leg_a, self.leg_b).reflect_point(self.tip)
 
     @property
@@ -2273,12 +2299,12 @@ class Dart:
     # Transformations
     # ------------------------------------------------------------------
 
-    def translate(self, dx: float, dy: float) -> "Dart":
+    def translate(self, dx: float, dy: float) -> Dart:
         """Return a translated copy."""
 
         def _translate_curve(
-            c: "Segment | CubicBezier | None",
-        ) -> "Segment | CubicBezier | None":
+            c: Segment | CubicBezier | None,
+        ) -> Segment | CubicBezier | None:
             if c is None:
                 return None
             if isinstance(c, Segment):
@@ -2303,20 +2329,20 @@ class Dart:
             stitch_curve_b=_translate_curve(self.stitch_curve_b),
         )
 
-    def set_name(self, name: str) -> "Dart":
+    def set_name(self, name: str) -> Dart:
         """Set the name of this dart and return ``self`` for fluent chaining."""
         self.name = name
         return self
 
-    def rotate(self, pivot: Point, angle_rad: float) -> "Dart":
+    def rotate(self, pivot: Point, angle_rad: float) -> Dart:
         """Return a rotated copy (CCW around *pivot*).
 
         Preserves intake angle and depth — used for pivot-method dart transfer.
         """
 
         def _rotate_curve(
-            c: "Segment | CubicBezier | None",
-        ) -> "Segment | CubicBezier | None":
+            c: Segment | CubicBezier | None,
+        ) -> Segment | CubicBezier | None:
             if c is None:
                 return None
             if isinstance(c, Segment):
@@ -2345,7 +2371,7 @@ class Dart:
             stitch_curve_b=_rotate_curve(self.stitch_curve_b),
         )
 
-    def split(self, ratio: float = 0.5) -> "tuple[Dart, Dart]":
+    def split(self, ratio: float = 0.5) -> tuple[Dart, Dart]:
         """Split into two sub-darts sharing the same tip.
 
         The intake angle is divided *ratio* : (1 − *ratio*).
@@ -2436,7 +2462,7 @@ class Dart:
 
 def _unwrap_edge(
     edge: object,
-) -> "tuple[Segment | CubicBezier | Ray | Line, object | None]":
+) -> tuple[Segment | CubicBezier | Ray | Line, object | None]:
     """Extract geometry and optional source PatternElement from an edge argument.
 
     Accepts a ``PatternElement`` wrapping a ``Segment``, ``CubicBezier``,

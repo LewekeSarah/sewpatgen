@@ -33,7 +33,7 @@ _FLOAT_COLS = (
 )
 
 
-def load_person(name: str, date: str | None = None) -> "Person":
+def load_person(name: str, date: str | None = None) -> Person:
     """Load a :class:`Person` from ``persons.csv`` by name.
 
     Args:
@@ -271,10 +271,15 @@ class PersonAnalyser:
                 self.person_balanced = BalancedPerson(person_balanced)
 
     def get_balanced_person(self) -> BalancedPerson:
+        if self.person_balanced is None:
+            raise RuntimeError(
+                "balance_person() did not produce a BalancedPerson. "
+                "Check that front_length and back_length are properly balanced."
+            )
         return self.person_balanced
 
     def get_optimal_balance(self) -> float:
-        if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
+        if self.person.bust is not None and (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
             return 3.5 * CM
         else:
             raise NotImplementedError(

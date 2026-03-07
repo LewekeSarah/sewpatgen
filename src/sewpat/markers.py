@@ -1,5 +1,4 @@
-"""
-SVG marker definitions for sewing pattern rendering.
+"""SVG marker definitions for sewing pattern rendering.
 
 Each marker is defined in ``markerUnits="userSpaceOnUse"`` so sizes stay in
 the same mm-based coordinate space as the rest of the drawing (Inkscape-safe).

@@ -1,5 +1,4 @@
-"""
-Style options for rendering sewing pattern elements.
+"""Style options for rendering sewing pattern elements.
 
 Kept separate from geometry.py and render.py to avoid circular imports.
 """
@@ -57,14 +56,13 @@ class StyleOptions:
         seam_allowance: float | None = None,
         corner_join: str | None = None,
     ) -> None:
-        """
-        Args:
-            seam_allowance: Per-element SA override in mm.  ``None`` (default)
-                = use the global distance passed to ``add_seam_allowance()``.
-                ``0.0`` = explicitly no seam allowance on this edge (e.g. fold line).
-            corner_join: Per-element corner-join override (``"miter"``,
-                ``"round"``, ``"bevel"``); ``None`` = use the part-wide default.
-            All other arguments map directly to the identically named SVG attributes.
+        """Args:
+        seam_allowance: Per-element SA override in mm.  ``None`` (default)
+            = use the global distance passed to ``add_seam_allowance()``.
+            ``0.0`` = explicitly no seam allowance on this edge (e.g. fold line).
+        corner_join: Per-element corner-join override (``"miter"``,
+            ``"round"``, ``"bevel"``); ``None`` = use the part-wide default.
+        All other arguments map directly to the identically named SVG attributes.
         """
         self.stroke_color = stroke_color
         self.stroke_width = stroke_width

@@ -494,7 +494,7 @@ class TestAddNotches(unittest.TestCase):
     # Automatic dual-notch (seam-line + SA-line) tests
     # ------------------------------------------------------------------
 
-    def _square_part_with_sa(self, sa_dist: float = 10.0) -> "PatternPart":
+    def _square_part_with_sa(self, sa_dist: float = 10.0) -> PatternPart:
         """100×100 mm square with seam allowance already added."""
         part = PatternPart(name="Square")
         part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
@@ -615,7 +615,7 @@ class TestProjectDartNotchesToSA(unittest.TestCase):
     _project_dart_notches_to_sa().
     """
 
-    def _square_part_with_dart(self) -> "PatternPart":
+    def _square_part_with_dart(self) -> PatternPart:
 
         """100×100 mm square with a triangle dart on the top edge, SA not yet added."""
         from sewpat.geometry import Dart

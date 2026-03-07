@@ -79,7 +79,7 @@ class TopGrid:
         config: GarmentConfig,
         hip_offset: float = 0.0,
         layout: PatternConfig | None = None,
-    ) -> "TopGrid":
+    ) -> TopGrid:
         """Build and return a :class:`TopGrid` from the given measurements.
 
         Args:
@@ -89,7 +89,6 @@ class TopGrid:
             config:     Garment-design choices (length, seam allowance).
             layout:     Pattern layout configuration.
         """
-
         bust_point_ease = fit_class.bust_point_ease
         length = config.length
 
@@ -178,7 +177,7 @@ class TopGrid:
         return grid
 
 
-def _check_chest_width(grid: "TopGrid", expected_half_width: float) -> None:
+def _check_chest_width(grid: TopGrid, expected_half_width: float) -> None:
     """Validate that the built grid positions satisfy the chest-width constraint.
 
     The distance from ``hip_adj`` to ``side_back`` (back half-width) plus the
