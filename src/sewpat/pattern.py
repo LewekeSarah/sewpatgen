@@ -258,7 +258,7 @@ class PatternPart(NamedAccessMixin):
         poly = self._outline_polygon()
         if poly is None or poly.is_empty:
             return None
-        return poly.area / 100.0
+        return float(poly.area) / 100.0
 
     def bounding_box(self) -> tuple[Point, Point] | None:
         """Axis-aligned bounding box of the outline polygon.
@@ -612,29 +612,34 @@ class PatternPart(NamedAccessMixin):
         # seam_allowance=None  → not in dict → use global distance
         # seam_allowance=0.0   → in dict as 0.0 → no offset (fold line)
         # seam_allowance=x > 0 → in dict as x   → custom distance
-        elem_sa: dict[frozenset, float] = {
-            _ep_key(e.geometry): e.style.seam_allowance
-            for e in outline_elements
-            if isinstance(e.geometry, (Segment, CubicBezier))
-            and getattr(e.style, "seam_allowance", None) is not None
-        }
+        elem_sa: dict[frozenset, float] = {}
+        for e in outline_elements:
+            if not isinstance(e.geometry, (Segment, CubicBezier)):
+                continue
+            if getattr(e.style, "seam_allowance", None) is None:
+                continue
+            _lg: Segment | CubicBezier = e.geometry
+            elem_sa[_ep_key(_lg)] = float(e.style.seam_allowance)  # type: ignore[arg-type]
 
         # Per-element SA direction override: dart roof segments store the tip
         # as _sa_center so the offset goes away from the tip (outward) rather
         # than away from the part centroid, which can be wrong for inward-
         # pointing geometry like shoulder dart roofs.
-        elem_center: dict[frozenset, Point] = {
-            _ep_key(e.geometry): e._sa_center  # type: ignore[misc]
-            for e in outline_elements
-            if isinstance(e.geometry, (Segment, CubicBezier))
-            and getattr(e, "_sa_center", None) is not None
-        }
+        elem_center: dict[frozenset, Point] = {}
+        for e in outline_elements:
+            if not isinstance(e.geometry, (Segment, CubicBezier)):
+                continue
+            if getattr(e, "_sa_center", None) is None:
+                continue
+            _lg2: Segment | CubicBezier = e.geometry
+            elem_center[_ep_key(_lg2)] = e._sa_center  # type: ignore[assignment]
 
         _valid_cj = {"miter", "round", "bevel"}
         elem_cj: dict[frozenset, str] = {}
         for e in outline_elements:
             if not isinstance(e.geometry, (Segment, CubicBezier)):
                 continue
+            linear_geom: Segment | CubicBezier = e.geometry
             val = getattr(e.style, "corner_join", None)
             if val is None:
                 continue
@@ -643,7 +648,7 @@ class PatternPart(NamedAccessMixin):
                     f"StyleOptions.corner_join must be one of {sorted(_valid_cj)!r}, "
                     f"got {val!r} on element {e.get_name()!r}"
                 )
-            elem_cj[_ep_key(e.geometry)] = val
+            elem_cj[_ep_key(linear_geom)] = val
 
         offset_groups: list[list[Segment | CubicBezier]] = []
         for g in chain_mixed:
@@ -739,6 +744,7 @@ class PatternPart(NamedAccessMixin):
         ]
 
         for seam_elem in candidates:
+            assert isinstance(seam_elem.geometry, Triangle)  # guaranteed by candidates filter
             tri = seam_elem.geometry
             # Base centre of the triangle is the point on the seam line
             base_centre = Point(
@@ -1156,7 +1162,10 @@ class PatternPart(NamedAccessMixin):
             The newly created :class:`PatternElement`.
         """
         if name is not None:
-            geometry = geometry.set_name(name)
+            if isinstance(geometry, Segment):
+                geometry = geometry.set_name(name)
+            else:
+                geometry.name = name
         return self.append(
             geometry,
             style=style if style is not None else STYLE_CONSTRUCTION_GRID,
@@ -1190,6 +1199,11 @@ class PatternPart(NamedAccessMixin):
             for e in self.elements
             if e.is_outline and isinstance(e.geometry, (Segment, CubicBezier))
         ]
+        # Narrowed geometry list — mypy can now see Segment | CubicBezier everywhere.
+        outline_geoms: list[Segment | CubicBezier] = [
+            e.geometry  # type: ignore[misc]
+            for e in outline_elems
+        ]
         grid_geoms = [
             e.geometry
             for e in grid_part.elements
@@ -1198,18 +1212,18 @@ class PatternPart(NamedAccessMixin):
 
         # Build map of forward tangents at each outline endpoint for corner detection.
         ep_tangents: dict[tuple, list] = {}
-        for oe in outline_elems:
-            s = geom_start(oe.geometry)
-            e = geom_end(oe.geometry)
+        for og in outline_geoms:
+            s = geom_start(og)
+            end_pt = geom_end(og)
             sk = (round(s.x, 3), round(s.y, 3))
-            ek = (round(e.x, 3), round(e.y, 3))
-            ep_tangents.setdefault(sk, []).append(edge_tangent(oe.geometry, at_end=False))
-            ep_tangents.setdefault(ek, []).append(edge_tangent(oe.geometry, at_end=True))
+            ek = (round(end_pt.x, 3), round(end_pt.y, 3))
+            ep_tangents.setdefault(sk, []).append(edge_tangent(og, at_end=False))
+            ep_tangents.setdefault(ek, []).append(edge_tangent(og, at_end=True))
 
         def _is_corner_endpoint(pt: Point) -> bool:
             """Return True when *pt* is within *tolerance* of a sharp corner or free endpoint."""
-            for oe in outline_elems:
-                for ep in (geom_start(oe.geometry), geom_end(oe.geometry)):
+            for og in outline_geoms:
+                for ep in (geom_start(og), geom_end(og)):
                     if pt.distance_to(ep) >= tolerance:
                         continue
                     key = (round(ep.x, 3), round(ep.y, 3))
@@ -1229,8 +1243,8 @@ class PatternPart(NamedAccessMixin):
             return False
 
         corner_vertices: list[Point] = []
-        for oe in outline_elems:
-            for ep in (geom_start(oe.geometry), geom_end(oe.geometry)):
+        for og in outline_geoms:
+            for ep in (geom_start(og), geom_end(og)):
                 key = (round(ep.x, 3), round(ep.y, 3))
                 tangents = ep_tangents.get(key, [])
                 if len(tangents) < 2:
@@ -1258,17 +1272,17 @@ class PatternPart(NamedAccessMixin):
             return any(pt.distance_to(s) < min_spacing for s in seen)
 
         candidates: list[tuple[int, Segment | CubicBezier, Point]] = []
-        for oe in outline_elems:
+        for og in outline_geoms:
             for gg in grid_geoms:
                 is_horiz = _is_horizontal(gg)
                 try:
-                    pts = _intersect(oe.geometry, gg)
+                    pts = _intersect(og, gg)
                 except TypeError, Exception:
                     continue
                 priority = 0 if is_horiz else 1
                 for pt in pts:
                     if not _is_corner_endpoint(pt) and not _is_near_corner(pt):
-                        candidates.append((priority, oe.geometry, pt))
+                        candidates.append((priority, og, pt))
 
         candidates.sort(key=lambda c: c[0])
 
