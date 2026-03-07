@@ -63,7 +63,7 @@ def _intersect_lines(
 
 def _bezier_closest_t(svg_bezier: _SvgCubicBezier, pt_c: complex) -> float:
     """Return *t* ∈ [0, 1] of the point on *svg_bezier* closest to *pt_c*."""
-    return svg_bezier.radialrange(pt_c)[0][1]
+    return float(svg_bezier.radialrange(pt_c)[0][1])
 
 
 @dataclass(frozen=True)
@@ -275,13 +275,14 @@ class Segment:
     @property
     def direction_unnormalized(self) -> np.ndarray:
         """Direction vector (not normalised)."""
-        return self.p2.coords - self.p1.coords
+        return np.asarray(self.p2.coords - self.p1.coords)
 
     @property
     def unit_direction(self) -> np.ndarray:
         """Normalised direction vector."""
         d = self.p2.coords - self.p1.coords
-        return d / np.linalg.norm(d)
+        n = float(np.linalg.norm(d))
+        return np.array(d / n, dtype=float)
 
     @property
     def unit_normal(self) -> np.ndarray:
@@ -418,7 +419,7 @@ class Segment:
     def contains_point(self, point: Point, tolerance: float = 1e-9) -> bool:
         """Return True if *point* lies on the segment within *tolerance* mm (uses Shapely GEOS)."""
         ls = _sg.LineString([(self.p1.x, self.p1.y), (self.p2.x, self.p2.y)])
-        return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
+        return bool(ls.distance(_sg.Point(point.x, point.y)) <= tolerance)
 
     def point_at_length(self, arc_length: float) -> Point:
         """Return the point at *arc_length* mm from p1; raises ValueError if out of range."""
@@ -510,7 +511,7 @@ class Ray:
     @property
     def unit_direction(self) -> np.ndarray:
         """Normalised direction vector."""
-        return self.direction
+        return np.asarray(self.direction)
 
     @property
     def unit_normal(self) -> np.ndarray:
@@ -541,7 +542,7 @@ class Ray:
 
         # Check if vectors are parallel (dot product near 1)
         # and point is in the right direction
-        return abs(dot_product - 1.0) < tolerance
+        return bool(abs(dot_product - 1.0) < tolerance)
 
     def point_perpendicular(self, distance: float, arc_length: float) -> Point:
         """Return a point offset perpendicularly by *distance* at *arc_length* along the ray.
@@ -613,7 +614,7 @@ class Line:
     @property
     def unit_direction(self) -> np.ndarray:
         """Normalized direction vector of the line."""
-        return self.direction
+        return np.asarray(self.direction)
 
     @property
     def unit_normal(self) -> np.ndarray:
@@ -643,7 +644,7 @@ class Line:
         dot_product = np.dot(v_normalized, self.direction)
 
         # Check if vectors are parallel (dot product near 1)
-        return abs(abs(dot_product) - 1.0) < tolerance
+        return bool(abs(abs(dot_product) - 1.0) < tolerance)
 
     def point_perpendicular(self, distance: float, arc_length: float) -> Point:
         """Return a point offset perpendicularly by *distance* at *arc_length* along the line.
@@ -1028,7 +1029,7 @@ class CubicBezier:
     @property
     def length(self) -> float:
         """Exact arc length via Gauss-Legendre quadrature (delegated to svgpathtools)."""
-        return self._svg().length()
+        return float(self._svg().length())
 
     def tangent_at_t(self, t: float) -> np.ndarray:
         """Tangent vector at *t* (not normalised), via svgpathtools B'(t)."""
@@ -1209,7 +1210,7 @@ class CubicBezier:
         Uses Shapely GEOS on a 64-segment discretisation.
         """
         ls = _bezier_shapely(self)  # 64-segment discretisation
-        return ls.distance(_sg.Point(point.x, point.y)) <= tolerance
+        return bool(ls.distance(_sg.Point(point.x, point.y)) <= tolerance)
 
     def offset(
         self,
@@ -1524,7 +1525,7 @@ def edge_tangent(g: Segment | CubicBezier, at_end: bool) -> np.ndarray:
     else:
         d = g.tangent_at_t(1.0) if at_end else g.tangent_at_t(0.0)
     norm = float(_np.linalg.norm(d))
-    return d / norm if norm > 1e-12 else d
+    return np.asarray(d / norm) if norm > 1e-12 else np.asarray(d)
 
 
 def with_endpoints(

@@ -170,8 +170,8 @@ class FitClass:
         """Return override if set, otherwise the table upper bound (hi)."""
         override = getattr(self, f"_{field_name}")
         if override is not None:
-            return override
-        return _TABLE[self.pk][field_name].hi
+            return float(override)
+        return float(_TABLE[self.pk][field_name].hi)
 
     # ------------------------------------------------------------------
     # Public properties — no prefix needed, always return resolved value
