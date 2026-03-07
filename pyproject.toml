@@ -1,6 +1,6 @@
 [project]
 name = "sewpat"
-version = "0.3.0"
+version = "0.4.0"
 description = "Sewing pattern vector file generator"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -9,22 +9,47 @@ authors = [
     { name = "Sarah Leweke", email = "sarah@leweke.info" },
     { name = "Samuel Leweke", email = "samuel@leweke.info" },
 ]
+keywords = [
+    "sewing",
+    "pattern",
+    "garment",
+    "CAD",
+    "SVG",
+    "geometry",
+    "dart",
+    "fashion",
+]
 classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Scientific/Engineering :: Visualization",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Typing :: Typed",
 ]
 dependencies = [
-    "numpy>=1.24.0",
-    "pandas>=2.0.0",
-    "shapely>=2.0.0",
+    "numpy>=2.2.0",
+    "pandas>=2.2.0",
+    "shapely>=2.1.2",
     "svgpathtools>=1.7.2",
 ]
+
+[project.urls]
+Homepage      = "https://github.com/sleweke/sewpatgen"
+Repository    = "https://github.com/sleweke/sewpatgen"
+"Bug Tracker" = "https://github.com/sleweke/sewpatgen/issues"
+Changelog     = "https://github.com/sleweke/sewpatgen/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["uv_build>=0.8.3,<0.9.0"]
 build-backend = "uv_build"
+
+[tool.uv]
+package = true
 
 [tool.ruff]
 line-length = 100

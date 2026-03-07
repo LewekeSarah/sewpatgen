@@ -439,7 +439,7 @@ wheels = [
 
 [[package]]
 name = "sewpat"
-version = "0.3.0"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
@@ -459,9 +459,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numpy", specifier = ">=1.24.0" },
-    { name = "pandas", specifier = ">=2.0.0" },
-    { name = "shapely", specifier = ">=2.0.0" },
+    { name = "numpy", specifier = ">=2.2.0" },
+    { name = "pandas", specifier = ">=2.2.0" },
+    { name = "shapely", specifier = ">=2.1.2" },
     { name = "svgpathtools", specifier = ">=1.7.2" },
 ]
 

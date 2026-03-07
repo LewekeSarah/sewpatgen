@@ -103,7 +103,7 @@ class TopGrid:
                 (
                     "Shoulder Front",
                     meas.back_length - meas.front_length,
-                ),  # TODO check front_length vs VL2
+                ),  # VL2 offset: shoulder front sits (back_length - front_length) below anchor
                 ("Shoulder Back", 0),
                 ("Chest", meas.armscye_depth),
                 ("Waist", meas.back_length),
@@ -148,7 +148,9 @@ class TopGrid:
         built = cg.build()
 
         def seg(name: str) -> Segment:
-            return built.get_element(name).geometry  # type: ignore[return-value]
+            geom = built.get_element(name).geometry
+            assert isinstance(geom, Segment), f"Grid element {name!r} must be a Segment"
+            return geom
 
         grid = cls(
             part=built,
