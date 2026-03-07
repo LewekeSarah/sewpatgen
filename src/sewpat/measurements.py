@@ -1,3 +1,12 @@
+"""Ease-adjusted garment measurements derived from body measurements and fit class.
+
+This module provides dataclasses for garment measurements (with ease already
+applied), distribution helpers that split waist and hip shortfall into darts
+and side-seam intakes, and factory functions that combine a
+:class:`~sewpat.person.Person` with a :class:`~sewpat.fitclass.FitClass` to
+produce construction-ready measurements.
+"""
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -51,6 +60,23 @@ class TrouserEase:
 
 @dataclass
 class TrouserMeasurements:
+    """Ease-adjusted measurements for trouser construction.
+
+    All values are in mm (the project's internal unit).
+
+    Attributes:
+        waist: TaU — Taillenumfang (waist circumference, with ease).
+        hip: HüU — Hüftumfang (hip circumference, with ease).
+        body_rise: SiH — Sitzhöhe (body rise, with ease).
+        waist_width: TaW — Taillenweite fertig (finished waist half-width).
+        hip_width: HüW — Hüftweite fertig (finished hip half-width).
+        hip_depth: HüT — Hüfttiefe (hip depth; optional).
+        inseam: SrH — Schritthöhe (inside leg length; optional).
+        sTaH: Combined rise + inseam for children (optional).
+        knee_height: Kniehöhe (knee height, derived if not given).
+        front_trouser_width: vHoB — Vorderhosenbreite (defaults to 25 % of hip_width).
+        gender: Used for gender-specific construction formulas.
+    """
     waist: float          # TaU — Taillenumfang
     hip: float            # HüU — Hüftumfang
     body_rise: float      # SiH — Sitzhöhe
@@ -85,6 +111,33 @@ class TrouserMeasurements:
 
 @dataclass
 class BlouseMeasurements:
+    """Ease-adjusted measurements for blouse / top construction.
+
+    All values are in mm (the project's internal unit).
+    Build via :func:`make_top_measurements` from a
+    :class:`~sewpat.person.BalancedPerson` and a
+    :class:`~sewpat.fitclass.FitClass`.
+
+    Attributes:
+        bust: BrU — Brustumfang (bust circumference).
+        waist: TaU — Taillenumfang (waist circumference).
+        hip: HüU — Hüftumfang (hip circumference).
+        hip_depth: HüT — Hüfttiefe (hip depth).
+        bust_depth: BrT — Brusttiefe (bust depth).
+        neck_size: HlB — Halslochbreite (neck hole width).
+        bust_span: BrPA — Brustpunktabstand (bust point distance).
+        shoulder_width: SuB — Schulterbreite (shoulder width, with ease).
+        back_length: RüL — Rückenlänge (back length).
+        front_length: VL — Vorderlänge (front length).
+        bust_width: BrW — Brustbreite fertig (half-width, with ease).
+        waist_width: TaW — Taillenweite fertig (half-width, with ease).
+        hip_width: HüW — Hüftweite fertig (half-width, with ease).
+        armscye_depth: AlT — Armlochtiefe (armhole depth, with ease).
+        back_width: RüB — Rückenbreite (back width, with ease).
+        armscye_width: ArD — Armdurchmesser (arm diameter, with ease).
+        chest_width: BrB — Brustbreite (chest width, with ease).
+        gender: Used for gender-specific construction formulas.
+    """
     bust: float             # BrU — Brustumfang
     waist: float            # TaU — Taillenumfang
     hip: float              # HüU — Hüftumfang

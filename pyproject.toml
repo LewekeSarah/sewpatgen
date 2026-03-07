@@ -27,31 +27,61 @@ requires = ["uv_build>=0.8.3,<0.9.0"]
 build-backend = "uv_build"
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
-# E  = pycodestyle errors
-# F  = pyflakes
-# I  = isort
-# UP = pyupgrade (modernise syntax automatically)
-# B  = flake8-bugbear (common bugs and design issues)
-#
-# Intentionally NOT enabled yet (separate incremental steps):
-#   N   — pep8-naming: too many false positives from German domain abbreviations
-#           (sTaH, HüU, BrU, …) and single-letter geometry variables
-#   D   — pydocstyle: ~80 missing docstrings — tracked in docs/rename_map.md
-#   ANN — flake8-annotations: ~40 missing annotations — covered by mypy
+select = ["E", "F", "I", "UP", "B", "D", "ANN"]
+# E   = pycodestyle errors
+# F   = pyflakes
+# I   = isort
+# UP  = pyupgrade (modernise syntax automatically)
+# B   = flake8-bugbear (common bugs and design issues)
+# D   = pydocstyle (Google convention)
+# ANN = flake8-annotations (type annotation completeness)
 
 ignore = [
     "B904",   # raise … from err — too noisy in existing exception chains
     "B006",   # mutable default argument — intentional in dataclasses with field()
+    "D105",   # missing docstring in magic method — too noisy for __repr__ etc.
+    "D107",   # missing docstring in __init__ — covered by class docstring
 ]
 
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**"   = ["B", "UP"]
-"examples/**" = ["B", "UP"]
+# ── tests / examples: no docstrings or annotations required ──────────────────
+"tests/**"    = ["ANN", "D"]
+"examples/**" = ["ANN", "D"]
+
+# ── render.py: all _render_* helpers are private module-level functions ──────
+# TODO: add docstrings to public exports (export_pattern_svg_mm etc.), then tighten
+"src/sewpat/render.py" = ["D103", "D105", "D107", "ANN001", "ANN201", "ANN202"]
+
+# ── pattern.py / blocks.py: large internal helpers, closures ─────────────────
+# TODO: add docstrings to internal helpers, then tighten
+"src/sewpat/pattern.py" = ["D102", "D103", "D105", "D107", "ANN001", "ANN201", "ANN202"]
+"src/sewpat/blocks.py"  = ["D102", "D103", "D105", "D107", "ANN001", "ANN201", "ANN202"]
+
+# ── geometry.py: single-letter math variables; __init__ covered by class doc ──
+# TODO: add ANN to public API functions, then tighten
+"src/sewpat/geometry.py" = ["D102", "D103", "D105", "D107", "ANN001", "ANN201", "ANN202"]
+
+# ── measurements.py: __post_init__ covered by class docstring ─────────────────
+"src/sewpat/measurements.py" = ["ANN001", "ANN201", "D105"]
+
+# ── person.py: __init__ / __repr__ covered by class docstring ────────────────
+"src/sewpat/person.py" = ["D105", "D107"]
+
+# ── fitclass.py: __init__ / __post_init__ covered by class docstring ─────────
+"src/sewpat/fitclass.py" = ["D105", "D107"]
+
+# ── element.py: __init__ covered by class docstring ──────────────────────────
+"src/sewpat/element.py" = ["D105", "D107"]
+
+# ── style.py: __eq__ / __repr__ magic methods ────────────────────────────────
+"src/sewpat/style.py" = ["D105"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["sewpat"]

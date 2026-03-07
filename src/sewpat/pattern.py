@@ -11,6 +11,7 @@ This module owns:
 """
 
 import copy
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -59,6 +60,8 @@ from .units import CM, MM
 
 @dataclass
 class PatternConfig:
+    """Layout configuration for a pattern: anchor point and inter-piece margin."""
+
     anchor: Point = Point(5 * CM, 5 * CM, "anchor")
     margin: float = 15 * CM
 
@@ -102,7 +105,7 @@ class DartResult:
     def __repr__(self) -> str:
         return f"DartResult(dart={self.dart!r}, elements={len(self.elements)})"
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[object]:
         """Iterate as ``(dart, *elements)`` to allow unpacking.
 
         Example::
@@ -169,8 +172,7 @@ class PatternPart(NamedAccessMixin):
         is_outline: bool = False,
         is_construction: bool = False,
     ) -> PatternElement:
-        """Wrap *geometry* in a PatternElement, stamp ``is_construction``,
-        and append it.
+        """Wrap *geometry* in a PatternElement, stamp ``is_construction``, and append it.
 
         The element's name is taken from ``geometry.name``; set it on the
         geometry object before calling (e.g. ``seg.set_name("Center Back")``).
@@ -201,8 +203,7 @@ class PatternPart(NamedAccessMixin):
         return elem
 
     def extend(self, elements: list[PatternElement]) -> None:
-        """Append multiple :class:`~sewpat.element.PatternElement` objects, stamping
-        ``is_construction`` from this part.
+        """Append multiple ``PatternElement`` objects, stamping ``is_construction`` from this part.
 
         When a :class:`PatternElement` wraps a :class:`~sewpat.geometry.Dart`
         as its geometry, it is dispatched to :meth:`add_dart` using the
@@ -318,9 +319,7 @@ class PatternPart(NamedAccessMixin):
         return _geom_seam_length(resolved)
 
     def contains_point(self, point: Point) -> bool:
-        """Return True if *point* lies strictly inside the outline polygon
-        (boundary = False).
-        """
+        """Return True if *point* lies strictly inside the outline polygon (boundary = False)."""
         poly = self._outline_polygon()
         if poly is None or poly.is_empty:
             return False
@@ -362,13 +361,15 @@ class PatternPart(NamedAccessMixin):
         name: str = "grainline / Fadenlauf",
         style: StyleOptions | None = None,
     ) -> PatternElement:
-        """Add a grainline segment, nudging outside endpoints inward along
-        the grain axis.
+        """Add a grainline segment, nudging outside endpoints inward along the grain axis.
 
         Each endpoint is nudged toward the opposite one, so the grainline stays
         perfectly straight even when an endpoint sits on the outline boundary.
 
         Args:
+            start: Start point of the grainline.
+            end: End point of the grainline.
+            name: Label for the segment. Defaults to ``"grainline / Fadenlauf"``.
             style: Optional style override; defaults to :data:`STYLE_GRAINLINE`.
         """
         start = self._nudge_point_inside(start, end)
@@ -441,6 +442,7 @@ class PatternPart(NamedAccessMixin):
                 vertical triangle centred on the point is used.
             length: Tip-to-base distance. Defaults to 0.8 cm.
             width: Base width on the seam edge. Defaults to 0.4 cm.
+            symbol: Notch shape — ``"Triangle"`` (default) or ``"Line"``.
             is_back: Two neighbouring triangles (back piece convention) if True.
         """
         inward_ref = self.centroid
@@ -506,8 +508,7 @@ class PatternPart(NamedAccessMixin):
         style: StyleOptions | None = None,
         corner_join: str = "miter",
     ) -> list[PatternElement]:
-        """Offset the outline outward by *distance* mm and add the result
-        as SA elements.
+        """Offset the outline outward by *distance* mm and add the result as SA elements.
 
         Three code paths: **Rect** outlines expand uniformly; **pure-segment**
         outlines use ``Shapely.Polygon.buffer()``; **mixed/Bézier** outlines
@@ -1153,8 +1154,7 @@ class PatternPart(NamedAccessMixin):
         name: str | None = None,
         style: StyleOptions | None = None,
     ) -> PatternElement:
-        """Append a construction-grid line (never ``is_outline``;
-        defaults to grid style.
+        """Append a construction-grid line (never ``is_outline``); defaults to grid style.
 
         *name* is applied directly to *geometry* so it is the single source of
         truth and can be retrieved via :meth:`~sewpat.pattern.PatternPart.get_element`.
@@ -1215,9 +1215,7 @@ class PatternPart(NamedAccessMixin):
             )
 
         def _is_corner_endpoint(pt: Point) -> bool:
-            """True when *pt* is within *tolerance* of a sharp corner
-            or free endpoint.
-            """
+            """Return True when *pt* is within *tolerance* of a sharp corner or free endpoint."""
             for oe in outline_elems:
                 for ep in (geom_start(oe.geometry), geom_end(oe.geometry)):
                     if pt.distance_to(ep) >= tolerance:
@@ -1499,8 +1497,7 @@ class Pattern:
         style: StyleOptions | None = None,
         part: PatternPart | None = None,
     ) -> PatternElement:
-        """Add a print-scale verification square, clamped inside the
-        bounding box with 2 mm padding.
+        """Add a print-scale verification square, clamped inside the bounding box with 2 mm padding.
 
         Args:
             origin: Preferred top-left corner.

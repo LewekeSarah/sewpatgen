@@ -89,6 +89,32 @@ class Gender(Enum):
 
 @dataclass
 class Person:
+    """Raw body measurements for a single person.
+
+    All values are stored in mm (the project's internal unit).
+    Unmeasured fields remain ``None`` and are excluded from calculations.
+
+    Attributes:
+        bust: BrU — Brustumfang (bust circumference).
+        waist: TaU — Taillenumfang (waist circumference).
+        hip: HüU — Hüftumfang (hip circumference).
+        hip_depth: HüT — Hüfttiefe (hip depth).
+        bust_depth: BrT — Brusttiefe (bust depth).
+        neck_size: HlB — Halslochbreite (neck hole width).
+        bust_span: BrPA — Brustpunktabstand (bust point distance).
+        shoulder_width: SuB — Schulterbreite (shoulder width).
+        back_length: RüL — Rückenlänge (back length).
+        front_length: VL — Vorderlänge (front length).
+        body_rise: SiH — Sitzhöhe (body rise).
+        inseam: SrH — Schritthöhe (inside leg).
+        back_width: RüB — Rückenbreite (back width).
+        armscye_depth: AlT — Armlochtiefe (armhole depth).
+        armscye_width: ArD — Armdurchmesser (arm diameter).
+        chest_width: BrB — Brustbreite (chest width).
+        height: KöH — Körperhöhe (body height).
+        gender: Geschlecht (gender for gender-specific adjustments).
+    """
+
     bust: float | None = None  # BrU — Brustumfang
     waist: float | None = None  # TaU — Taillenumfang
     hip: float | None = None  # HüU — Hüftumfang
@@ -113,6 +139,13 @@ class Person:
 
 @dataclass
 class BalanceAdjustments:
+    """Front/back length corrections for balance adjustments.
+
+    Attributes:
+        back_length: RüL — Rückenlänge correction in mm.
+        front_length: VL — Vorderlänge correction in mm.
+    """
+
     back_length: float = 0.0  # RüL — Rückenlänge
     front_length: float = 0.0  # VL  — Vorderlänge
 
@@ -156,8 +189,7 @@ class PersonalAdjustments:
 
 
 class BalancedPerson:
-    """A :class:`Person` that has been validated and balanced
-    by :class:`PersonAnalyser`.
+    """A :class:`Person` validated and balanced by :class:`PersonAnalyser`.
 
     This type can only be created by :meth:`PersonAnalyser.get_balanced_person`.
     Passing a ``BalancedPerson`` instead of a raw :class:`Person` to construction
@@ -173,11 +205,11 @@ class BalancedPerson:
 
     @property
     def person(self) -> Person:
+        """Return the wrapped :class:`Person`."""
         return self._person
 
-    # Delegate attribute access to the wrapped Person so callers can read
-    # measurements directly (e.g. balanced.bust) without going via .person.
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> object:
+        """Delegate attribute access to the wrapped :class:`Person`."""
         return getattr(self._person, name)
 
     def __repr__(self) -> str:
@@ -185,6 +217,17 @@ class BalancedPerson:
 
 
 class PersonAnalyser:
+    """Calculates and balances body measurements for pattern construction.
+
+    Derives missing measurements from the bust circumference using standard
+    formulas, then validates that the person is properly balanced
+    (front length vs. back length within the optimal range).
+
+    Args:
+        person: Raw body measurements.
+        balance_adjustments: Optional front/back length corrections.
+    """
+
     def __init__(
         self, person: Person, balance_adjustments: BalanceAdjustments | None = None
     ) -> None:
@@ -196,6 +239,7 @@ class PersonAnalyser:
         self.balance_person()
 
     def _set_armscye_depth(self) -> None:
+        """Derive armscye depth from bust circumference if not already set."""
         if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
             self.person.armscye_depth = (
                 self.person.bust / 10 + 11 * CM
@@ -209,6 +253,7 @@ class PersonAnalyser:
             )
 
     def _set_armscye_width(self) -> None:
+        """Derive armscye width from bust circumference if not already set."""
         if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
             self.person.armscye_width = (
                 self.person.bust / 8 - 1.5 * CM
@@ -222,6 +267,7 @@ class PersonAnalyser:
             )
 
     def _set_chest_width(self) -> None:
+        """Derive chest width from bust circumference if not already set."""
         if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
             self.person.chest_width = (
                 self.person.bust / 4 - 4.0 * CM
@@ -235,6 +281,7 @@ class PersonAnalyser:
             )
 
     def _set_back_width(self) -> None:
+        """Derive back width from bust circumference if not already set."""
         if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
             self.person.back_width = (
                 self.person.bust / 8 + 5.5 * CM
@@ -247,6 +294,7 @@ class PersonAnalyser:
             )
 
     def calculate_measurements(self) -> None:
+        """Derive all missing measurements from bust circumference."""
         if self.person.bust is not None:
             self._set_armscye_depth()
             self._set_armscye_width()
@@ -254,6 +302,7 @@ class PersonAnalyser:
             self._set_back_width()
 
     def balance_person(self) -> None:
+        """Apply balance adjustments and validate front/back length balance."""
         person_balanced = copy.deepcopy(self.person)
         if self.balance is not None:
             for key, val in self.balance.__dict__.items():
@@ -271,6 +320,11 @@ class PersonAnalyser:
                 self.person_balanced = BalancedPerson(person_balanced)
 
     def get_balanced_person(self) -> BalancedPerson:
+        """Get the validated and balanced person.
+
+        Raises:
+            RuntimeError: If the person has not been balanced.
+        """
         if self.person_balanced is None:
             raise RuntimeError(
                 "balance_person() did not produce a BalancedPerson. "
@@ -279,6 +333,11 @@ class PersonAnalyser:
         return self.person_balanced
 
     def get_optimal_balance(self) -> float:
+        """Determine the optimal front/back balance for the given bustline.
+
+        Raises:
+            NotImplementedError: If the bustline is outside the supported range.
+        """
         if (
             self.person.bust is not None
             and (self.person.bust > 80 * CM)

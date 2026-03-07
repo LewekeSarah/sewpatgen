@@ -374,9 +374,7 @@ def _make_renderers(
 
 
 def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
-    """Serialize a sorted chain of Segment/CubicBezier objects
-    into an SVG path string.
-    """
+    """Serialize a sorted chain of Segment/CubicBezier objects into an SVG path string."""
     if not geoms:
         return ""
 
@@ -401,9 +399,7 @@ def _render_seam_allowance_chain(
     sa_elements: list[PatternElement],
     style_dict: dict[str, Any],
 ) -> list[str]:
-    """Render all SA Segment/CubicBezier elements as one ``<path>``
-    for clean linejoin corners.
-    """
+    """Render all SA Segment/CubicBezier elements as one ``<path>`` for clean linejoin corners."""
     geoms: list[Segment | CubicBezier] = [
         e.geometry
         for e in sa_elements
@@ -500,9 +496,7 @@ def _render_elements(
 def _resolve_styles(
     style_map: dict[str, StyleOptions] | None,
 ) -> dict[str, StyleOptions]:
-    """Merge *style_map* overrides into ``_DEFAULT_STYLES``;
-    unknown keys raise ``ValueError``.
-    """
+    """Merge *style_map* overrides into ``_DEFAULT_STYLES``; unknown keys raise ``ValueError``."""
     styles = {**_DEFAULT_STYLES}
     if style_map:
         for k, v in style_map.items():
@@ -570,7 +564,8 @@ def export_pattern_part_svg_mm(
     Args:
         pattern_part: Part to export.
         filename: Output SVG path.
-        width_mm / height_mm: Canvas size in mm.
+        width_mm: Canvas width in mm.
+        height_mm: Canvas height in mm.
         margin_mm: Canvas margin in mm.
         style_map: Element-type → StyleOptions overrides; unknown keys warn.
         show_construction: Render elements flagged ``is_construction=True``.
@@ -611,7 +606,8 @@ def export_pattern_svg_mm(
     Args:
         pattern: Pattern to export.
         filename: Output SVG path.
-        width_mm / height_mm: Canvas size in mm.
+        width_mm: Canvas width in mm.
+        height_mm: Canvas height in mm.
         margin_mm: Canvas margin in mm.
         style_map: Element-type → StyleOptions overrides; unknown keys warn.
         show_construction: Render elements flagged ``is_construction=True``.

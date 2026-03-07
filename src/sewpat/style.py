@@ -56,13 +56,27 @@ class StyleOptions:
         seam_allowance: float | None = None,
         corner_join: str | None = None,
     ) -> None:
-        """Args:
-        seam_allowance: Per-element SA override in mm.  ``None`` (default)
-            = use the global distance passed to ``add_seam_allowance()``.
-            ``0.0`` = explicitly no seam allowance on this edge (e.g. fold line).
-        corner_join: Per-element corner-join override (``"miter"``,
-            ``"round"``, ``"bevel"``); ``None`` = use the part-wide default.
-        All other arguments map directly to the identically named SVG attributes.
+        """Initialize StyleOptions.
+
+        Args:
+            seam_allowance: Per-element SA override in mm.  ``None`` (default)
+                = use the global distance passed to ``add_seam_allowance()``.
+                ``0.0`` = explicitly no seam allowance on this edge (e.g. fold line).
+            corner_join: Per-element corner-join override (``"miter"``,
+                ``"round"``, ``"bevel"``); ``None`` = use the part-wide default.
+            stroke_color: SVG stroke colour string.
+            stroke_width: Stroke width in mm.
+            fill_color: SVG fill colour string.
+            dash_array: Dash pattern lengths in mm.
+            dash_offset: Dash pattern start offset.
+            opacity: Stroke opacity (0–1).
+            stroke_linejoin: SVG stroke-linejoin value.
+            stroke_miterlimit: SVG stroke-miterlimit value.
+            marker_start: Optional marker at the segment start.
+            marker_end: Optional marker at the segment end.
+            font_size_mm: Label font size in mm.
+            font_weight: CSS font-weight string.
+            font_style: CSS font-style string.
         """
         self.stroke_color = stroke_color
         self.stroke_width = stroke_width
