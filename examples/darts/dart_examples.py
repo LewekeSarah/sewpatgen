@@ -79,9 +79,7 @@ _DART_FOLD = _scaled(STYLE_DART_FOLD)
 _PRECISION = _scaled(STYLE_PRECISION_POINT)
 _GRAINLINE = _scaled(STYLE_GRAINLINE)
 _AUX = _scaled(STYLE_CONSTRUCTION_GRID)
-_REF_STYLE = StyleOptions(
-    stroke_color="#bbbbbb", stroke_width=0.15, dash_array=[3.0, 3.0]
-)
+_REF_STYLE = StyleOptions(stroke_color="#bbbbbb", stroke_width=0.15, dash_array=[3.0, 3.0])
 
 # ---------------------------------------------------------------------------
 # Shared bodice-front dimensions (mm)
@@ -148,9 +146,7 @@ def _build_block(name: str) -> tuple[Pattern, dict[str, Point]]:
 def _add_outline(part: PatternPart, pts: dict[str, Point]) -> dict[str, Segment]:
     """Add the four closed outline segments to *part* and return them by name."""
     segs = {
-        "cf": part.append(
-            Segment(pts["hem_cf"], pts["shoulder_cf"]), style=_FOLD, is_outline=True
-        ),
+        "cf": part.append(Segment(pts["hem_cf"], pts["shoulder_cf"]), style=_FOLD, is_outline=True),
         "shoulder": part.append(
             Segment(pts["shoulder_cf"], pts["shoulder_side"]),
             style=_STITCH,
@@ -161,9 +157,7 @@ def _add_outline(part: PatternPart, pts: dict[str, Point]) -> dict[str, Segment]
             style=_STITCH,
             is_outline=True,
         ),
-        "hem": part.append(
-            Segment(pts["hem_side"], pts["hem_cf"]), style=_STITCH, is_outline=True
-        ),
+        "hem": part.append(Segment(pts["hem_side"], pts["hem_cf"]), style=_STITCH, is_outline=True),
     }
     return segs
 
@@ -287,11 +281,9 @@ def example_03_inner_dart_rhombus() -> None:
     pattern, pts = _build_block("Beispiel 3 – Innennaht-Abnäher (Raute)")
     part = PatternPart("Vorderteil")
     pattern.add_part(part)
-    segs = _add_outline(part, pts)
+    _add_outline(part, pts)
 
-    bust_line_elem = PatternElement(
-        Segment(pts["bust_cf"], pts["bust_side"]), style=_STITCH
-    )
+    bust_line_elem = PatternElement(Segment(pts["bust_cf"], pts["bust_side"]), style=_STITCH)
     dart = Dart.from_edge_at_t(
         bust_line_elem,
         t=0.5,
@@ -401,9 +393,7 @@ def example_05_dart_transfer() -> None:
     seam so the result makes immediate sense to a sewer.  Positioning both
     darts in the upper third of the piece keeps them clear of the info box.
     """
-    pattern, pts = _build_block(
-        "Beispiel 5 – Abnäher verschieben (translate, 20 mm nach oben)"
-    )
+    pattern, pts = _build_block("Beispiel 5 – Abnäher verschieben (translate, 20 mm nach oben)")
     part = PatternPart("Vorderteil")
     pattern.add_part(part)
     segs = _add_outline(part, pts)
@@ -491,9 +481,7 @@ def example_06_curved_dart() -> None:
     The straight reference lines are shown in light grey so the curvature
     is easy to see.
     """
-    pattern, pts = _build_block(
-        "Beispiel 6 – Bustnaht-Abnäher (geschwungene Stichlinien)"
-    )
+    pattern, pts = _build_block("Beispiel 6 – Bustnaht-Abnäher (geschwungene Stichlinien)")
     part = PatternPart("Vorderteil")
     pattern.add_part(part)
     segs = _add_outline(part, pts)
@@ -533,12 +521,8 @@ def example_06_curved_dart() -> None:
 
     # Offset the mid-points inward by 8 mm to create a clearly visible curve
     CURVE_OFFSET = 8.0
-    mid_a_curved = Point(
-        mid_a.x + inward[0] * CURVE_OFFSET, mid_a.y + inward[1] * CURVE_OFFSET
-    )
-    mid_b_curved = Point(
-        mid_b.x - inward[0] * CURVE_OFFSET, mid_b.y - inward[1] * CURVE_OFFSET
-    )
+    mid_a_curved = Point(mid_a.x + inward[0] * CURVE_OFFSET, mid_a.y + inward[1] * CURVE_OFFSET)
+    mid_b_curved = Point(mid_b.x - inward[0] * CURVE_OFFSET, mid_b.y - inward[1] * CURVE_OFFSET)
 
     # Cubic Bézier: tip → cp1 → cp2 → leg
     # To make the curve pass near the offset midpoint we place both control
@@ -637,10 +621,8 @@ def example_07_dart_with_seam_allowance() -> None:
         seam_allowance=SA,
     )
 
-    cf = part.append(
-        Segment(pts["hem_cf"], pts["shoulder_cf"]), style=_FOLD_SA, is_outline=True
-    )
-    shldr = part.append(
+    part.append(Segment(pts["hem_cf"], pts["shoulder_cf"]), style=_FOLD_SA, is_outline=True)
+    part.append(
         Segment(pts["shoulder_cf"], pts["shoulder_side"]),
         style=_SA_STITCH,
         is_outline=True,
@@ -650,9 +632,7 @@ def example_07_dart_with_seam_allowance() -> None:
         style=_SA_STITCH,
         is_outline=True,
     )
-    hem = part.append(
-        Segment(pts["hem_side"], pts["hem_cf"]), style=_SA_STITCH, is_outline=True
-    )
+    part.append(Segment(pts["hem_side"], pts["hem_cf"]), style=_SA_STITCH, is_outline=True)
 
     # ── Dart ─────────────────────────────────────────────────────────────────
     dart = Dart.from_edge_free_tip(

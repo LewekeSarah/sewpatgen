@@ -126,7 +126,8 @@ def test_offset_negative_distance():
     # Both offsets must move away from the original midpoint
     assert mid_pos.distance_to(mid_orig) > 1.0
     assert mid_neg.distance_to(mid_orig) > 1.0
-    # The two offsets must be on opposite sides (further apart than either from original)
+    # The two offsets must be on opposite sides
+    # (further apart than either from original)
     assert mid_pos.distance_to(mid_neg) > mid_pos.distance_to(mid_orig)
     assert mid_pos.distance_to(mid_neg) > mid_neg.distance_to(mid_orig)
 
@@ -161,7 +162,7 @@ def test_offset_adaptive_each_segment_within_eps():
     # Resolve signed distance (no center → positive = left of travel)
     d = distance
 
-    result = curve.split(0.5)  # pre-split for the tight S
+    curve.split(0.5)  # pre-split for the tight S
     segments = curve.offset_adaptive(d, eps=eps)
     for seg in segments:
         # We cannot compute _true_offset_ls for a sub-segment of the original
@@ -178,15 +179,13 @@ def test_offset_adaptive_each_segment_within_eps():
     # The last segment's end must also be ≈d from the original curve's end
     last = segments[-1]
     dist_end = curve.p3.distance_to(last.p3)
-    assert abs(dist_end - d) < d * 0.1, (
-        f"last segment end not shifted by d: {dist_end:.3f} vs {d}"
-    )
+    assert abs(dist_end - d) < d * 0.1, f"last segment end not shifted by d: {dist_end:.3f} vs {d}"
 
 
 def test_offset_adaptive_segments_are_connected():
     """Consecutive segments returned by offset_adaptive must share endpoints."""
     result = _tight().offset_adaptive(10.0, eps=0.1)
-    for a, b in zip(result, result[1:]):
+    for a, b in zip(result, result[1:], strict=False):
         gap = a.p3.distance_to(b.p0)
         assert gap < 1e-6, f"gap between consecutive segments: {gap:.8f} mm"
 
@@ -210,9 +209,7 @@ def test_offset_adaptive_better_than_single_offset_on_tight_curve():
     segments = curve.offset_adaptive(d, eps=0.1)
     all_pts = []
     for seg in segments:
-        all_pts += [
-            (seg.point_at_t(i / 64).x, seg.point_at_t(i / 64).y) for i in range(65)
-        ]
+        all_pts += [(seg.point_at_t(i / 64).x, seg.point_at_t(i / 64).y) for i in range(65)]
     ls_adaptive = _sg.LineString(all_pts)
     err_adaptive = ls_true.hausdorff_distance(ls_adaptive)
 

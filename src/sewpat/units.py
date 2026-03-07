@@ -1,5 +1,4 @@
-"""
-Length unit constants for sewing pattern generation.
+"""Length unit constants for sewing pattern generation.
 
 All internal coordinates are in millimetres. Use these constants to express
 measurements in other units and convert them to the base unit (mm).

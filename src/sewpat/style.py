@@ -1,14 +1,13 @@
-"""
-Style options for rendering sewing pattern elements.
+"""Style options for rendering sewing pattern elements.
 
 Kept separate from geometry.py and render.py to avoid circular imports.
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class Marker(str, Enum):
+class Marker(StrEnum):
     """Named markers placed at line endpoints.
 
     String values match ``<marker id="…">`` in render.py.
@@ -57,14 +56,27 @@ class StyleOptions:
         seam_allowance: float | None = None,
         corner_join: str | None = None,
     ) -> None:
-        """
+        """Initialize StyleOptions.
+
         Args:
             seam_allowance: Per-element SA override in mm.  ``None`` (default)
                 = use the global distance passed to ``add_seam_allowance()``.
                 ``0.0`` = explicitly no seam allowance on this edge (e.g. fold line).
             corner_join: Per-element corner-join override (``"miter"``,
                 ``"round"``, ``"bevel"``); ``None`` = use the part-wide default.
-            All other arguments map directly to the identically named SVG attributes.
+            stroke_color: SVG stroke colour string.
+            stroke_width: Stroke width in mm.
+            fill_color: SVG fill colour string.
+            dash_array: Dash pattern lengths in mm.
+            dash_offset: Dash pattern start offset.
+            opacity: Stroke opacity (0–1).
+            stroke_linejoin: SVG stroke-linejoin value.
+            stroke_miterlimit: SVG stroke-miterlimit value.
+            marker_start: Optional marker at the segment start.
+            marker_end: Optional marker at the segment end.
+            font_size_mm: Label font size in mm.
+            font_weight: CSS font-weight string.
+            font_style: CSS font-style string.
         """
         self.stroke_color = stroke_color
         self.stroke_width = stroke_width
@@ -83,11 +95,13 @@ class StyleOptions:
         self.corner_join: str | None = corner_join
 
     def __eq__(self, other: object) -> bool:
+        """Return ``True`` when all style attributes are equal."""
         if not isinstance(other, StyleOptions):
             return NotImplemented
         return self.__dict__ == other.__dict__
 
     def __repr__(self) -> str:
+        """Return a compact representation showing only non-default attributes."""
         parts = []
         defaults = StyleOptions()
         for k, v in self.__dict__.items():

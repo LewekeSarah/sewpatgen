@@ -12,8 +12,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from sewpat.geometry import Point, Segment, Triangle
 from sewpat.element import PatternElement
+from sewpat.geometry import Point, Segment, Triangle
 from sewpat.pattern import (
     ConstructionGrid,
     ConstructionGridPart,
@@ -128,9 +128,7 @@ class TestAddConstructionLine(unittest.TestCase):
     def test_custom_style_respected(self):
         part = ConstructionGridPart()
         custom = StyleOptions(stroke_color="blue")
-        elem = part.add_construction_line(
-            Segment(Point(0, 0), Point(10, 0)), style=custom
-        )
+        elem = part.add_construction_line(Segment(Point(0, 0), Point(10, 0)), style=custom)
         self.assertEqual(elem.style.stroke_color, "blue")
 
     def test_not_is_outline(self):
@@ -171,15 +169,11 @@ class TestConstructionGridBuild(unittest.TestCase):
         self.assertAlmostEqual(seg.p1.y, seg.p2.y, places=6)
 
     def test_custom_part_name(self):
-        grid = ConstructionGrid(
-            anchor=Point(0, 0), verticals=[("v", 0)], part_name="MyGrid"
-        )
+        grid = ConstructionGrid(anchor=Point(0, 0), verticals=[("v", 0)], part_name="MyGrid")
         self.assertEqual(grid.build().name, "MyGrid")
 
     def test_default_part_name(self):
-        self.assertEqual(
-            ConstructionGrid(anchor=Point(0, 0)).build().name, "Konstruktionsgitter"
-        )
+        self.assertEqual(ConstructionGrid(anchor=Point(0, 0)).build().name, "Konstruktionsgitter")
 
     def test_element_names_match_labels(self):
         grid = ConstructionGrid(
@@ -196,9 +190,7 @@ class TestConstructionGridBuild(unittest.TestCase):
             anchor=Point(0, 0), verticals=[("v", 0)], horizontals=[("h", 10)]
         ).build()
         for elem in grid.elements:
-            self.assertEqual(
-                elem.style.stroke_color, STYLE_CONSTRUCTION_GRID.stroke_color
-            )
+            self.assertEqual(elem.style.stroke_color, STYLE_CONSTRUCTION_GRID.stroke_color)
 
 
 # ---------------------------------------------------------------------------
@@ -211,9 +203,7 @@ class TestAddGridNotches(unittest.TestCase):
         """100×100 square with a horizontal grid line at y=50."""
         part = _square_part(side=100.0)
         grid = ConstructionGridPart()
-        grid.add_construction_line(
-            Segment(Point(-200, 50), Point(200, 50), name="Mitte")
-        )
+        grid.add_construction_line(Segment(Point(-200, 50), Point(200, 50), name="Mitte"))
         return part, grid
 
     def test_returns_list_of_pattern_elements(self):
@@ -278,9 +268,7 @@ class TestAddGridNotches(unittest.TestCase):
         grid.add_construction_line(Segment(Point(50, -200), Point(50, 200)))
         part.add_grid_notches(grid)
         triangles = [e for e in part.elements if isinstance(e.geometry, Triangle)]
-        xs = [
-            (t.geometry.p1.x + t.geometry.p2.x + t.geometry.p3.x) / 3 for t in triangles
-        ]
+        xs = [(t.geometry.p1.x + t.geometry.p2.x + t.geometry.p3.x) / 3 for t in triangles]
         for cx in xs:
             self.assertAlmostEqual(cx, 50.0, delta=2.0)
 
@@ -359,9 +347,7 @@ class TestAddGridNotches(unittest.TestCase):
         part = PatternPart(name="p")
         part.append(Segment(Point(0, 50), Point(100, 50)), is_outline=True)
         grid = ConstructionGridPart()
-        grid.add_construction_line(
-            Segment(Point(-200, 50.5), Point(200, 50.5), name="H")
-        )
+        grid.add_construction_line(Segment(Point(-200, 50.5), Point(200, 50.5), name="H"))
         grid.add_construction_line(Segment(Point(50, -200), Point(50, 200), name="V"))
         created = part.add_grid_notches(grid, min_spacing=8.0)
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]

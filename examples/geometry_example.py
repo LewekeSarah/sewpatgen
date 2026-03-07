@@ -141,16 +141,12 @@ def demonstrate_circles():
 
     test_point = Point(3, 4)  # 3-4-5 triangle – lies on circle 1
     print(f"Is point {test_point} on circle 1? {circle1.contains_point(test_point)}")
-    print(
-        f"Is point {test_point} inside circle 1? {circle1.contains_point_inside(test_point)}"
-    )
+    print(f"Is point {test_point} inside circle 1? {circle1.contains_point_inside(test_point)}")
 
     # Circle–circle intersection
     intersections = intersect(circle1, circle2)
     if len(intersections) == 2:
-        print(
-            f"Circle 1 and circle 2 intersect at: {intersections[0]} and {intersections[1]}"
-        )
+        print(f"Circle 1 and circle 2 intersect at: {intersections[0]} and {intersections[1]}")
     elif len(intersections) == 1:
         print(f"Circle 1 and circle 2 touch at: {intersections[0]}")
     else:
@@ -161,7 +157,8 @@ def demonstrate_circles():
     intersections = intersect(circle1, line)
     if len(intersections) == 2:
         print(
-            f"Circle 1 and horizontal segment intersect at: {intersections[0]} and {intersections[1]}"
+            f"Circle 1 and horizontal segment intersect at: "
+            f"{intersections[0]} and {intersections[1]}"
         )
     elif len(intersections) == 1:
         print(f"Circle 1 and horizontal segment touch at: {intersections[0]}")
@@ -192,20 +189,14 @@ def demonstrate_cad_example():
     left_line = Segment(Point(0, corner_radius), Point(0, rect_height - corner_radius))
 
     # Corner circles
-    c1 = Circle(
-        Point(corner_radius, rect_height - corner_radius), corner_radius
-    )  # top-left
+    c1 = Circle(Point(corner_radius, rect_height - corner_radius), corner_radius)  # top-left
     c2 = Circle(
         Point(rect_width - corner_radius, rect_height - corner_radius), corner_radius
     )  # top-right
     c3 = Circle(Point(corner_radius, corner_radius), corner_radius)  # bottom-left
-    c4 = Circle(
-        Point(rect_width - corner_radius, corner_radius), corner_radius
-    )  # bottom-right
+    c4 = Circle(Point(rect_width - corner_radius, corner_radius), corner_radius)  # bottom-right
 
-    print(
-        f"  Width: {rect_width}, Height: {rect_height}, Corner radius: {corner_radius}"
-    )
+    print(f"  Width: {rect_width}, Height: {rect_height}, Corner radius: {corner_radius}")
     print(f"  Top edge:    {top_line}")
     print(f"  Right edge:  {right_line}")
     print(f"  Bottom edge: {bottom_line}")

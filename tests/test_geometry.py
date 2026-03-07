@@ -9,7 +9,16 @@ import unittest
 
 import numpy as np
 
-from sewpat.geometry import Circle, CubicBezier, Point, Ray, Segment, intersect
+from sewpat.geometry import (
+    Circle,
+    CubicBezier,
+    Point,
+    Ray,
+    Segment,
+    intersect,
+    miter_corner,
+    round_corner,
+)
 
 
 class TestPoint(unittest.TestCase):
@@ -131,7 +140,8 @@ class TestPoint(unittest.TestCase):
         self.assertAlmostEqual(mid.y, 3)
 
     def test_add_non_point_returns_not_implemented(self):
-        """Adding a non-Point returns NotImplemented (no TypeError from Point itself)."""
+        """Adding a non-Point returns NotImplemented
+        (no TypeError from Point itself)."""
         p = Point(1, 2)
         result = p.__add__(42)
         self.assertIs(result, NotImplemented)
@@ -199,7 +209,8 @@ class TestPointMoveTowards(unittest.TestCase):
         bez = CubicBezier(Point(0, 0), Point(33, 0), Point(66, 0), Point(100, 0))
         p = bez.point_at_t(0.3)  # ≈ 30 mm along
         result = p.move_towards(bez, 20)
-        # Should land near x=50; allow 0.5 mm tolerance for round-trip arc-length accumulation
+        # Should land near x=50; allow 0.5 mm tolerance for
+        # round-trip arc-length accumulation
         self.assertAlmostEqual(result.x, 50.0, places=0)
         self.assertAlmostEqual(result.y, 0.0, places=3)
 
@@ -257,7 +268,8 @@ class TestPointMoveTowards(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_circle_ccw(self):
-        """Moving CCW along a circle by π*r (half circumference) reaches the antipode."""
+        """Moving CCW along a circle by π*r (half circumference)
+        reaches the antipode."""
         c = Circle(Point(0, 0), 10)
         p = c.point_at_angle(0)  # (10, 0)
         half_circ = math.pi * 10
@@ -611,12 +623,8 @@ class TestCircle(unittest.TestCase):
         self.assertTrue(circle.contains_point_inside(Point(3, 0)))  # Inside
 
         # Boundary
-        self.assertTrue(
-            circle.contains_point_inside(Point(5, 0), include_boundary=True)
-        )
-        self.assertFalse(
-            circle.contains_point_inside(Point(5, 0), include_boundary=False)
-        )
+        self.assertTrue(circle.contains_point_inside(Point(5, 0), include_boundary=True))
+        self.assertFalse(circle.contains_point_inside(Point(5, 0), include_boundary=False))
 
         # Outside
         self.assertFalse(circle.contains_point_inside(Point(10, 0)))
@@ -767,12 +775,8 @@ class TestCubicBezierBoundingBox(unittest.TestCase):
         bez = self._make_curve()
         mn, mx = bez.bounding_box()
         # Control points are at y=0 and y=20 – the curve never reaches them
-        self.assertGreater(
-            mn.y, 0.0, "y_min must be above the off-curve control point y=0"
-        )
-        self.assertLess(
-            mx.y, 20.0, "y_max must be below the off-curve control point y=20"
-        )
+        self.assertGreater(mn.y, 0.0, "y_min must be above the off-curve control point y=0")
+        self.assertLess(mx.y, 20.0, "y_max must be below the off-curve control point y=20")
 
     def test_bbox_y_values_are_correct(self):
         """Exact y extrema match the analytic result (also verified by svgpathtools)."""
@@ -844,12 +848,8 @@ class TestCubicBezierIntersect(unittest.TestCase):
         tol = 0.05  # mm – sampling grid resolution bound
         pts = intersect(self._A, self._B)
         for pt in pts:
-            min_d_a = min(
-                pt.distance_to(self._A.point_at_t(k / 1000)) for k in range(1001)
-            )
-            min_d_b = min(
-                pt.distance_to(self._B.point_at_t(k / 1000)) for k in range(1001)
-            )
+            min_d_a = min(pt.distance_to(self._A.point_at_t(k / 1000)) for k in range(1001))
+            min_d_b = min(pt.distance_to(self._B.point_at_t(k / 1000)) for k in range(1001))
             self.assertLess(min_d_a, tol, f"Point {pt} is not on curve A")
             self.assertLess(min_d_b, tol, f"Point {pt} is not on curve B")
 
@@ -926,8 +926,8 @@ class TestCubicBezierNewMethods(unittest.TestCase):
     def test_length_is_property(self):
         """length must be accessible as a property (no call parentheses)."""
         b = self._curve()
-        l = b.length  # must not raise TypeError
-        self.assertGreater(l, 0.0)
+        curve_len = b.length  # must not raise TypeError
+        self.assertGreater(curve_len, 0.0)
 
     # ── normal_at_t ─────────────────────────────────────────────────────────
 
@@ -1090,10 +1090,8 @@ class TestCubicBezierSplitAtPoints(unittest.TestCase):
     def test_split_at_points_chain_is_continuous(self):
         """End of each sub-curve must equal the start of the next."""
         b = self._curve()
-        subs = b.split_at_points(
-            [b.point_at_t(0.2), b.point_at_t(0.6), b.point_at_t(0.9)]
-        )
-        for a, c in zip(subs, subs[1:]):
+        subs = b.split_at_points([b.point_at_t(0.2), b.point_at_t(0.6), b.point_at_t(0.9)])
+        for a, c in zip(subs, subs[1:], strict=False):
             self.assertAlmostEqual(a.p3.x, c.p0.x, places=6)
             self.assertAlmostEqual(a.p3.y, c.p0.y, places=6)
 
@@ -1104,7 +1102,7 @@ class TestCubicBezierSplitAtPoints(unittest.TestCase):
         forward = b.split_at_points([pa, pb])
         backward = b.split_at_points([pb, pa])
         self.assertEqual(len(forward), len(backward))
-        for a, c in zip(forward, backward):
+        for a, c in zip(forward, backward, strict=False):
             self.assertAlmostEqual(a.length, c.length, places=4)
 
     def test_split_at_endpoint_produces_no_degenerate_stub(self):
@@ -1248,10 +1246,8 @@ class TestSegmentNewMethods(unittest.TestCase):
     def test_split_at_points_chain_is_continuous(self):
         """End of each sub-segment must equal start of the next."""
         s = self._seg()
-        subs = s.split_at_points(
-            [s.point_at_t(0.2), s.point_at_t(0.6), s.point_at_t(0.9)]
-        )
-        for a, b in zip(subs, subs[1:]):
+        subs = s.split_at_points([s.point_at_t(0.2), s.point_at_t(0.6), s.point_at_t(0.9)])
+        for a, b in zip(subs, subs[1:], strict=False):
             self.assertAlmostEqual(a.p2.x, b.p1.x, places=6)
             self.assertAlmostEqual(a.p2.y, b.p1.y, places=6)
 
@@ -1262,7 +1258,7 @@ class TestSegmentNewMethods(unittest.TestCase):
         forward = s.split_at_points([pa, pb])
         backward = s.split_at_points([pb, pa])
         self.assertEqual(len(forward), len(backward))
-        for a, b in zip(forward, backward):
+        for a, b in zip(forward, backward, strict=False):
             self.assertAlmostEqual(a.length, b.length, places=6)
 
     def test_split_at_endpoint_produces_no_degenerate_stub(self):
@@ -1369,9 +1365,6 @@ class TestCubicBezierConsistencyMethods(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-from sewpat.geometry import miter_corner, round_corner
-
-
 class TestMiterCornerReflex(unittest.TestCase):
     """Tests for the reflex-corner (concave) detection in miter_corner()."""
 
@@ -1391,7 +1384,6 @@ class TestMiterCornerReflex(unittest.TestCase):
 
     def test_convex_corner_miter_extends_outward(self):
         """A convex 90° corner must produce a miter point outside the original seams."""
-        geoms = self._rect_offset_geoms()
         # Corner between top (→) and right (↓): expected miter at (110, -10)
         # which is the exact intersection — gap is 0 but we test conceptually.
         # Use two perpendicular segments that meet at a gap:
@@ -1409,8 +1401,6 @@ class TestMiterCornerReflex(unittest.TestCase):
         ga goes left (←) and gb goes right (→) — a 180°-reversal / hairpin,
         which is the extreme reflex case.
         """
-        ga = Segment(Point(50, 5), Point(0, 5))  # going left, end at (0,5)
-        gb = Segment(Point(0, 5), Point(50, 5))  # going right, start at (0,5)
         # For a less extreme case: ga ends at (10,0) going right, gb starts at
         # (10, 20) going right — the miter intersection would be far behind.
         ga2 = Segment(Point(0, 0), Point(10, 0))  # → end=(10,0)
@@ -1605,9 +1595,7 @@ class TestDartRoof(unittest.TestCase):
         dart_narrow = self._make_symmetric_dart(width=20.0, depth=80.0)
         dart_wide = self._make_symmetric_dart(width=60.0, depth=80.0)
         # For this setup tip is at y=-80, seam at y=0; roof is at y > 0
-        rise_narrow = np.linalg.norm(
-            dart_narrow.roof.coords - dart_narrow.center.coords
-        )
+        rise_narrow = np.linalg.norm(dart_narrow.roof.coords - dart_narrow.center.coords)
         rise_wide = np.linalg.norm(dart_wide.roof.coords - dart_wide.center.coords)
         self.assertGreater(rise_wide, rise_narrow)
 

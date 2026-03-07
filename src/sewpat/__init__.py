@@ -1,6 +1,8 @@
 """Sewpat — a Python library for generating sewing patterns."""
 
-from .element import PatternElement, PrecisionPoint
+from .blocks import TopBlock, TopBlockBack, TopBlockFront
+from .element import GeometryType, PatternElement, PrecisionPoint
+from .fitclass import FitClass
 from .geometry import (
     Circle,
     CubicBezier,
@@ -19,19 +21,19 @@ from .geometry import (
     segment_to_intersection,
 )
 from .measurements import (
-    Allowance,
     BlouseMeasurements,
+    GarmentConfig,
     HipDistribution,
-    ModelConfig,
+    TrouserConfig,
+    TrouserEase,
     TrouserMeasurements,
     WaistDistribution,
     calculate_hip_distribution,
     calculate_waist_distribution,
-    make_blouse_measurements,
     make_measurements_trouser,
+    make_top_measurements,
 )
 from .pages import DinA0, DinA1, DinA2, DinA4
-from .blocks import TopBlock, TopBlockBack, TopBlockFront
 from .pattern import (
     Block,
     ConstructionGrid,
@@ -41,6 +43,15 @@ from .pattern import (
     OverlayPart,
     Pattern,
     PatternPart,
+)
+from .person import (
+    BalanceAdjustments,
+    BalancedPerson,
+    Gender,
+    Person,
+    PersonalAdjustments,
+    PersonAnalyser,
+    load_person,
 )
 from .style import (
     DEFAULT_STROKE_WIDTH,
@@ -57,6 +68,7 @@ from .style import (
     STYLE_PRECISION_POINT,
     STYLE_SEAM_ALLOWANCE,
     STYLE_STITCH,
+    STYLE_STITCH_BEVEL,
     STYLE_WAISTBAND,
     Marker,
     StyleOptions,
@@ -90,6 +102,7 @@ __all__ = [
     "TopBlockBack",
     "TopBlockFront",
     # Pattern element
+    "GeometryType",
     "PatternElement",
     "PrecisionPoint",
     # Dart result
@@ -108,12 +121,26 @@ __all__ = [
     "DinA1",
     "DinA0",
     # Measurements
-    "Allowance",
     "BlouseMeasurements",
     "TrouserMeasurements",
-    "ModelConfig",
-    "make_blouse_measurements",
+    "TrouserEase",
+    "GarmentConfig",
+    "TrouserConfig",
+    "HipDistribution",
+    "WaistDistribution",
+    "FitClass",
+    "make_top_measurements",
     "make_measurements_trouser",
+    "calculate_hip_distribution",
+    "calculate_waist_distribution",
+    # Person
+    "Person",
+    "BalancedPerson",
+    "Gender",
+    "BalanceAdjustments",
+    "PersonalAdjustments",
+    "PersonAnalyser",
+    "load_person",
     # Style
     "StyleOptions",
     "Marker",
@@ -123,6 +150,7 @@ __all__ = [
     "STYLE_FOLD",
     "STYLE_HEM",
     "STYLE_STITCH",
+    "STYLE_STITCH_BEVEL",
     "STYLE_CUT",
     "STYLE_WAISTBAND",
     "STYLE_CENTER_LINE",

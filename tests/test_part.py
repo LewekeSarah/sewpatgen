@@ -13,6 +13,7 @@ import math
 import unittest
 from typing import cast
 
+from sewpat.element import PatternElement
 from sewpat.geometry import (
     Circle,
     CubicBezier,
@@ -23,7 +24,6 @@ from sewpat.geometry import (
     Triangle,
     seam_length,
 )
-from sewpat.element import PatternElement
 from sewpat.pattern import Block, OverlayPart, Pattern, PatternPart
 from sewpat.style import STYLE_GRAINLINE, StyleOptions
 from sewpat.units import CM, MM
@@ -401,9 +401,7 @@ class TestAddPrecisionPoints(unittest.TestCase):
         """Circles have the correct radii (5 mm outer, 0.5 mm inner)."""
         part = PatternPart(name="Body")
         part.add_precision_points(Point(0, 0))
-        radii = sorted(
-            e.geometry.radius for e in part.elements if isinstance(e.geometry, Circle)
-        )
+        radii = sorted(e.geometry.radius for e in part.elements if isinstance(e.geometry, Circle))
         self.assertAlmostEqual(radii[0], 0.2 * MM)
         self.assertAlmostEqual(radii[1], 2.0 * MM)
 
@@ -444,12 +442,8 @@ class TestAddNotches(unittest.TestCase):
         """With a segment, a Triangle is still produced."""
         part = PatternPart(name="Body")
         part.append(Segment(Point(0, 0), Point(10 * CM, 0)), is_outline=True)
-        part.append(
-            Segment(Point(10 * CM, 0), Point(10 * CM, 10 * CM)), is_outline=True
-        )
-        part.append(
-            Segment(Point(10 * CM, 10 * CM), Point(0, 10 * CM)), is_outline=True
-        )
+        part.append(Segment(Point(10 * CM, 0), Point(10 * CM, 10 * CM)), is_outline=True)
+        part.append(Segment(Point(10 * CM, 10 * CM), Point(0, 10 * CM)), is_outline=True)
         part.append(Segment(Point(0, 10 * CM), Point(0, 0)), is_outline=True)
         seg = Segment(Point(0, 10 * CM), Point(10 * CM, 10 * CM))
         mid = Point(5 * CM, 10 * CM)
@@ -461,12 +455,8 @@ class TestAddNotches(unittest.TestCase):
         """Notch tip points toward the centroid (inward), not outward."""
         part = PatternPart(name="Body")
         part.append(Segment(Point(0, 0), Point(10 * CM, 0)), is_outline=True)
-        part.append(
-            Segment(Point(10 * CM, 0), Point(10 * CM, 10 * CM)), is_outline=True
-        )
-        part.append(
-            Segment(Point(10 * CM, 10 * CM), Point(0, 10 * CM)), is_outline=True
-        )
+        part.append(Segment(Point(10 * CM, 0), Point(10 * CM, 10 * CM)), is_outline=True)
+        part.append(Segment(Point(10 * CM, 10 * CM), Point(0, 10 * CM)), is_outline=True)
         part.append(Segment(Point(0, 10 * CM), Point(0, 0)), is_outline=True)
         # Bottom edge: y = 10 cm → centroid is at y = 5 cm → inward = up (negative y)
         seg = Segment(Point(0, 10 * CM), Point(10 * CM, 10 * CM))
@@ -492,7 +482,7 @@ class TestAddNotches(unittest.TestCase):
     # Automatic dual-notch (seam-line + SA-line) tests
     # ------------------------------------------------------------------
 
-    def _square_part_with_sa(self, sa_dist: float = 10.0) -> "PatternPart":
+    def _square_part_with_sa(self, sa_dist: float = 10.0) -> PatternPart:
         """100×100 mm square with seam allowance already added."""
         part = PatternPart(name="Square")
         part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
@@ -510,17 +500,11 @@ class TestAddNotches(unittest.TestCase):
         seam_seg = Segment(Point(0, 0), Point(100, 0))
         n_before = len(part.elements)
         part.add_notches(Point(50, 0), seam_edge=seam_seg)
-        triangles = [
-            e for e in part.elements[n_before:] if isinstance(e.geometry, Triangle)
-        ]
+        triangles = [e for e in part.elements[n_before:] if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 2)
         sa_flags = [e.is_seam_allowance for e in triangles]
-        self.assertIn(
-            False, sa_flags, "Expected one seam-line triangle (is_seam_allowance=False)"
-        )
-        self.assertIn(
-            True, sa_flags, "Expected one SA-line triangle (is_seam_allowance=True)"
-        )
+        self.assertIn(False, sa_flags, "Expected one seam-line triangle (is_seam_allowance=False)")
+        self.assertIn(True, sa_flags, "Expected one SA-line triangle (is_seam_allowance=True)")
 
     def test_without_sa_produces_one_notch_triangle(self):
         """Without add_seam_allowance, add_notches produces only one triangle
@@ -533,9 +517,7 @@ class TestAddNotches(unittest.TestCase):
         seam_seg = Segment(Point(0, 0), Point(100, 0))
         n_before = len(part.elements)
         part.add_notches(Point(50, 0), seam_edge=seam_seg)
-        triangles = [
-            e for e in part.elements[n_before:] if isinstance(e.geometry, Triangle)
-        ]
+        triangles = [e for e in part.elements[n_before:] if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 1)
         self.assertFalse(triangles[0].is_seam_allowance)
 
@@ -552,9 +534,12 @@ class TestAddNotches(unittest.TestCase):
         )
         base_y = (seam_tri.geometry.p1.y + seam_tri.geometry.p2.y) / 2
         self.assertAlmostEqual(base_y, 0.0, delta=0.5)
+        """The SA triangle (is_seam_allowance=True) has its base
+        on the SA edge (y≈-10)."""
 
     def test_sa_notch_sits_on_sa_edge(self):
-        """The SA triangle (is_seam_allowance=True) has its base on the SA edge (y≈-10)."""
+        """The SA triangle (is_seam_allowance=True)
+        has its base on the SA edge (y≈-10)."""
         sa_dist = 10.0
         part = self._square_part_with_sa(sa_dist)
         seam_seg = Segment(Point(0, 0), Point(100, 0))
@@ -611,18 +596,21 @@ class TestProjectDartNotchesToSA(unittest.TestCase):
     _project_dart_notches_to_sa().
     """
 
-    def _square_part_with_dart(self) -> "PatternPart":
+    def _square_part_with_dart(self) -> PatternPart:
         """100×100 mm square with a triangle dart on the top edge, SA not yet added."""
         from sewpat.geometry import Dart
+
         part = PatternPart(name="DartSquare")
-        part.append(Segment(Point(0, 0),   Point(100, 0)),   is_outline=True)
+        dart_edge = Segment(Point(0, 100), Point(0, 0))
+        part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
         part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True)
         part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
-        part.append(Segment(Point(0, 100), Point(0, 0)),     is_outline=True)
-        dart = Dart.from_tip_and_legs(
+        part.append(dart_edge, is_outline=True)
+        dart = Dart.from_edge_at_legs(
             tip=Point(50, 80),
             leg_a=Point(40, 0),
             leg_b=Point(60, 0),
+            edge=dart_edge,
         )
         part.add_dart(dart)
         return part
@@ -633,13 +621,13 @@ class TestProjectDartNotchesToSA(unittest.TestCase):
         part.add_seam_allowance(10.0)
 
         sa_dart_notches = [
-            e for e in part.elements
-            if e.role == "dart_notch"
-            and e.is_seam_allowance
-            and isinstance(e.geometry, Triangle)
+            e
+            for e in part.elements
+            if e.role == "dart_notch" and e.is_seam_allowance and isinstance(e.geometry, Triangle)
         ]
         self.assertGreaterEqual(
-            len(sa_dart_notches), 2,
+            len(sa_dart_notches),
+            2,
             "Expected at least one SA notch per dart leg (leg_a and leg_b)",
         )
 
@@ -650,7 +638,8 @@ class TestProjectDartNotchesToSA(unittest.TestCase):
         part.add_seam_allowance(10.0)
 
         seam_notches = [
-            e for e in part.elements
+            e
+            for e in part.elements
             if e.role == "dart_notch"
             and not e.is_seam_allowance
             and isinstance(e.geometry, Triangle)
@@ -668,16 +657,17 @@ class TestProjectDartNotchesToSA(unittest.TestCase):
         part.add_seam_allowance(sa_dist)
 
         sa_dart_notches = [
-            e for e in part.elements
-            if e.role == "dart_notch"
-            and e.is_seam_allowance
-            and isinstance(e.geometry, Triangle)
+            e
+            for e in part.elements
+            if e.role == "dart_notch" and e.is_seam_allowance and isinstance(e.geometry, Triangle)
         ]
         for e in sa_dart_notches:
             tri = e.geometry
             base_y = (tri.p1.y + tri.p2.y) / 2
             self.assertAlmostEqual(
-                base_y, -sa_dist, delta=1.5,
+                base_y,
+                -sa_dist,
+                delta=1.5,
                 msg="SA dart notch base should be on the SA edge",
             )
 
@@ -685,19 +675,16 @@ class TestProjectDartNotchesToSA(unittest.TestCase):
         """Calling add_seam_allowance a second time must not duplicate SA notches."""
         part = self._square_part_with_dart()
         part.add_seam_allowance(10.0)
-        count_after_first = len([
-            e for e in part.elements
-            if e.role == "dart_notch" and e.is_seam_allowance
-        ])
-        # A second SA call (e.g. re-generation) should not project again because
-        # the seam-line notches are already marked is_seam_notch=True.
+        count_after_first = len(
+            [e for e in part.elements if e.role == "dart_notch" and e.is_seam_allowance]
+        )
         part.add_seam_allowance(10.0)
-        count_after_second = len([
-            e for e in part.elements
-            if e.role == "dart_notch" and e.is_seam_allowance
-        ])
+        count_after_second = len(
+            [e for e in part.elements if e.role == "dart_notch" and e.is_seam_allowance]
+        )
         self.assertEqual(
-            count_after_first, count_after_second,
+            count_after_first,
+            count_after_second,
             "A second add_seam_allowance must not re-project already-projected notches",
         )
 
@@ -864,12 +851,14 @@ class TestAddGrainlineClipping(unittest.TestCase):
         self.assertAlmostEqual(seg.p2.x, 80.0, places=3)
 
     def test_start_outside_is_nudged_inward(self):
-        """Start point outside → nudged to on or inside the boundary on the left side."""
+        """Start point outside → nudged to on or inside the boundary
+        on the left side."""
         part = self._square_part(100)
         # Horizontal line: start at x=-20 (outside), end at x=80 (inside)
         elem = part.add_grainline(Point(-20, 50), Point(80, 50))
         seg = cast(Segment, elem.geometry)
-        # Nudged start must be on or inside the boundary (x >= 0) and close to the left edge
+        # Nudged start must be on or inside the boundary (x >= 0)
+        # and close to the left edge
         self.assertGreaterEqual(seg.p1.x, 0.0)
         self.assertLess(seg.p1.x, 5.0)
         self.assertAlmostEqual(seg.p1.y, 50.0, places=3)
@@ -889,7 +878,8 @@ class TestAddGrainlineClipping(unittest.TestCase):
         self.assertAlmostEqual(seg.p2.y, 50.0, places=3)
 
     def test_both_outside_nudged_inward(self):
-        """Both endpoints outside but line crosses the square → both nudged to boundary or inside."""
+        """Both endpoints outside but line crosses the square →
+        both nudged to boundary or inside."""
         part = self._square_part(100)
         # Vertical line crossing the full square from y=-20 to y=120
         elem = part.add_grainline(Point(50, -20), Point(50, 120))
@@ -936,9 +926,7 @@ class TestAddGrainlineClipping(unittest.TestCase):
 class TestAddReferenceSquarePlacement(unittest.TestCase):
     """Tests for the auto-placement logic in Pattern.add_reference_square."""
 
-    def _pattern_with_square_part(
-        self, size: float = 200.0
-    ) -> tuple[Pattern, PatternPart]:
+    def _pattern_with_square_part(self, size: float = 200.0) -> tuple[Pattern, PatternPart]:
         """Helper: a Pattern with one rectangular PatternPart."""
         part = PatternPart(name="Body")
         part.append(Segment(Point(0, 0), Point(size, 0)), is_outline=True)
@@ -998,9 +986,7 @@ class TestAddReferenceSquarePlacement(unittest.TestCase):
         pat.add_part(part_b)
         edge = 3 * CM
         # Pass origin outside both parts; anchor to part_a (50 × 50 mm)
-        elem = pat.add_reference_square(
-            Point(-100, -100), edge_length=edge, part=part_a
-        )
+        elem = pat.add_reference_square(Point(-100, -100), edge_length=edge, part=part_a)
         rect = cast(Rect, elem.geometry)
         # Square must fit inside part_a's 50 mm extent
         self.assertLessEqual(rect.origin.x + edge, 50.0)
@@ -1051,9 +1037,7 @@ class TestSeamLength(unittest.TestCase):
     def test_mixed_segment_and_bezier(self):
         """A straight segment plus a collinear Bézier: lengths add up correctly."""
         seg = Segment(Point(0, 0), Point(50, 0))  # 50 mm
-        bez = CubicBezier(
-            Point(0, 0), Point(0, 25), Point(0, 75), Point(0, 100)
-        )  # 100 mm straight
+        bez = CubicBezier(Point(0, 0), Point(0, 25), Point(0, 75), Point(0, 100))  # 100 mm straight
         total = seam_length([seg, bez])
         self.assertAlmostEqual(total, 150.0, places=2)
 
@@ -1079,9 +1063,7 @@ class TestSeamLength(unittest.TestCase):
     def test_part_seam_length_by_name(self):
         """PatternPart.seam_length() looks up elements by name."""
         part = PatternPart(name="Front")
-        part.append(
-            Segment(Point(0, 0), Point(60, 0), name="Seitennaht"), is_outline=True
-        )
+        part.append(Segment(Point(0, 0), Point(60, 0), name="Seitennaht"), is_outline=True)
         self.assertAlmostEqual(part.seam_length(["Seitennaht"]), 60.0, places=6)
 
     def test_part_seam_length_multiple_named(self):
@@ -1113,16 +1095,15 @@ class TestSeamLength(unittest.TestCase):
         self.assertAlmostEqual(part.seam_length([elem]), 70.0, places=6)
 
     def test_part_seam_length_pattern_element_non_geometry_skipped(self):
-        """A PatternElement wrapping a non-geometry object (e.g. Circle) is silently skipped."""
+        """A PatternElement wrapping a non-geometry object
+        (e.g. Circle) is silently skipped."""
         from sewpat.geometry import Circle
 
         part = PatternPart(name="Front")
         seg_elem = part.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True)
         circle_elem = part.append(Circle(Point(25, 0), radius=5))
         # Only the segment contributes; circle is silently ignored
-        self.assertAlmostEqual(
-            part.seam_length([seg_elem, circle_elem]), 50.0, places=6
-        )
+        self.assertAlmostEqual(part.seam_length([seg_elem, circle_elem]), 50.0, places=6)
 
     def test_part_seam_length_wrong_type_raises(self):
         """Passing an unsupported type raises TypeError."""
@@ -1161,11 +1142,9 @@ class TestSeamAllowanceReversal(unittest.TestCase):
     def _sa_distances(self, part: PatternPart, global_sa: float) -> list[float]:
         """Return the lengths of all SA segments added to *part*."""
         sa_elems = [e for e in part.elements if e.is_seam_allowance]
-        from sewpat.geometry import CubicBezier as _CB
-        from sewpat.geometry import Segment as _S
 
         return [
-            e.geometry.length for e in sa_elems if isinstance(e.geometry, (_S, _CB))
+            e.geometry.length for e in sa_elems if isinstance(e.geometry, (Segment, CubicBezier))
         ]
 
     def test_reversed_waistband_gets_correct_sa(self):
@@ -1219,9 +1198,7 @@ class TestSeamAllowanceReversal(unittest.TestCase):
         ]
         # The SA segment offset from the waistband (y=0) should be near y=-30
         waistband_sa = [
-            s
-            for s in sa_segs
-            if abs(s.p1.y - (-30.0)) < 5.0 or abs(s.p2.y - (-30.0)) < 5.0
+            s for s in sa_segs if abs(s.p1.y - (-30.0)) < 5.0 or abs(s.p2.y - (-30.0)) < 5.0
         ]
         self.assertTrue(
             len(waistband_sa) > 0,
@@ -1449,18 +1426,14 @@ class TestBlock(unittest.TestCase):
         from sewpat.render import export_pattern_svg_mm
 
         block = Block(name="Grundschnitt")
-        block.append(
-            Segment(Point(0, 0), Point(50, 0), name="Oberkante"), is_outline=True
-        )
+        block.append(Segment(Point(0, 0), Point(50, 0), name="Oberkante"), is_outline=True)
 
         pat = Pattern(name="Test")
         pat.add_part(block)
 
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
-        export_pattern_svg_mm(
-            pat, fname, width_mm=200, height_mm=200, parts=["Grundschnitt"]
-        )
+        export_pattern_svg_mm(pat, fname, width_mm=200, height_mm=200, parts=["Grundschnitt"])
         svg = Path(fname).read_text()
 
         self.assertIn("Oberkante", svg)
@@ -1577,7 +1550,7 @@ class TestOverlayPart(unittest.TestCase):
         _, pocket = self._pocket_overlay()
         offset = Point(110, 0)
         result = pocket.explode(offset=offset)
-        for orig, expl in zip(pocket.elements, result.elements):
+        for orig, expl in zip(pocket.elements, result.elements, strict=False):
             orig_s = orig.geometry  # Segment
             expl_s = expl.geometry
             self.assertAlmostEqual(expl_s.p1.x, orig_s.p1.x + 110, places=6)
@@ -1586,7 +1559,7 @@ class TestOverlayPart(unittest.TestCase):
     def test_explode_is_outline_flag_preserved(self):
         _, pocket = self._pocket_overlay()
         result = pocket.explode(offset=Point(110, 0))
-        for orig, expl in zip(pocket.elements, result.elements):
+        for orig, expl in zip(pocket.elements, result.elements, strict=False):
             self.assertEqual(expl.is_outline, orig.is_outline)
 
     def test_explode_is_seam_allowance_flag_preserved(self):
@@ -1601,9 +1574,7 @@ class TestOverlayPart(unittest.TestCase):
         front = _front_part()
         pocket = OverlayPart(name="Tasche", parent=front)
         style = StyleOptions(stroke_color="red")
-        pocket.append(
-            Segment(Point(10, 10), Point(40, 10)), style=style, is_outline=True
-        )
+        pocket.append(Segment(Point(10, 10), Point(40, 10)), style=style, is_outline=True)
         result = pocket.explode(offset=Point(110, 0))
         self.assertEqual(result.elements[0].style.stroke_color, "red")
 

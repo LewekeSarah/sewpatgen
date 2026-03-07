@@ -5,14 +5,11 @@ import warnings
 
 import pytest
 
-from sewpat import CM, MM, Dart, DartResult, DartType, Point, Segment
-from sewpat.geometry import CubicBezier
+from sewpat import CubicBezier, Dart, DartResult, DartType, Point, Segment
 from sewpat.element import PatternElement
 from sewpat.pattern import PatternPart
 from sewpat.style import STYLE_DART_FOLD, STYLE_DART_STITCH, StyleOptions
 
-
-# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
@@ -97,9 +94,7 @@ class TestDartGeometry:
         assert d2.stitch_line_a is curve
 
     def test_effective_second_tip_defaults_to_mirror(self) -> None:
-        d = Dart(
-            Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80), dart_type="rhombus"
-        )
+        d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80), dart_type="rhombus")
         assert d.effective_second_tip.x == pytest.approx(50.0)
         assert d.effective_second_tip.y == pytest.approx(-80.0)
 
@@ -117,16 +112,12 @@ class TestDartGeometry:
 
     def test_intake_angle_deg(self) -> None:
         d = _simple_dart()
-        assert d.intake_angle_deg == pytest.approx(
-            math.degrees(d.intake_angle), rel=1e-9
-        )
+        assert d.intake_angle_deg == pytest.approx(math.degrees(d.intake_angle), rel=1e-9)
 
     def test_intake_angle_deg_45(self) -> None:
         """A dart with width == 2*depth has a 90° total intake angle."""
         d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 10))
-        assert d.intake_angle_deg == pytest.approx(
-            2 * math.degrees(math.atan(1.0)), rel=1e-6
-        )
+        assert d.intake_angle_deg == pytest.approx(2 * math.degrees(math.atan(1.0)), rel=1e-6)
 
     def test_roof_displaced_outward(self) -> None:
         """roof must be beyond center (away from tip) along the fold direction."""
@@ -218,7 +209,10 @@ class TestDartSecondTipWarning:
     def test_direct_init_triangle_warns(self) -> None:
         with pytest.warns(UserWarning, match="second_tip"):
             Dart(
-                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
+                Point(50, 0),
+                Point(50, 80),
                 dart_type=DartType.TRIANGLE,
                 second_tip=self._second_tip,
             )
@@ -226,7 +220,9 @@ class TestDartSecondTipWarning:
     def test_from_tip_center_width_triangle_warns(self) -> None:
         with pytest.warns(UserWarning, match="second_tip"):
             Dart.from_tip_center_width(
-                tip=Point(50, 80), center=Point(50, 0), width=20.0,
+                tip=Point(50, 80),
+                center=Point(50, 0),
+                width=20.0,
                 dart_type=DartType.TRIANGLE,
                 second_tip=self._second_tip,
             )
@@ -234,7 +230,9 @@ class TestDartSecondTipWarning:
     def test_from_tip_and_legs_triangle_warns(self) -> None:
         with pytest.warns(UserWarning, match="second_tip"):
             Dart.from_tip_and_legs(
-                Point(50, 80), Point(40, 0), Point(60, 0),
+                Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
                 dart_type=DartType.TRIANGLE,
                 second_tip=self._second_tip,
             )
@@ -242,7 +240,10 @@ class TestDartSecondTipWarning:
     def test_warning_message_mentions_dart_type(self) -> None:
         with pytest.warns(UserWarning, match="triangle"):
             Dart(
-                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
+                Point(50, 0),
+                Point(50, 80),
                 dart_type=DartType.TRIANGLE,
                 second_tip=self._second_tip,
             )
@@ -250,7 +251,10 @@ class TestDartSecondTipWarning:
     def test_warning_is_user_warning(self) -> None:
         with pytest.warns(UserWarning):
             Dart(
-                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
+                Point(50, 0),
+                Point(50, 80),
                 dart_type=DartType.TRIANGLE,
                 second_tip=self._second_tip,
             )
@@ -261,7 +265,10 @@ class TestDartSecondTipWarning:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             Dart(
-                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
+                Point(50, 0),
+                Point(50, 80),
                 dart_type=DartType.RHOMBUS,
                 second_tip=self._second_tip,
             )
@@ -275,7 +282,10 @@ class TestDartSecondTipWarning:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             Dart(
-                Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
+                Point(50, 0),
+                Point(50, 80),
                 dart_type=DartType.RHOMBUS,
             )
 
@@ -283,7 +293,9 @@ class TestDartSecondTipWarning:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             Dart.from_tip_center_width(
-                tip=Point(50, 80), center=Point(50, 0), width=20.0,
+                tip=Point(50, 80),
+                center=Point(50, 0),
+                width=20.0,
                 dart_type=DartType.RHOMBUS,
                 second_tip=self._second_tip,
             )
@@ -292,10 +304,27 @@ class TestDartSecondTipWarning:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             Dart.from_tip_and_legs(
-                Point(50, 80), Point(40, 0), Point(60, 0),
+                Point(50, 80),
+                Point(40, 0),
+                Point(60, 0),
                 dart_type=DartType.RHOMBUS,
                 second_tip=self._second_tip,
             )
+
+    def test_rhombus_with_second_tip(self) -> None:
+        d = Dart(
+            Point(40, 0),
+            Point(60, 0),
+            Point(50, 0),
+            Point(50, 80),
+            dart_type=DartType.RHOMBUS,
+            second_tip=self._second_tip,
+        )
+        assert d.second_tip == self._second_tip
+
+    def test_triangle_without_second_tip(self) -> None:
+        d = Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80))
+        assert d.second_tip is None
 
 
 class TestDartSplit:
@@ -303,9 +332,7 @@ class TestDartSplit:
         d = _simple_dart()
         a, b = d.split(0.5)
         assert a.tip.x == pytest.approx(d.tip.x)
-        assert a.intake_angle + b.intake_angle == pytest.approx(
-            d.intake_angle, rel=1e-4
-        )
+        assert a.intake_angle + b.intake_angle == pytest.approx(d.intake_angle, rel=1e-4)
 
     def test_split_asymmetric(self) -> None:
         d = _simple_dart()
@@ -467,9 +494,7 @@ class TestDartFactories:
     def test_from_edge_free_tip_invalid_t(self) -> None:
         edge = PatternElement(Segment(Point(0, 0), Point(100, 0)))
         with pytest.raises(ValueError, match="t must be"):
-            Dart.from_edge_free_tip(
-                edge, t=-0.1, width=20.0, reference_point=Point(50, 100)
-            )
+            Dart.from_edge_free_tip(edge, t=-0.1, width=20.0, reference_point=Point(50, 100))
 
     def test_from_edge_at_t_bezier(self) -> None:
         bez = CubicBezier(Point(0, 0), Point(33.3, 0), Point(66.6, 0), Point(100, 0))
@@ -638,7 +663,6 @@ class TestDartResult:
 
     def test_elements_all_added_to_part(self) -> None:
         part = _square_part()
-        baseline = len(part.elements)
         result = part.add_dart(_simple_dart(), notches=True, precision_tip=True)
         assert all(e in part.elements for e in result.elements)
 
@@ -663,16 +687,15 @@ class TestAddDartCurved:
     """add_dart() must use stitch_curve_a/b geometry when set."""
 
     def test_curved_stitch_elements_are_not_segments(self) -> None:
-        from sewpat.geometry import CubicBezier as _CB
 
         d = _simple_dart()
         # Replace straight legs with explicit CubicBezier curves
         cp1a = Point(50, 60)
         cp2a = Point(43, 20)
-        curve_a = _CB(d.tip, cp1a, cp2a, d.leg_a)
+        curve_a = CubicBezier(d.tip, cp1a, cp2a, d.leg_a)
         cp1b = Point(50, 60)
         cp2b = Point(57, 20)
-        curve_b = _CB(d.tip, cp1b, cp2b, d.leg_b)
+        curve_b = CubicBezier(d.tip, cp1b, cp2b, d.leg_b)
         d_curved = Dart(
             d.leg_a,
             d.leg_b,
@@ -685,7 +708,7 @@ class TestAddDartCurved:
         result = part.add_dart(d_curved, notches=False, precision_tip=False)
         stitch_geoms = [e.geometry for e in result.elements if e.role == "dart_stitch"]
         assert len(stitch_geoms) == 2
-        assert all(isinstance(g, _CB) for g in stitch_geoms)
+        assert all(isinstance(g, CubicBezier) for g in stitch_geoms)
 
 
 class TestDartSeamAllowance:
@@ -696,10 +719,7 @@ class TestDartSeamAllowance:
         assert STYLE_DART_STITCH.seam_allowance == 0.0
 
     def test_dart_fold_style_no_seam_allowance(self) -> None:
-        assert (
-            STYLE_DART_FOLD.seam_allowance is None
-            or STYLE_DART_FOLD.seam_allowance == 0.0
-        )
+        assert STYLE_DART_FOLD.seam_allowance is None or STYLE_DART_FOLD.seam_allowance == 0.0
 
 
 class TestAddDartRhombusPrecisionTip:

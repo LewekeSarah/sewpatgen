@@ -3,86 +3,70 @@
 
 from pathlib import Path
 
-from sewpat import (
-    GarmentPart,
-)
+from sewpat import GarmentPart
 from sewpat.blocks import TopBlock
+from sewpat.fitclass import FitClass
 from sewpat.grids import TopGrid
-from sewpat.measurements import (
-    Allowance,
-    BlouseMeasurements,
-    ModelConfig,
-    make_blouse_measurements,
-)
+from sewpat.measurements import GarmentConfig, make_top_measurements
 from sewpat.pages import DinA0
 from sewpat.pattern import Pattern, PatternConfig
-from sewpat.person import BalanceAdjustments, Person
+from sewpat.person import (
+    BalanceAdjustments,
+    BalancedPerson,
+    PersonalAdjustments,
+    PersonAnalyser,
+    load_person,
+)
 from sewpat.render import export_pattern_svg_mm
 from sewpat.units import CM
 
 
-def make_person() -> Person:
-    return Person(
-        KöH=159 * CM,
-        BrU=83.5 * CM,
-        TaU=69.5 * CM,
-        HüU=93 * CM,
-        HüT=24 * CM,
-        BrT=27.5 * CM,
-        HlB=6.5 * CM,
-        BrPA=8.3 * CM,
-        SuB=12.1 * CM,
-        RüL=39 * CM,
-        VL=43.4 * CM,
-    )
-
-
-def make_allowance() -> Allowance:
-    return Allowance(
-        RüB=1.0 * CM,
-        ArD=2.0 * CM,
-        BrB=1.5 * CM,
-        AlT=1.5 * CM,
-        TaU=8.0 * CM,
-        HüU=6.0 * CM,
-    )
-
-
-def make_model_config() -> ModelConfig:
-    # TODO the ZuBrA depends on the Passformklasse PK <4: 0-0.5cm, 5 <= PK < 8: 1cm, PK >=0: 1.5cm
-    return ModelConfig(MoL=75 * CM, BeckenAdjustment=1 * CM, ZuBrA=0.5 * CM)
-
-
-def make_balance() -> BalanceAdjustments:
-    return BalanceAdjustments(VL=-0.9 * CM)
-
-
 class Part(GarmentPart):
     """Pattern parts for the waisted top with darts."""
-    GRID        = "Grid"
-    BLOCK_BACK  = "Block Back"
+
+    GRID = "Grid"
+    BLOCK_BACK = "Block Back"
     BLOCK_FRONT = "Block Front"
 
 
-# -----------------------------------------------------------------------
-def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
+def create_block(
+    person: BalancedPerson,
+    fit_class: FitClass,
+    adjustments: PersonalAdjustments,
+    config: GarmentConfig,
+) -> Pattern:
+    """Creates block pattern for a waisted top with darts.
 
-    config = PatternConfig()
-    pattern = Pattern(name="Waisted Top with Darts Block", anchor=config.anchor)
+    Args:
+        person:     Balanced person — obtain via PersonAnalyser.get_balanced_person().
+        fit_class:  Fit class defining construction offsets.
+        adjustments: Personal adjustments (hip offset, balance).
+        config:     Garment configuration (length, seam allowance).
 
-    # -----------------------------------------------------------------------
-    # Grid — construction detail lines
-    # -----------------------------------------------------------------------
-    grid = TopGrid.from_measurements(meas=meas, model=model, config=config)
+    Returns:
+        A Pattern object representing the waisted top with darts block.
+    """
+    meas = make_top_measurements(person, fit_class)
+
+    layout = PatternConfig()
+    pattern = Pattern(name="Waisted Top with Darts Block", anchor=layout.anchor)
+
+    grid = TopGrid.from_measurements(
+        meas=meas,
+        fit_class=fit_class,
+        hip_offset=adjustments.hip_offset,
+        config=config,
+        layout=layout,
+    )
     pattern.add_part(grid.part)
 
-    # -----------------------------------------------------------------------
-    # Block — both pieces built and returned as a typed TopBlock
-    # -----------------------------------------------------------------------
     block = TopBlock.from_measurements(
         meas=meas,
-        model=model,
         config=config,
+        fit_class=fit_class,
+        adjustments=adjustments,
+        grid=grid,
+        layout=layout,
         back_name=Part.BLOCK_BACK,
         front_name=Part.BLOCK_FRONT,
     )
@@ -93,15 +77,20 @@ def make_blouse(meas: BlouseMeasurements, model: ModelConfig) -> Pattern:
 
 
 if __name__ == "__main__":
-    person = make_person()
-    allowance = make_allowance()
-    balance = make_balance()
-    measurements = make_blouse_measurements(person, allowance, balance)
-    model_config = make_model_config()
-    pattern = make_blouse(measurements, model_config)
+    person = load_person("Sarah", date="2025-07-30")
+    fit_class = FitClass(pk=4, hip_ease=6 * CM)
+    adjustments = PersonalAdjustments(
+        hip_offset=1 * CM,
+        balance=BalanceAdjustments(front_length=-0.9 * CM),
+    )
+    config = GarmentConfig(length=75 * CM)
+
+    person_balanced = PersonAnalyser(person, adjustments.balance).get_balanced_person()
+
+    pattern = create_block(person_balanced, fit_class, adjustments, config)
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
-    grid_parts = [Part.GRID]
+    grid_parts = []  # [Part.GRID]
 
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
@@ -112,7 +101,7 @@ if __name__ == "__main__":
         parts=grid_parts + pattern_parts,
         show_bezier_control_points=False,
         show_construction=True,
-        show_seam_allowance=True
+        show_seam_allowance=True,
     )
 
 # #marker_single  top_waisted_dart.pdf ./

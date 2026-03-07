@@ -1,5 +1,4 @@
-"""
-SVG marker definitions for sewing pattern rendering.
+"""SVG marker definitions for sewing pattern rendering.
 
 Each marker is defined in ``markerUnits="userSpaceOnUse"`` so sizes stay in
 the same mm-based coordinate space as the rest of the drawing (Inkscape-safe).
@@ -59,9 +58,7 @@ _MARKER_ARROW_END = (
 # The blade tips are at x_marker ≈ 3.91, which is 9.09 mm back along the line.
 # _render_segment shortens the segment by this amount so the visible line
 # terminates at the blade tips rather than the crossing.
-_BLADE_TIP_X: float = round(
-    13.0 - 9.0898857, 4
-)  # marker-space x of the blade tips ≈ 3.91
+_BLADE_TIP_X: float = round(13.0 - 9.0898857, 4)  # marker-space x of the blade tips ≈ 3.91
 SCISSOR_BLADE_OVERHANG: float = round(13.0 - _BLADE_TIP_X, 4)  # ≈ 9.09 mm
 
 _SCISSOR_PATH = (

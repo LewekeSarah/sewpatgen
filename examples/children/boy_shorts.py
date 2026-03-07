@@ -17,8 +17,8 @@ from sewpat.geometry import (
     intersect,
 )
 from sewpat.measurements import (
-    Allowance,
-    ModelConfig,
+    TrouserConfig,
+    TrouserEase,
     TrouserMeasurements,
     make_measurements_trouser,
 )
@@ -31,49 +31,47 @@ from sewpat.units import CM
 
 def make_person() -> Person:
     henri = Person(
-        KöH=116 * CM,
-        BrU=63 * CM,
-        TaU=62.5 * CM,
-        HüU=71 * CM,
-        SiH=19.6 * CM,  ## 18.5 * CM,
-        SrH=51.5 * CM,
+        height=116 * CM,
+        bust=63 * CM,
+        waist=62.5 * CM,
+        hip=71 * CM,
+        body_rise=19.6 * CM,  ## 18.5 * CM,
+        inseam=51.5 * CM,
         gender=Gender.boy,
     )  # gemessen 2025-09-15
     # return Person(
-    #     KöH=122 * CM,
-    #     BrU=63 * CM,
-    #     TaU=60 * CM,
-    #     HüU=67 * CM,
-    #     HüT=0 * CM,
-    #     BrT=15.6 * CM,
-    #     RüL=29.2 * CM,
-    #     SiH=20.4 * CM,  # SiH = body_rise / Sitzhöhe
-    #     SrH=55 * CM,  # SrH = inside leg / Schritthöhe
+    #     height=122 * CM,
+    #     bust=63 * CM,
+    #     waist=60 * CM,
+    #     hip=67 * CM,
+    #     hip_depth=0 * CM,
+    #     bust_depth=15.6 * CM,
+    #     back_length=29.2 * CM,
+    #     body_rise=20.4 * CM,  # body_rise / Sitzhöhe
+    #     inseam=55 * CM,       # inseam / Schritthöhe
     #     gender=Gender.boy,
     # )
     return henri
 
 
-def make_allowance() -> Allowance:
-    return Allowance(
-        SiH=3 * CM,  # baby 4.5 * CM,
-        SrH=-3 * CM,  # baby-2 * CM,
-        HüU=5.5 * CM,  # baby 4 * CM,
+def make_ease() -> TrouserEase:
+    return TrouserEase(
+        body_rise_ease=3 * CM,  # baby 4.5 * CM,
+        inseam_ease=-3 * CM,  # baby -2 * CM,
+        hip_ease=5.5 * CM,  # baby 4 * CM,
     )
 
 
-def make_model_config() -> ModelConfig:
-    return ModelConfig(
-        MoL=48.75 * CM,
-        ZuvHoB=0.5 * CM,
-        SaW=14 * CM,  # baby 1 * CM  # 35/2
+def make_config() -> TrouserConfig:
+    return TrouserConfig(
+        length=48.75 * CM,
+        front_trouser_ease=0.5 * CM,
+        hem_width=14 * CM,  # baby 1 * CM  # 35/2
     )
 
 
-def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
-    pattern_boy_trousers = Pattern(
-        name="Flat Boy Trousers", anchor=Point(5 * CM, 7 * CM)
-    )
+def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
+    pattern_boy_trousers = Pattern(name="Flat Boy Trousers", anchor=Point(5 * CM, 7 * CM))
     pt0 = pattern_boy_trousers.anchor
 
     # -----------------------------------------------------------------------
@@ -84,14 +82,14 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
         anchor=pt0,
         verticals=[
             ("Hintermitte", 0),
-            ("Vorderhosenbreite", meas.vHoB),
+            ("Vorderhosenbreite", meas.front_trouser_width),
         ],
         horizontals=[
             ("Taillenlinie", 0),
-            ("Sitzhöhe", meas.SiH),
-            ("Knielinie", meas.SiH + meas.KnH),
-            ("Saumlinie", meas.SiH + meas.SrH),
-            ("Modellänge", model.MoL),
+            ("Sitzhöhe", meas.body_rise),
+            ("Knielinie", meas.body_rise + meas.knee_height),
+            ("Saumlinie", meas.body_rise + meas.inseam),
+            ("Modellänge", model.length),
         ],
     ).build()
 
@@ -118,14 +116,14 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
         anchor=back_pt0,
         verticals=[
             ("Hintermitte", 0),
-            ("Vorderhosenbreite", meas.vHoB),
+            ("Vorderhosenbreite", meas.front_trouser_width),
         ],
         horizontals=[
             ("Taillenlinie", 0),
-            ("Sitzhöhe", meas.SiH),
-            ("Knielinie", meas.SiH + meas.KnH),
-            ("Saumlinie", meas.SiH + meas.SrH),
-            ("Modellänge", model.MoL),
+            ("Sitzhöhe", meas.body_rise),
+            ("Knielinie", meas.body_rise + meas.knee_height),
+            ("Saumlinie", meas.body_rise + meas.inseam),
+            ("Modellänge", model.length),
         ],
     ).build()
 
@@ -150,25 +148,24 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     pattern_boy_trousers.add_part(front)
 
     # Leg-grid midpoints (not on grid lines, keep as computed)
-    pt9 = Point(pt0.x + 0.5 * meas.vHoB, pt1.y)  # Fadenlauf-Mitte auf SiH
-    pt10 = Point(pt0.x + 0.5 * meas.vHoB, pt3.y)  # Fadenlauf-Mitte auf KnH
-    pt11 = Point(pt0.x + 0.5 * meas.vHoB, pt2.y)  # Fadenlauf-Mitte auf SrH
-    pt12 = Point(pt11.x - (model.SaW / 2 + 0.5 * CM), pt11.y)  # Seitennaht Saum
-    pt13 = Point(pt11.x + (model.SaW / 2 + 0.5 * CM), pt11.y)  # Innennaht Saum
+    _cx = pt0.x + 0.5 * meas.front_trouser_width
+    pt9 = Point(_cx, pt1.y)  # grain centre at body_rise
+    pt10 = Point(_cx, pt3.y)  # grain centre at knee_height
+    pt11 = Point(_cx, pt2.y)  # grain centre at inseam
+    pt12 = Point(pt11.x - (model.hem_width / 2 + 0.5 * CM), pt11.y)  # side hem
+    pt13 = Point(pt11.x + (model.hem_width / 2 + 0.5 * CM), pt11.y)  # inner hem
 
     # Bund
     pt6 = pt5.translate(-1 * CM, 0)
 
     # Hosenausschnitt
-    pt7 = pt4.translate(0, -0.25 * meas.SiH)
-    pt8 = pt4.translate((0.25 * meas.vHoB - model.ZuvHoB), 0)
+    pt7 = pt4.translate(0, -0.25 * meas.body_rise)
+    pt8 = pt4.translate((0.25 * meas.front_trouser_width - model.front_trouser_ease), 0)
     bz_control2 = Segment(pt7, pt8).point_perpendicular(0.5 * CM, t=0.75)
     bz_control3 = pt7.translate(0.2 * CM, 2.5 * CM)
 
     front.append(Segment(pt6, pt0, name="Bund"), style=STYLE_WAISTBAND, is_outline=True)
-    front_size_top = front.append(
-        Segment(pt0, pt1), style=STYLE_STITCH, is_outline=True
-    )
+    front_size_top = front.append(Segment(pt0, pt1), style=STYLE_STITCH, is_outline=True)
 
     # Seitennaht & Innennaht
     side = Segment(pt1, pt12)
@@ -183,20 +180,16 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     pt33 = intersect(g_mol, side)[0]  # grid reuse
 
     # Outline
-    front_side_upper = front.append(
-        Segment(pt1, pt14), style=STYLE_STITCH, is_outline=True
-    )
-    front_side_lower = front.append(
-        Segment(pt14, pt33), style=STYLE_STITCH, is_outline=True
-    )
+    front_side_upper = front.append(Segment(pt1, pt14), style=STYLE_STITCH, is_outline=True)
+    front_side_lower = front.append(Segment(pt14, pt33), style=STYLE_STITCH, is_outline=True)
     front.append(Segment(pt33, pt32), style=STYLE_HEM, is_outline=True)
     front.append(Segment(pt32, pt15), style=STYLE_STITCH, is_outline=True)
-    front_inner_leg = front.append(
+    front.append(
         CubicBezier(pt8, bz_control, pt15.translate(0.1 * CM, -2 * CM), pt15),
         style=STYLE_STITCH,
         is_outline=True,
     )
-    front_curve = front.append(
+    front.append(
         CubicBezier(pt7, bz_control3, bz_control2, pt8),
         style=STYLE_STITCH,
         is_outline=True,
@@ -207,8 +200,8 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     front.add_grainline(start=pt9, end=grain_end[0])
     front.add_info_box(
         notes=[
-            f"Modellänge {model.MoL / CM:.1f} cm",
-            f"SiH {meas.SiH / CM:.1f} cm",
+            f"Modellänge {model.length / CM:.1f} cm",
+            f"Sitzhöhe {meas.body_rise / CM:.1f} cm",
             "1× Stoff (gegengleich)",
         ]
     )
@@ -221,11 +214,10 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     pattern_boy_trousers.add_part(back)
 
     # Leg-grid midpoints for back
-    back_pt9 = Point(back_pt0.x + 0.5 * meas.vHoB, back_pt1.y)
-    back_pt10 = Point(back_pt0.x + 0.5 * meas.vHoB, intersect(bg_hm, bg_kni)[0].y)
-    back_pt11 = Point(back_pt0.x + 0.5 * meas.vHoB, intersect(bg_hm, bg_mol)[0].y)
-    back_pt12 = Point(back_pt11.x - (model.SaW / 2 + 0.5 * CM), back_pt11.y)
-    back_pt13 = Point(back_pt11.x + (model.SaW / 2 + 0.5 * CM), back_pt11.y)
+    back_pt9 = Point(back_pt0.x + 0.5 * meas.front_trouser_width, back_pt1.y)
+    back_pt11 = Point(back_pt0.x + 0.5 * meas.front_trouser_width, intersect(bg_hm, bg_mol)[0].y)
+    back_pt12 = Point(back_pt11.x - (model.hem_width / 2 + 0.5 * CM), back_pt11.y)
+    back_pt13 = Point(back_pt11.x + (model.hem_width / 2 + 0.5 * CM), back_pt11.y)
 
     # Hosenbund
     back_pt6 = intersect(bg_vhb, back_grid.get_element("Taillenlinie").geometry)[0]
@@ -234,10 +226,8 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     pt18 = back_pt0.translate(-2 * CM, 0)
 
     # Hinternaht
-    pt19 = back_pt4.translate(0, -0.5 * meas.SiH)
-    pt20 = back_pt4.translate(
-        (2 * (pt8.x - intersect(g_vhb, g_sih)[0].x) + 0.5 * CM), 0
-    )
+    pt19 = back_pt4.translate(0, -0.5 * meas.body_rise)
+    pt20 = back_pt4.translate((2 * (pt8.x - intersect(g_vhb, g_sih)[0].x) + 0.5 * CM), 0)
     pt21 = pt20.translate(0, 1 * CM)
     bz_contol4 = back_pt4.translate(3.05 * CM, -3.05 * CM)
 
@@ -271,17 +261,15 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     )
     back.append(Segment(pt25, pt30), style=STYLE_STITCH, is_outline=True)
     back.append(Segment(pt30, pt31), style=STYLE_HEM, is_outline=True)
-    back_side_seam = back.append(
-        Segment(pt18, pt31), style=STYLE_STITCH, is_outline=True
-    )
+    back_side_seam = back.append(Segment(pt18, pt31), style=STYLE_STITCH, is_outline=True)
     back.append(Segment(pt17, pt18), style=STYLE_WAISTBAND, is_outline=True)
 
     grain_end_back = intersect(Segment(back_pt9, back_pt11), bg_mol)
     back.add_grainline(start=back_pt9, end=grain_end_back[0])
     back.add_info_box(
         notes=[
-            f"Modellänge {model.MoL / CM:.1f} cm",
-            f"SiH {meas.SiH / CM:.1f} cm",
+            f"Modellänge {model.length / CM:.1f} cm",
+            f"Sitzhöhe {meas.body_rise / CM:.1f} cm",
             "1× Stoff (gegengleich)",
         ]
     )
@@ -290,9 +278,7 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     # -----------------------------------------------------------------------
     # Nahtlängen-Kontrolle
     # -----------------------------------------------------------------------
-    front_side_len = front.seam_length(
-        [front_size_top, front_side_upper, front_side_lower]
-    )
+    front_side_len = front.seam_length([front_size_top, front_side_upper, front_side_lower])
     back_side_len = back.seam_length([back_side_seam])
     diff_side = back_side_len - front_side_len
     print(
@@ -314,8 +300,8 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     _dash = StyleOptions(dash_array=[3, 2], stroke_color="lightgrey")
     _dash_red = StyleOptions(dash_array=[3, 2], stroke_color="red")
 
-    aux.append(Segment(pt0, pt1), style=_dash, name="Grundgerüst: Taillenlinie")
-    aux.append(Segment(pt0, pt6), style=_dash, name="Grundgerüst: Bundlinie")
+    aux.append(Segment(pt0, pt1, name="Grundgerüst: Taillenlinie"), style=_dash)
+    aux.append(Segment(pt0, pt6, name="Grundgerüst: Bundlinie"), style=_dash)
     aux.append(Circle(pt4, 2.5 * CM), style=_dash)
     aux.append(Ray(pt2, (pt10.x, 0), name="Saumlinie"), style=_dash)
     aux.append(Segment(pt12, pt13), style=_dash)
@@ -332,9 +318,7 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
     # -----------------------------------------------------------------------
     # Referenzquadrat
     # -----------------------------------------------------------------------
-    pattern_boy_trousers.add_reference_square(
-        origin=front.centroid.translate(-5 * CM, -17 * CM)
-    )
+    pattern_boy_trousers.add_reference_square(origin=front.centroid.translate(-5 * CM, -17 * CM))
 
     return pattern_boy_trousers
 
@@ -346,9 +330,9 @@ def boy_shorts(meas: TrouserMeasurements, model: ModelConfig) -> Pattern:
 if __name__ == "__main__":
     DEBUG = True
     person = make_person()
-    allowance = make_allowance()
-    measurements = make_measurements_trouser(person, allowance)
-    model_config = make_model_config()
+    ease = make_ease()
+    measurements = make_measurements_trouser(person, ease)
+    model_config = make_config()
     pattern = boy_shorts(measurements, model_config)
 
     parts = ["Vorderteil", "Rückteil"]
@@ -358,9 +342,7 @@ if __name__ == "__main__":
     # Without seam allowance
     export_pattern_svg_mm(
         pattern,
-        filename=str(
-            Path(__file__).parent / f"boys_shorts{'_grid' if DEBUG else ''}.svg"
-        ),
+        filename=str(Path(__file__).parent / f"boys_shorts{'_grid' if DEBUG else ''}.svg"),
         height_mm=DinA1.width,
         width_mm=DinA1.height,
         parts=parts,
@@ -370,9 +352,7 @@ if __name__ == "__main__":
     # With seam allowance
     export_pattern_svg_mm(
         pattern,
-        filename=str(
-            Path(__file__).parent / f"boys_shorts_sa{'_grid' if DEBUG else ''}.svg"
-        ),
+        filename=str(Path(__file__).parent / f"boys_shorts_sa{'_grid' if DEBUG else ''}.svg"),
         height_mm=DinA1.width,
         width_mm=DinA1.height,
         parts=parts,

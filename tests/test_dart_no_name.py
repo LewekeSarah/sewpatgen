@@ -1,10 +1,9 @@
 """Regression: SVG export must not crash when dart has no name."""
 
-import pytest
-from sewpat import Dart, DartType, Point, Segment, PatternPart, Pattern, MM
+from sewpat import MM, Dart, DartType, Pattern, PatternPart, Point, Segment
 from sewpat.element import PatternElement
-from sewpat.style import StyleOptions
 from sewpat.render import export_pattern_svg_mm
+from sewpat.style import StyleOptions
 
 
 def _nameless_dart() -> Dart:

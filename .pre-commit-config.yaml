@@ -1,0 +1,54 @@
+# Pre-commit hooks for sewpat
+# Mirrors the CI pipeline (.github/workflows/ci.yml) so every local commit
+# gets the same checks that will run on GitHub before they ever hit the remote.
+#
+# Install once per clone:
+#   uv run pre-commit install
+#
+# Run manually against all files:
+#   uv run pre-commit run --all-files
+
+default_language_version:
+  python: python3.14
+
+repos:
+  # ── Basic file hygiene ────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+      - id: end-of-file-fixer
+        name: Ensure files end with a newline
+      - id: check-yaml
+        name: Validate YAML syntax
+      - id: check-toml
+        name: Validate TOML syntax
+      - id: check-merge-conflict
+        name: Detect merge-conflict markers
+      - id: debug-statements
+        name: Detect leftover debug statements (pdb, breakpoint)
+
+  # ── Ruff — lint + auto-fix ────────────────────────────────────────────────
+  # Uses the same version pinned in pyproject.toml / uv.lock.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.4
+    hooks:
+      - id: ruff
+        name: Ruff — lint
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+        name: Ruff — format
+
+  # ── mypy — static type checking ───────────────────────────────────────────
+  # All 166 pre-existing errors were resolved; mypy is now clean and can
+  # block commits on regressions.  Runs only on src/ to match the CI step.
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy — type check
+        language: system
+        entry: uv run mypy src/sewpat/ --ignore-missing-imports
+        types: [python]
+        pass_filenames: false
+        files: ^src/

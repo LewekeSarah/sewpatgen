@@ -1,6 +1,6 @@
 """Tests for the bidirectional build_chain fix."""
-import pytest
-from sewpat.geometry import Segment, Point, build_chain, geom_start, geom_end
+
+from sewpat.geometry import Point, Segment, build_chain, geom_end, geom_start
 
 
 def _xs(chain):
@@ -51,7 +51,7 @@ def test_four_elements_scrambled():
     xs = _xs(chain)
     # All four segments must be present and connected
     for i in range(len(xs) - 1):
-        assert xs[i][1] == xs[i + 1][0], f"gap between {xs[i]} and {xs[i+1]}"
+        assert xs[i][1] == xs[i + 1][0], f"gap between {xs[i]} and {xs[i + 1]}"
 
 
 def test_disconnected_remainder_appended():
@@ -60,4 +60,3 @@ def test_disconnected_remainder_appended():
     chain = build_chain([Segment(A, B), Segment(B, C), Segment(far, far.translate(1, 0))])
     assert len(chain) == 3
     assert _xs(chain)[:2] == [(0, 10), (10, 20)]
-

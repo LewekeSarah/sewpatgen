@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] — 2026-03-07
+
+### Added
+
+- **`GeometryType`** union alias in `sewpat.element` (and re-exported from `sewpat`)
+  — the canonical type for all geometry objects accepted by `PatternElement` and
+  `PatternPart.append()`.  Replaces the ad-hoc inline union in `PatternElement.__init__`.
+- **`STYLE_STITCH_BEVEL`** added to the public `sewpat` namespace (`__all__`).
+- **`TopBlock`** — `fit_class=None` now falls back to `FitClass(pk=4)` instead of
+  raising a `TypeError` at runtime.
+- **`docs/QUALITY_PLAN.md`** — living document describing all quality gates,
+  pre-commit hooks, mypy configuration, tech-debt history, and coverage report.
+
+### Changed
+
+- **`pyproject.toml`** — version bump to `0.4.0`; added `keywords`, `[project.urls]`,
+  expanded `classifiers` (including `"Typing :: Typed"`); updated runtime dependency
+  lower-bounds to match locked versions (`numpy>=2.2.0`, `pandas>=2.2.0`,
+  `shapely>=2.1.2`); added `[tool.uv] package = true`.
+- **`PatternPart.append()`** — parameter `geometry` is now typed as `GeometryType`
+  instead of `object`, eliminating the `# type: ignore[arg-type]` suppression.
+- **`_build_darts()`** in `blocks.py` — return type corrected to
+  `tuple[_Darts, Dart]`.
+- **`_SideSeams.waist_offset`** — field type corrected from `Line` to `Segment`.
+- **`TopGrid.from_measurements()`** — replaced `# type: ignore[return-value]` in
+  the inner `seg()` helper with `assert isinstance(geom, Segment)`.
+
+### Fixed — mypy (166 → 0 errors)
+
+All pre-existing type errors resolved across 6 files.  See `docs/QUALITY_PLAN.md`
+for the full breakdown by error code.
+
+### Infrastructure
+
+- **pre-commit hook for mypy** added to `.pre-commit-config.yaml` — every local
+  commit now runs `mypy src/sewpat/` and blocks on regressions.
+- **CI pipeline** (`.github/workflows/ci.yml`) — added `pre-commit run --all-files`
+  step between ruff and mypy.
+- **`grids.py`** — resolved outstanding `TODO` comment (`front_length vs VL2`)
+  with an explanatory inline comment.
+
+---
+
 ## [0.3.0] — 2026-03-03
 
 ### Added — Dart (Abnäher) support
@@ -83,4 +126,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ConstructionGrid`, `PatternPart`, `Pattern`, `PatternElement`.
 - `CubicBezier`, `Segment`, `Ray`, `Line`, `Circle`, `Rect`, `Triangle` geometry.
 - SVG export via `export_pattern_svg_mm()`.
-

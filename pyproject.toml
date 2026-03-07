@@ -1,6 +1,6 @@
 [project]
 name = "sewpat"
-version = "0.3.0"
+version = "0.4.0"
 description = "Sewing pattern vector file generator"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -9,31 +9,76 @@ authors = [
     { name = "Sarah Leweke", email = "sarah@leweke.info" },
     { name = "Samuel Leweke", email = "samuel@leweke.info" },
 ]
+keywords = [
+    "sewing",
+    "pattern",
+    "garment",
+    "CAD",
+    "SVG",
+    "geometry",
+    "dart",
+    "fashion",
+]
 classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Scientific/Engineering :: Visualization",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Typing :: Typed",
 ]
 dependencies = [
-    "numpy>=1.24.0",
-    "shapely>=2.0.0",
+    "numpy>=2.2.0",
+    "pandas>=2.2.0",
+    "shapely>=2.1.2",
     "svgpathtools>=1.7.2",
 ]
+
+[project.urls]
+Homepage      = "https://github.com/sleweke/sewpatgen"
+Repository    = "https://github.com/sleweke/sewpatgen"
+"Bug Tracker" = "https://github.com/sleweke/sewpatgen/issues"
+Changelog     = "https://github.com/sleweke/sewpatgen/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["uv_build>=0.8.3,<0.9.0"]
 build-backend = "uv_build"
 
+[tool.uv]
+package = true
+
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]  # pycodestyle errors, pyflakes, isort
+select = ["E", "F", "I", "UP", "B", "D", "ANN"]
+# E   = pycodestyle errors
+# F   = pyflakes
+# I   = isort
+# UP  = pyupgrade (modernise syntax automatically)
+# B   = flake8-bugbear (common bugs and design issues)
+# D   = pydocstyle (Google convention)
+# ANN = flake8-annotations (type annotation completeness)
+
+ignore = [
+    "B904",   # raise … from err — too noisy in existing exception chains
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.isort]
 known-first-party = ["sewpat"]
+
+[tool.ruff.lint.per-file-ignores]
+# ── tests / examples: no docstrings or annotations required ──────────────────
+"tests/**"    = ["ANN", "D"]
+"examples/**" = ["ANN", "D"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -41,6 +86,32 @@ indent-style = "space"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov=sewpat --cov-report=term-missing --cov-fail-under=80"
+
+[tool.coverage.run]
+source = ["sewpat"]
+omit = ["*/data/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+
+[tool.mypy]
+python_version = "3.14"
+strict = false
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "examples.*"]
+ignore_errors = true
 
 [tool.pyright]
 venvPath = "."
@@ -48,6 +119,9 @@ venv = ".venv"
 
 [dependency-groups]
 dev = [
+    "mypy>=1.19.1",
+    "pre-commit>=4.5.1",
     "pytest>=8.4.1",
+    "pytest-cov>=7.0.0",
     "ruff>=0.15.4",
 ]
