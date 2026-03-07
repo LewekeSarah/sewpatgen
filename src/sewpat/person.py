@@ -124,9 +124,7 @@ class Person:
     bust_span: float | None = None  # BrPA — Brustpunktabstand
     shoulder_width: float | None = None  # SuB — Schulterbreite
     back_length: float | None = None  # RüL — Rückenlänge
-    front_length: float | None = (
-        None  # VL  — Vorderlänge (VL2 variant: balancing, future feature)
-    )
+    front_length: float | None = None  # VL  — Vorderlänge (VL2 variant: balancing, future feature)
     body_rise: float | None = None  # SiH — Sitzhöhe
     inseam: float | None = None  # SrH — Schritthöhe
     back_width: float | None = None  # RüB — Rückenbreite
@@ -199,9 +197,7 @@ class BalancedPerson:
     Access the underlying :class:`Person` via the ``.person`` attribute.
     """
 
-    def __init__(
-        self, person: Person
-    ) -> None:  # private — only PersonAnalyser calls this
+    def __init__(self, person: Person) -> None:  # private — only PersonAnalyser calls this
         """Wrap a validated, balanced *person*. Use :meth:`PersonAnalyser.get_balanced_person`."""
         self._person = person
 
@@ -252,8 +248,7 @@ class PersonAnalyser:
             )
         if self.person.armscye_depth is None:
             raise NotImplementedError(
-                "Matching armscye_depth formula for given bustline "
-                "is not yet implemented."
+                "Matching armscye_depth formula for given bustline is not yet implemented."
             )
 
     def _set_armscye_width(self) -> None:
@@ -266,8 +261,7 @@ class PersonAnalyser:
             )
         if self.person.armscye_width is None:
             raise NotImplementedError(
-                "Matching armscye_width formula for given bustline "
-                "is not yet implemented."
+                "Matching armscye_width formula for given bustline is not yet implemented."
             )
 
     def _set_chest_width(self) -> None:
@@ -280,8 +274,7 @@ class PersonAnalyser:
             )
         if self.person.chest_width is None:
             raise NotImplementedError(
-                "Matching chest_width formula for given bustline "
-                "is not yet implemented."
+                "Matching chest_width formula for given bustline is not yet implemented."
             )
 
     def _set_back_width(self) -> None:
@@ -293,9 +286,7 @@ class PersonAnalyser:
                 else self.person.back_width
             )
         if self.person.back_width is None:
-            raise NotImplementedError(
-                "Matching formula for given bustline is not yet implemented."
-            )
+            raise NotImplementedError("Matching formula for given bustline is not yet implemented.")
 
     def calculate_measurements(self) -> None:
         """Derive all missing measurements from bust circumference."""
@@ -310,16 +301,10 @@ class PersonAnalyser:
         person_balanced = copy.deepcopy(self.person)
         if self.balance is not None:
             for key, val in self.balance.__dict__.items():
-                person_balanced.__setattr__(
-                    key, person_balanced.__getattribute__(key) + val
-                )
+                person_balanced.__setattr__(key, person_balanced.__getattribute__(key) + val)
         if person_balanced.gender == Gender.female:
-            if (
-                person_balanced.front_length - person_balanced.back_length
-            ) > self.optimal_balance:
-                raise ValueError(
-                    "front_length and back_length are not properly balanced"
-                )
+            if (person_balanced.front_length - person_balanced.back_length) > self.optimal_balance:
+                raise ValueError("front_length and back_length are not properly balanced")
             else:
                 self.person_balanced = BalancedPerson(person_balanced)
 
@@ -349,6 +334,4 @@ class PersonAnalyser:
         ):
             return 3.5 * CM
         else:
-            raise NotImplementedError(
-                "Matching balance for given bustline is not yet implemented."
-            )
+            raise NotImplementedError("Matching balance for given bustline is not yet implemented.")

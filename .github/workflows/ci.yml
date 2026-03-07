@@ -37,4 +37,3 @@ jobs:
 
       - name: pytest — tests + coverage
         run: uv run pytest --cov=sewpat --cov-report=term-missing --cov-fail-under=80
-

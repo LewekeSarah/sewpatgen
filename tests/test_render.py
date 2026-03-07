@@ -192,9 +192,7 @@ class TestBuildSvg(unittest.TestCase):
         p1.append(Segment(Point(0, 0), Point(5, 0)))
         p2 = PatternPart(name="b")
         p2.append(Circle(Point(50, 50), radius=3))
-        svg = _build_svg(
-            **self._default_kwargs(element_groups=[p1.elements, p2.elements])
-        )
+        svg = _build_svg(**self._default_kwargs(element_groups=[p1.elements, p2.elements]))
         self.assertIn("<line ", svg)
         self.assertIn("<circle ", svg)
 
@@ -514,9 +512,7 @@ class TestRenderCubicBezier(unittest.TestCase):
         self.assertGreaterEqual(circle_count, 4)
 
     def test_bezier_name_rendered(self):
-        b = CubicBezier(
-            Point(0, 0), Point(5, 5), Point(15, 5), Point(20, 0), name="curve"
-        )
+        b = CubicBezier(Point(0, 0), Point(5, 5), Point(15, 5), Point(20, 0), name="curve")
         svg = self._svg(b)
         self.assertIn("curve", svg)
 
@@ -614,9 +610,7 @@ class TestExportPatternPartSvgMm(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
             fname = f.name
         with self.assertRaises(ValueError):
-            export_pattern_part_svg_mm(
-                part, fname, style_map={"no_such_key": StyleOptions()}
-            )
+            export_pattern_part_svg_mm(part, fname, style_map={"no_such_key": StyleOptions()})
 
 
 # ---------------------------------------------------------------------------
@@ -768,9 +762,7 @@ class TestExportPatternSvgMm(unittest.TestCase):
     def test_show_construction_false_hides_construction_elements(self):
         pat = Pattern(name="pts")
         p = PatternPart(name="p")
-        elem = PatternElement(
-            Segment(Point(0, 0), Point(10, 0), name="aux"), is_construction=True
-        )
+        elem = PatternElement(Segment(Point(0, 0), Point(10, 0), name="aux"), is_construction=True)
         p.elements.append(elem)
         pat.add_part(p)
         with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:

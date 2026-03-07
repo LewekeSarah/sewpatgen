@@ -114,4 +114,3 @@ pk,    lo,    hi,         lo,     hi,           lo,    hi,         lo,    hi,   
 
 Only PK 4 is populated with real values. All other PKs raise `KeyError` until
 the full table is digitised from the Mueller & Sohn source.
-

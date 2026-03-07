@@ -179,9 +179,7 @@ def test_offset_adaptive_each_segment_within_eps():
     # The last segment's end must also be ≈d from the original curve's end
     last = segments[-1]
     dist_end = curve.p3.distance_to(last.p3)
-    assert abs(dist_end - d) < d * 0.1, (
-        f"last segment end not shifted by d: {dist_end:.3f} vs {d}"
-    )
+    assert abs(dist_end - d) < d * 0.1, f"last segment end not shifted by d: {dist_end:.3f} vs {d}"
 
 
 def test_offset_adaptive_segments_are_connected():
@@ -211,9 +209,7 @@ def test_offset_adaptive_better_than_single_offset_on_tight_curve():
     segments = curve.offset_adaptive(d, eps=0.1)
     all_pts = []
     for seg in segments:
-        all_pts += [
-            (seg.point_at_t(i / 64).x, seg.point_at_t(i / 64).y) for i in range(65)
-        ]
+        all_pts += [(seg.point_at_t(i / 64).x, seg.point_at_t(i / 64).y) for i in range(65)]
     ls_adaptive = _sg.LineString(all_pts)
     err_adaptive = ls_true.hausdorff_distance(ls_adaptive)
 

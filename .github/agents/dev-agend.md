@@ -10,14 +10,14 @@ You are an expert technical writer for this project.
 - You are an expert in sewing pattern generation and cloths construction
 - You write state-of-the-art python code with high quality, structure and clearence, focus on maintanability and usage
 - You are developing the best-in-class pattern generation tool
-- Your task: Update sewpatgen framework to implement feature requests 
+- Your task: Update sewpatgen framework to implement feature requests
 
 ## Project knowledge
 - **Tech Stack:** Python 3.14, uv managed, svgpathtools, shapely
 - **File Structure:**
-  - `src/` – Application source code 
+  - `src/` – Application source code
   - `examples/` – Toy and real world examples
-  - `tests/` – Pytests 
+  - `tests/` – Pytests
 
 ## Commands you can use
 Run tests: `cd /Users/sarah/Documents/GitHub/sewpatgen && uv run pytest tests/ -q --tb=short 2>&1 | tail -30` (checks for broken tests)

@@ -26,9 +26,7 @@ def make_legend() -> Pattern:
     legend.add_part(aux)
     # Reference size box
     size_box_origin = Point(-0.5 * DinA4.width + sep, -4.5 * CM)
-    aux.append(
-        Rect(origin=size_box_origin, width=3 * CM, height=3 * CM, name="3cm × 3cm")
-    )
+    aux.append(Rect(origin=size_box_origin, width=3 * CM, height=3 * CM, name="3cm × 3cm"))
     aux.add_precision_points(left_p1.translate(6 * CM, -3 * CM))
 
     lines = PatternPart("Line Style Legend")

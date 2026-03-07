@@ -81,9 +81,7 @@ def _svg_text(x: float, y: float, font_size_mm: float, text: str, **extra: str) 
     return f"<text {attrs}>{_xml_escape(text)}</text>"
 
 
-def _common_stroke_attrs(
-    style_dict: dict[str, Any], *, force_fill: str | None = None
-) -> str:
+def _common_stroke_attrs(style_dict: dict[str, Any], *, force_fill: str | None = None) -> str:
     """Build common stroke/fill/opacity SVG attribute string from a style dict.
 
     Args:
@@ -141,9 +139,7 @@ def _render_cubic_bezier(
     nodes.append(f'<path d="{path_data}" {attrs} />')
 
     if getattr(element, "name", None):
-        nodes.append(
-            _svg_text(element.p0.x, element.p0.y, font_size_mm, str(element.name))
-        )
+        nodes.append(_svg_text(element.p0.x, element.p0.y, font_size_mm, str(element.name)))
 
     if show_control_points:
         c_stroke = "red"
@@ -214,9 +210,7 @@ def _render_segment(
             x2 -= SCISSOR_BLADE_OVERHANG * dx / length
             y2 -= SCISSOR_BLADE_OVERHANG * dy / length
 
-    nodes.append(
-        f'<line x1="{element.p1.x}" y1="{element.p1.y}" x2="{x2}" y2="{y2}" {attrs} />'
-    )
+    nodes.append(f'<line x1="{element.p1.x}" y1="{element.p1.y}" x2="{x2}" y2="{y2}" {attrs} />')
     if getattr(element, "name", None):
         mid_x = (element.p1.x + element.p2.x) / 2
         mid_y = (element.p1.y + element.p2.y) / 2
@@ -315,9 +309,7 @@ def _render_triangle(element: Triangle, style_dict: dict[str, Any]) -> list[str]
         fill = "black"
     opacity = style_dict.get("opacity", 1.0)
     pts = (
-        f"{element.p1.x},{element.p1.y} "
-        f"{element.p2.x},{element.p2.y} "
-        f"{element.p3.x},{element.p3.y}"
+        f"{element.p1.x},{element.p1.y} {element.p2.x},{element.p2.y} {element.p3.x},{element.p3.y}"
     )
     return [
         f'<polygon points="{pts}" '
@@ -396,8 +388,7 @@ def _render_rect(element: Rect, style_dict: dict[str, Any]) -> list[str]:
     )
 
     nodes.append(
-        f'<clipPath id="{clip_id}">'
-        f'<rect x="{x}" y="{y}" width="{w}" height="{h}" /></clipPath>'
+        f'<clipPath id="{clip_id}"><rect x="{x}" y="{y}" width="{w}" height="{h}" /></clipPath>'
     )
     nodes.append(
         f'<rect x="{x}" y="{y}" width="{w}" height="{h}" '
@@ -456,9 +447,7 @@ def _make_renderers(
         callable.
     """
     return {
-        CubicBezier: lambda el, sd: _render_cubic_bezier(
-            el, sd, show_bezier_control_points
-        ),
+        CubicBezier: lambda el, sd: _render_cubic_bezier(el, sd, show_bezier_control_points),
         Segment: lambda el, sd: _render_segment(el, sd),
         Line: lambda el, sd: _render_line(el, sd),
         Ray: lambda el, sd: _render_ray(el, sd),
@@ -498,9 +487,7 @@ def _render_seam_allowance_chain(
 ) -> list[str]:
     """Render all SA Segment/CubicBezier elements as one ``<path>`` for clean linejoin corners."""
     geoms: list[Segment | CubicBezier] = [
-        e.geometry
-        for e in sa_elements
-        if isinstance(e.geometry, (Segment, CubicBezier))
+        e.geometry for e in sa_elements if isinstance(e.geometry, (Segment, CubicBezier))
     ]
     if not geoms:
         return []
@@ -578,13 +565,13 @@ def _render_elements(
             try:
                 if isinstance(element, Point):
                     object.__setattr__(element, "name", effective_name)
-            except (AttributeError, TypeError):
+            except AttributeError, TypeError:
                 pass
             svg_nodes.extend(renderer(element, style.as_dict()))
             try:
                 if isinstance(element, Point):
                     object.__setattr__(element, "name", original_name)
-            except (AttributeError, TypeError):
+            except AttributeError, TypeError:
                 pass
 
     # Render all SA elements as one connected path (clean corners via linejoin).

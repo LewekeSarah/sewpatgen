@@ -150,8 +150,7 @@ class NamedAccessMixin:
             if e.get_name() == key:
                 return e
         raise AttributeError(
-            f"{type(self).__name__!r} has no element named {key!r} "
-            f"(looked up as {snake!r})"
+            f"{type(self).__name__!r} has no element named {key!r} (looked up as {snake!r})"
         )
 
 
@@ -314,13 +313,10 @@ class PatternPart(NamedAccessMixin):
                 matches = [
                     e.geometry
                     for e in self.elements
-                    if e.get_name() == item
-                    and isinstance(e.geometry, (Segment, CubicBezier))
+                    if e.get_name() == item and isinstance(e.geometry, (Segment, CubicBezier))
                 ]
                 if not matches:
-                    raise KeyError(
-                        f"No Segment/CubicBezier named {item!r} in part {self.name!r}"
-                    )
+                    raise KeyError(f"No Segment/CubicBezier named {item!r} in part {self.name!r}")
                 resolved.extend(matches)
             else:
                 raise TypeError(
@@ -486,9 +482,7 @@ class PatternPart(NamedAccessMixin):
             """Place one or two notch triangles and return the created elements."""
             along_pt = Point(*along)
             normal_pt = Point(*normal)
-            offsets = (
-                [0.0] if not is_back else [-(half_w + gap / 2), +(half_w + gap / 2)]
-            )
+            offsets = [0.0] if not is_back else [-(half_w + gap / 2), +(half_w + gap / 2)]
             created = []
             for offset in offsets:
                 centre = notch_pt + along_pt * offset
@@ -508,9 +502,7 @@ class PatternPart(NamedAccessMixin):
             if seam_edge is not None:
                 notch_pt, along, normal = project_onto_edge(seam_edge, pt, inward_ref)
             else:
-                notch_pt, along, normal = (
-                    pt, np.array([1.0, 0.0]), np.array([0.0, -1.0])
-                )
+                notch_pt, along, normal = (pt, np.array([1.0, 0.0]), np.array([0.0, -1.0]))
             seam_elems = _place_symbol(notch_pt, along, normal, symbol, is_sa=False)
 
             if sa_geoms:
@@ -550,13 +542,9 @@ class PatternPart(NamedAccessMixin):
         """
         _CJ = {"miter": 2, "round": 1, "bevel": 3}
         if corner_join not in _CJ:
-            raise ValueError(
-                f"corner_join must be one of {list(_CJ)!r}, got {corner_join!r}"
-            )
+            raise ValueError(f"corner_join must be one of {list(_CJ)!r}, got {corner_join!r}")
         if distance <= 0:
-            raise ValueError(
-                f"seam allowance distance must be positive, got {distance}"
-            )
+            raise ValueError(f"seam allowance distance must be positive, got {distance}")
 
         sa_style = style if style is not None else STYLE_SEAM_ALLOWANCE
 
@@ -583,9 +571,7 @@ class PatternPart(NamedAccessMixin):
                 return [new_elem]
 
         geoms: list[Segment | CubicBezier] = [
-            e.geometry
-            for e in outline_elements
-            if isinstance(e.geometry, (Segment, CubicBezier))
+            e.geometry for e in outline_elements if isinstance(e.geometry, (Segment, CubicBezier))
         ]
 
         # ── Pure-segment path: Shapely buffer ────────────────────────────────
@@ -608,9 +594,7 @@ class PatternPart(NamedAccessMixin):
             buf_coords = buffer_chain(chain, distance, join_style=_CJ[corner_join])
             added: list[PatternElement] = []
             for (x1, y1), (x2, y2) in zip(buf_coords, buf_coords[1:], strict=False):
-                elem = self.append(
-                    Segment(Point(x1, y1), Point(x2, y2)), style=sa_style
-                )
+                elem = self.append(Segment(Point(x1, y1), Point(x2, y2)), style=sa_style)
                 elem.is_seam_allowance = True
                 added.append(elem)
             self._project_dart_notches_to_sa()
@@ -623,9 +607,7 @@ class PatternPart(NamedAccessMixin):
         def _ep_key(g: Segment | CubicBezier) -> frozenset[tuple[float, float]]:
             """Return a frozenset of the two rounded endpoint coordinate pairs."""
             s, e = geom_start(g), geom_end(g)
-            return frozenset(
-                [(round(s.x, 6), round(s.y, 6)), (round(e.x, 6), round(e.y, 6))]
-            )
+            return frozenset([(round(s.x, 6), round(s.y, 6)), (round(e.x, 6), round(e.y, 6))])
 
         # seam_allowance=None  → not in dict → use global distance
         # seam_allowance=0.0   → in dict as 0.0 → no offset (fold line)
@@ -693,18 +675,14 @@ class PatternPart(NamedAccessMixin):
                 elif effective_cj == "round":
                     arc = round_corner(ga, gb)
                     if isinstance(arc, CubicBezier):
-                        offset_groups[i][-1] = with_endpoints(
-                            ga, geom_start(ga), arc.p0
-                        )
+                        offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), arc.p0)
                         offset_groups[j][0] = with_endpoints(gb, arc.p3, geom_end(gb))
                         arc_inserts.append((i, arc))
                     else:
                         offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), arc)
                         offset_groups[j][0] = with_endpoints(gb, arc, geom_end(gb))
                 else:  # bevel — clipped miter: tangent intersection capped at 3× SA
-                    corner = miter_corner(
-                        ga, gb, distance, miter_limit=3.0, check_reflex=False
-                    )
+                    corner = miter_corner(ga, gb, distance, miter_limit=3.0, check_reflex=False)
                     offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), corner)
                     offset_groups[j][0] = with_endpoints(gb, corner, geom_end(gb))
 
@@ -778,9 +756,7 @@ class PatternPart(NamedAccessMixin):
             # For dart_center_notch use _sa_center (dart.tip) as inward ref,
             # not the centroid which can be on the wrong side of the roof.
             _notch_inward = getattr(seam_elem, "_sa_center", None)
-            _effective_inward = (
-                _notch_inward if _notch_inward is not None else inward_ref
-            )
+            _effective_inward = _notch_inward if _notch_inward is not None else inward_ref
 
             if seam_elem.role == "dart_center_notch":
                 # Intersect the fold line (extended past dart.roof) with every
@@ -814,22 +790,16 @@ class PatternPart(NamedAccessMixin):
                 orig_along = tri.p2 - tri.p1
                 _oa_norm = float(_np_cn.linalg.norm(orig_along.coords))
                 orig_along_u = (
-                    orig_along.coords / _oa_norm
-                    if _oa_norm > 1e-12
-                    else orig_along.coords
+                    orig_along.coords / _oa_norm if _oa_norm > 1e-12 else orig_along.coords
                 )
                 orig_normal = tri.p3 - base_centre
                 _on_norm = float(_np_cn.linalg.norm(orig_normal.coords))
                 orig_normal_u = (
-                    orig_normal.coords / _on_norm
-                    if _on_norm > 1e-12
-                    else orig_normal.coords
+                    orig_normal.coords / _on_norm if _on_norm > 1e-12 else orig_normal.coords
                 )
 
                 if _fold_sa_pt is None:
-                    _fold_sa_pt, _, _ = project_onto_edge(
-                        sa_edge, base_centre, _effective_inward
-                    )
+                    _fold_sa_pt, _, _ = project_onto_edge(sa_edge, base_centre, _effective_inward)
 
                 sa_pt = _fold_sa_pt
                 along_pt = Point(*orig_along_u)
@@ -842,16 +812,12 @@ class PatternPart(NamedAccessMixin):
                 orig_along_l = tri.p2 - tri.p1
                 _oal_n = float(_np_leg_sa.linalg.norm(orig_along_l.coords))
                 orig_along_lu = (
-                    orig_along_l.coords / _oal_n
-                    if _oal_n > 1e-12
-                    else orig_along_l.coords
+                    orig_along_l.coords / _oal_n if _oal_n > 1e-12 else orig_along_l.coords
                 )
                 orig_normal_l = tri.p3 - base_centre
                 _onl_n = float(_np_leg_sa.linalg.norm(orig_normal_l.coords))
                 orig_normal_lu = (
-                    orig_normal_l.coords / _onl_n
-                    if _onl_n > 1e-12
-                    else orig_normal_l.coords
+                    orig_normal_l.coords / _onl_n if _onl_n > 1e-12 else orig_normal_l.coords
                 )
 
                 _leg_pt_l = getattr(seam_elem, "_leg_pt", None)
@@ -997,9 +963,7 @@ class PatternPart(NamedAccessMixin):
             and isinstance(edge_elem.geometry, (Segment, CubicBezier))
         ):
             src_style = (
-                copy.copy(edge_elem.style)
-                if edge_elem.style is not None
-                else StyleOptions()
+                copy.copy(edge_elem.style) if edge_elem.style is not None else StyleOptions()
             )
             all_subs = edge_elem.geometry.split_at_points([dart.leg_a, dart.leg_b])
             # The middle sub-segment (between the two legs) is the dart mouth —
@@ -1094,9 +1058,7 @@ class PatternPart(NamedAccessMixin):
 
             # Tip precision mark
             if precision_tip:
-                for e in PrecisionPoint(
-                    dart.tip, style=precision_style
-                ).build_elements():
+                for e in PrecisionPoint(dart.tip, style=precision_style).build_elements():
                     e.role = "dart_tip"
                     _add(e)
                 if dart.name:
@@ -1241,12 +1203,8 @@ class PatternPart(NamedAccessMixin):
             e = geom_end(oe.geometry)
             sk = (round(s.x, 3), round(s.y, 3))
             ek = (round(e.x, 3), round(e.y, 3))
-            ep_tangents.setdefault(sk, []).append(
-                edge_tangent(oe.geometry, at_end=False)
-            )
-            ep_tangents.setdefault(ek, []).append(
-                edge_tangent(oe.geometry, at_end=True)
-            )
+            ep_tangents.setdefault(sk, []).append(edge_tangent(oe.geometry, at_end=False))
+            ep_tangents.setdefault(ek, []).append(edge_tangent(oe.geometry, at_end=True))
 
         def _is_corner_endpoint(pt: Point) -> bool:
             """Return True when *pt* is within *tolerance* of a sharp corner or free endpoint."""
@@ -1305,7 +1263,7 @@ class PatternPart(NamedAccessMixin):
                 is_horiz = _is_horizontal(gg)
                 try:
                     pts = _intersect(oe.geometry, gg)
-                except (TypeError, Exception):
+                except TypeError, Exception:
                     continue
                 priority = 0 if is_horiz else 1
                 for pt in pts:
@@ -1335,9 +1293,7 @@ class PatternPart(NamedAccessMixin):
             if not is_vertical:
                 elem_has_horizontal.add(id(seam_geom))
             before = len(self.elements)
-            self.add_notches(
-                pt, seam_edge=seam_geom, length=length, width=width, is_back=is_back
-            )
+            self.add_notches(pt, seam_edge=seam_geom, length=length, width=width, is_back=is_back)
             created.extend(self.elements[before:])
         return created
 
@@ -1494,17 +1450,13 @@ class ConstructionGrid:
         for name, x_off in self.verticals:
             x = ax + x_off
             part.add_construction_line(
-                Segment(
-                    Point(x, ay - self.extent), Point(x, ay + self.extent), name=name
-                ),
+                Segment(Point(x, ay - self.extent), Point(x, ay + self.extent), name=name),
                 style=self.style,
             )
         for name, y_off in self.horizontals:
             y = ay + y_off
             part.add_construction_line(
-                Segment(
-                    Point(ax - self.extent, y), Point(ax + self.extent, y), name=name
-                ),
+                Segment(Point(ax - self.extent, y), Point(ax + self.extent, y), name=name),
                 style=self.style,
             )
         return part
@@ -1553,11 +1505,7 @@ class Pattern:
 
         target_part: PatternPart | None = part
         if target_part is None:
-            regular = [
-                p
-                for p in self.parts
-                if not isinstance(p, (ConstructionGridPart, Block))
-            ]
+            regular = [p for p in self.parts if not isinstance(p, (ConstructionGridPart, Block))]
             if len(regular) == 1:
                 target_part = regular[0]
 
@@ -1578,11 +1526,7 @@ class Pattern:
                 height=edge_length,
                 name=f"{edge_length / CM:.0f}cm × {edge_length / CM:.0f}cm",
             ),
-            style=(
-                style
-                if style is not None
-                else StyleOptions(stroke_width=DEFAULT_STROKE_WIDTH)
-            ),
+            style=(style if style is not None else StyleOptions(stroke_width=DEFAULT_STROKE_WIDTH)),
         )
         self.reference_square = elem
         return elem

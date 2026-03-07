@@ -186,10 +186,6 @@ class PrecisionPoint:
             inner circle second.
         """
         return [
-            PatternElement(
-                Circle(self.center, radius=self.outer_radius), style=self.style
-            ),
-            PatternElement(
-                Circle(self.center, radius=self.inner_radius), style=self.style
-            ),
+            PatternElement(Circle(self.center, radius=self.outer_radius), style=self.style),
+            PatternElement(Circle(self.center, radius=self.inner_radius), style=self.style),
         ]

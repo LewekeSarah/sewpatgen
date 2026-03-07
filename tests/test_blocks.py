@@ -11,10 +11,10 @@ from sewpat.pattern import PatternConfig, PatternPart
 from sewpat.person import PersonalAdjustments
 from sewpat.units import CM
 
-
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_blouse_meas() -> BlouseMeasurements:
     bust = 86 * CM
@@ -23,12 +23,23 @@ def _make_blouse_meas() -> BlouseMeasurements:
     cw = bust / 4 - 4.0 * CM
     bust_width = 2 * (bw + aw + cw)
     return BlouseMeasurements(
-        bust=bust, waist=70 * CM, hip=96 * CM, hip_depth=20 * CM,
-        bust_depth=26 * CM, neck_size=7 * CM, bust_span=9 * CM,
-        shoulder_width=13 * CM, back_length=41 * CM, front_length=43 * CM,
-        armscye_depth=bust / 10 + 11 * CM, bust_width=bust_width,
-        waist_width=72 * CM, hip_width=98 * CM,
-        back_width=bw, armscye_width=aw, chest_width=cw,
+        bust=bust,
+        waist=70 * CM,
+        hip=96 * CM,
+        hip_depth=20 * CM,
+        bust_depth=26 * CM,
+        neck_size=7 * CM,
+        bust_span=9 * CM,
+        shoulder_width=13 * CM,
+        back_length=41 * CM,
+        front_length=43 * CM,
+        armscye_depth=bust / 10 + 11 * CM,
+        bust_width=bust_width,
+        waist_width=72 * CM,
+        hip_width=98 * CM,
+        back_width=bw,
+        armscye_width=aw,
+        chest_width=cw,
     )
 
 
@@ -42,6 +53,7 @@ def _make_block(seam_allowance: float = 0.0) -> TopBlock:
 # ---------------------------------------------------------------------------
 # TopBlock construction
 # ---------------------------------------------------------------------------
+
 
 class TestTopBlockConstruction(unittest.TestCase):
     """Tests for TopBlock.from_measurements."""
@@ -81,6 +93,7 @@ class TestTopBlockConstruction(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TopBlockBack typed attributes
 # ---------------------------------------------------------------------------
+
 
 class TestTopBlockBackAttributes(unittest.TestCase):
     """Tests for typed geometry attributes on TopBlockBack."""
@@ -129,6 +142,7 @@ class TestTopBlockBackAttributes(unittest.TestCase):
 # TopBlockFront typed attributes
 # ---------------------------------------------------------------------------
 
+
 class TestTopBlockFrontAttributes(unittest.TestCase):
     """Tests for typed geometry attributes on TopBlockFront."""
 
@@ -173,6 +187,7 @@ class TestTopBlockFrontAttributes(unittest.TestCase):
 # Optional parameters
 # ---------------------------------------------------------------------------
 
+
 class TestTopBlockOptions(unittest.TestCase):
     """Tests for optional constructor parameters."""
 
@@ -187,9 +202,7 @@ class TestTopBlockOptions(unittest.TestCase):
         fc = FitClass(pk=4)
         config = GarmentConfig(length=70 * CM)
         adj = PersonalAdjustments(hip_offset=2.0 * CM, shoulder_drop=1.5 * CM)
-        block = TopBlock.from_measurements(
-            meas=meas, config=config, fit_class=fc, adjustments=adj
-        )
+        block = TopBlock.from_measurements(meas=meas, config=config, fit_class=fc, adjustments=adj)
         self.assertIsInstance(block, TopBlock)
 
     def test_with_pre_built_grid(self):
@@ -198,9 +211,7 @@ class TestTopBlockOptions(unittest.TestCase):
         fc = FitClass(pk=4)
         config = GarmentConfig(length=70 * CM)
         grid = TopGrid.from_measurements(meas=meas, fit_class=fc, config=config)
-        block = TopBlock.from_measurements(
-            meas=meas, config=config, fit_class=fc, grid=grid
-        )
+        block = TopBlock.from_measurements(meas=meas, config=config, fit_class=fc, grid=grid)
         self.assertIsInstance(block, TopBlock)
 
     def test_custom_part_names(self):
@@ -209,8 +220,11 @@ class TestTopBlockOptions(unittest.TestCase):
         fc = FitClass(pk=4)
         config = GarmentConfig(length=70 * CM)
         block = TopBlock.from_measurements(
-            meas=meas, config=config, fit_class=fc,
-            back_name="Rückenteil", front_name="Vorderteil",
+            meas=meas,
+            config=config,
+            fit_class=fc,
+            back_name="Rückenteil",
+            front_name="Vorderteil",
         )
         self.assertEqual(block.back.part.name, "Rückenteil")
         self.assertEqual(block.front.part.name, "Vorderteil")
@@ -221,12 +235,9 @@ class TestTopBlockOptions(unittest.TestCase):
         fc = FitClass(pk=4)
         config = GarmentConfig(length=70 * CM)
         layout = PatternConfig(anchor=Point(10 * CM, 10 * CM))
-        block = TopBlock.from_measurements(
-            meas=meas, config=config, fit_class=fc, layout=layout
-        )
+        block = TopBlock.from_measurements(meas=meas, config=config, fit_class=fc, layout=layout)
         self.assertIsInstance(block, TopBlock)
 
 
 if __name__ == "__main__":
     unittest.main()
-

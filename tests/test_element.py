@@ -7,7 +7,6 @@ from sewpat.geometry import (
     Circle,
     CubicBezier,
     Dart,
-    DartType,
     Point,
     Rect,
     Segment,
@@ -15,10 +14,10 @@ from sewpat.geometry import (
 from sewpat.style import STYLE_STITCH, StyleOptions
 from sewpat.units import CM, MM
 
-
 # ---------------------------------------------------------------------------
 # PatternElement.split_at_dart
 # ---------------------------------------------------------------------------
+
 
 class TestSplitAtDart(unittest.TestCase):
     """Tests for PatternElement.split_at_dart."""
@@ -89,6 +88,7 @@ class TestSplitAtDart(unittest.TestCase):
 # PrecisionPoint
 # ---------------------------------------------------------------------------
 
+
 class TestPrecisionPoint(unittest.TestCase):
     """Tests for PrecisionPoint."""
 
@@ -135,4 +135,3 @@ class TestPrecisionPoint(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

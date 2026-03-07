@@ -153,9 +153,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
     )
     drawstring.add_grainline(
         start=Point(ds_origin.x + model.width * 0.5, ds_origin.y),
-        end=Point(
-            ds_origin.x + model.width * 0.5, ds_origin.y + model.drawstring_height
-        ),
+        end=Point(ds_origin.x + model.width * 0.5, ds_origin.y + model.drawstring_height),
     )
 
     # Explode first (before SA), then add SA only to the standalone cut piece.

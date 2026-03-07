@@ -152,8 +152,7 @@ class FitClass:
             raise ValueError(f"FitClass pk must be 0–12, got {self.pk!r}")
         if self.pk not in _TABLE:
             raise KeyError(
-                f"PK {self.pk} is not yet in the fit-class table. "
-                "Only PK 4 is currently populated."
+                f"PK {self.pk} is not yet in the fit-class table. Only PK 4 is currently populated."
             )
         row = _TABLE[self.pk]
         for ef in EASE_FIELDS:
@@ -221,9 +220,7 @@ class FitClass:
     @property
     def bust_width_ease(self) -> float:
         """BrW-Zugabe — always derived: 2 × (back + armscye_width + chest)."""
-        return 2.0 * (
-            self.back_width_ease + self.armscye_width_ease + self.chest_width_ease
-        )
+        return 2.0 * (self.back_width_ease + self.armscye_width_ease + self.chest_width_ease)
 
     def range(self, field_name: str) -> _Range:
         """Return the published [lo, hi] range for *field_name* at this PK.

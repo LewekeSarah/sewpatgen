@@ -623,12 +623,8 @@ class TestCircle(unittest.TestCase):
         self.assertTrue(circle.contains_point_inside(Point(3, 0)))  # Inside
 
         # Boundary
-        self.assertTrue(
-            circle.contains_point_inside(Point(5, 0), include_boundary=True)
-        )
-        self.assertFalse(
-            circle.contains_point_inside(Point(5, 0), include_boundary=False)
-        )
+        self.assertTrue(circle.contains_point_inside(Point(5, 0), include_boundary=True))
+        self.assertFalse(circle.contains_point_inside(Point(5, 0), include_boundary=False))
 
         # Outside
         self.assertFalse(circle.contains_point_inside(Point(10, 0)))
@@ -779,12 +775,8 @@ class TestCubicBezierBoundingBox(unittest.TestCase):
         bez = self._make_curve()
         mn, mx = bez.bounding_box()
         # Control points are at y=0 and y=20 – the curve never reaches them
-        self.assertGreater(
-            mn.y, 0.0, "y_min must be above the off-curve control point y=0"
-        )
-        self.assertLess(
-            mx.y, 20.0, "y_max must be below the off-curve control point y=20"
-        )
+        self.assertGreater(mn.y, 0.0, "y_min must be above the off-curve control point y=0")
+        self.assertLess(mx.y, 20.0, "y_max must be below the off-curve control point y=20")
 
     def test_bbox_y_values_are_correct(self):
         """Exact y extrema match the analytic result (also verified by svgpathtools)."""
@@ -856,12 +848,8 @@ class TestCubicBezierIntersect(unittest.TestCase):
         tol = 0.05  # mm – sampling grid resolution bound
         pts = intersect(self._A, self._B)
         for pt in pts:
-            min_d_a = min(
-                pt.distance_to(self._A.point_at_t(k / 1000)) for k in range(1001)
-            )
-            min_d_b = min(
-                pt.distance_to(self._B.point_at_t(k / 1000)) for k in range(1001)
-            )
+            min_d_a = min(pt.distance_to(self._A.point_at_t(k / 1000)) for k in range(1001))
+            min_d_b = min(pt.distance_to(self._B.point_at_t(k / 1000)) for k in range(1001))
             self.assertLess(min_d_a, tol, f"Point {pt} is not on curve A")
             self.assertLess(min_d_b, tol, f"Point {pt} is not on curve B")
 
@@ -1102,9 +1090,7 @@ class TestCubicBezierSplitAtPoints(unittest.TestCase):
     def test_split_at_points_chain_is_continuous(self):
         """End of each sub-curve must equal the start of the next."""
         b = self._curve()
-        subs = b.split_at_points(
-            [b.point_at_t(0.2), b.point_at_t(0.6), b.point_at_t(0.9)]
-        )
+        subs = b.split_at_points([b.point_at_t(0.2), b.point_at_t(0.6), b.point_at_t(0.9)])
         for a, c in zip(subs, subs[1:], strict=False):
             self.assertAlmostEqual(a.p3.x, c.p0.x, places=6)
             self.assertAlmostEqual(a.p3.y, c.p0.y, places=6)
@@ -1260,9 +1246,7 @@ class TestSegmentNewMethods(unittest.TestCase):
     def test_split_at_points_chain_is_continuous(self):
         """End of each sub-segment must equal start of the next."""
         s = self._seg()
-        subs = s.split_at_points(
-            [s.point_at_t(0.2), s.point_at_t(0.6), s.point_at_t(0.9)]
-        )
+        subs = s.split_at_points([s.point_at_t(0.2), s.point_at_t(0.6), s.point_at_t(0.9)])
         for a, b in zip(subs, subs[1:], strict=False):
             self.assertAlmostEqual(a.p2.x, b.p1.x, places=6)
             self.assertAlmostEqual(a.p2.y, b.p1.y, places=6)
@@ -1506,8 +1490,7 @@ class TestRoundCorner(unittest.TestCase):
             self.assertLess(
                 radial_err,
                 tolerance,
-                f"t={k / 20:.2f}: radial error "
-                f"{radial_err:.5f} mm > {tolerance:.5f} mm",
+                f"t={k / 20:.2f}: radial error {radial_err:.5f} mm > {tolerance:.5f} mm",
             )
 
     def test_reflex_corner_returns_point(self):
@@ -1612,9 +1595,7 @@ class TestDartRoof(unittest.TestCase):
         dart_narrow = self._make_symmetric_dart(width=20.0, depth=80.0)
         dart_wide = self._make_symmetric_dart(width=60.0, depth=80.0)
         # For this setup tip is at y=-80, seam at y=0; roof is at y > 0
-        rise_narrow = np.linalg.norm(
-            dart_narrow.roof.coords - dart_narrow.center.coords
-        )
+        rise_narrow = np.linalg.norm(dart_narrow.roof.coords - dart_narrow.center.coords)
         rise_wide = np.linalg.norm(dart_wide.roof.coords - dart_wide.center.coords)
         self.assertGreater(rise_wide, rise_narrow)
 

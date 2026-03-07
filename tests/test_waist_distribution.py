@@ -123,12 +123,7 @@ class TestWaistDistributionBalance:
         pts = _make_points(fww, bww)
         wd = calculate_waist_distribution(meas, *pts)
 
-        total = (
-            2 * wd.side_seam_intake
-            + wd.front_dart_width
-            + wd.back_dart_width
-            + wd.remainder
-        )
+        total = 2 * wd.side_seam_intake + wd.front_dart_width + wd.back_dart_width + wd.remainder
         assert total == pytest.approx(wd.hip_shortfall, abs=1e-9)
 
     def test_no_negative_remainder(self):

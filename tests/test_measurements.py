@@ -4,8 +4,6 @@ make_measurements_trouser, make_top_measurements.
 
 import unittest
 
-import pytest
-
 from sewpat.fitclass import FitClass
 from sewpat.measurements import (
     BlouseMeasurements,
@@ -16,18 +14,16 @@ from sewpat.measurements import (
 )
 from sewpat.person import (
     BalanceAdjustments,
-    BalancedPerson,
     Gender,
     Person,
     PersonAnalyser,
-    PersonalAdjustments,
 )
 from sewpat.units import CM
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_blouse_meas() -> BlouseMeasurements:
     bust = 86 * CM
@@ -83,24 +79,33 @@ def _make_person() -> Person:
 # TrouserMeasurements
 # ---------------------------------------------------------------------------
 
+
 class TestTrouserMeasurements(unittest.TestCase):
     """Tests for TrouserMeasurements.__post_init__ derivations."""
 
     def test_front_trouser_width_derived_female(self):
         """front_trouser_width defaults to 0.25 * hip_width (female with sTaH)."""
         meas = TrouserMeasurements(
-            waist=70 * CM, hip=96 * CM, body_rise=27 * CM,
-            waist_width=72 * CM, hip_width=98 * CM,
-            sTaH=107 * CM, inseam=80 * CM,
+            waist=70 * CM,
+            hip=96 * CM,
+            body_rise=27 * CM,
+            waist_width=72 * CM,
+            hip_width=98 * CM,
+            sTaH=107 * CM,
+            inseam=80 * CM,
         )
         self.assertAlmostEqual(meas.front_trouser_width, 0.25 * 98 * CM)
 
     def test_front_trouser_width_explicit(self):
         """Explicit front_trouser_width is kept as-is."""
         meas = TrouserMeasurements(
-            waist=70 * CM, hip=96 * CM, body_rise=27 * CM,
-            waist_width=72 * CM, hip_width=98 * CM,
-            sTaH=107 * CM, inseam=80 * CM,
+            waist=70 * CM,
+            hip=96 * CM,
+            body_rise=27 * CM,
+            waist_width=72 * CM,
+            hip_width=98 * CM,
+            sTaH=107 * CM,
+            inseam=80 * CM,
             front_trouser_width=25 * CM,
         )
         self.assertAlmostEqual(meas.front_trouser_width, 25 * CM)
@@ -108,18 +113,26 @@ class TestTrouserMeasurements(unittest.TestCase):
     def test_knee_height_derived_for_boy(self):
         """knee_height is derived as 0.5 * inseam for boy."""
         meas = TrouserMeasurements(
-            waist=60 * CM, hip=80 * CM, body_rise=22 * CM,
-            waist_width=62 * CM, hip_width=82 * CM,
-            inseam=60 * CM, gender=Gender.boy,
+            waist=60 * CM,
+            hip=80 * CM,
+            body_rise=22 * CM,
+            waist_width=62 * CM,
+            hip_width=82 * CM,
+            inseam=60 * CM,
+            gender=Gender.boy,
         )
         self.assertAlmostEqual(meas.knee_height, 0.5 * 60 * CM)
 
     def test_knee_height_derived_for_girl(self):
         """knee_height is derived as 0.5 * inseam for girl."""
         meas = TrouserMeasurements(
-            waist=60 * CM, hip=80 * CM, body_rise=22 * CM,
-            waist_width=62 * CM, hip_width=82 * CM,
-            inseam=60 * CM, gender=Gender.girl,
+            waist=60 * CM,
+            hip=80 * CM,
+            body_rise=22 * CM,
+            waist_width=62 * CM,
+            hip_width=82 * CM,
+            inseam=60 * CM,
+            gender=Gender.girl,
         )
         self.assertAlmostEqual(meas.knee_height, 0.5 * 60 * CM)
 
@@ -128,9 +141,13 @@ class TestTrouserMeasurements(unittest.TestCase):
         inseam = 80 * CM
         sTaH = 107 * CM
         meas = TrouserMeasurements(
-            waist=70 * CM, hip=96 * CM, body_rise=27 * CM,
-            waist_width=72 * CM, hip_width=98 * CM,
-            sTaH=sTaH, inseam=inseam,
+            waist=70 * CM,
+            hip=96 * CM,
+            body_rise=27 * CM,
+            waist_width=72 * CM,
+            hip_width=98 * CM,
+            sTaH=sTaH,
+            inseam=inseam,
         )
         self.assertAlmostEqual(meas.knee_height, 0.5 * inseam - inseam / 10)
 
@@ -138,6 +155,7 @@ class TestTrouserMeasurements(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # BlouseMeasurements
 # ---------------------------------------------------------------------------
+
 
 class TestBlouseMeasurements(unittest.TestCase):
     """Tests for BlouseMeasurements validation."""
@@ -152,14 +170,22 @@ class TestBlouseMeasurements(unittest.TestCase):
         meas = _make_blouse_meas()
         with self.assertRaises(ValueError):
             BlouseMeasurements(
-                bust=meas.bust, waist=meas.waist, hip=meas.hip,
-                hip_depth=meas.hip_depth, bust_depth=meas.bust_depth,
-                neck_size=meas.neck_size, bust_span=meas.bust_span,
-                shoulder_width=meas.shoulder_width, back_length=meas.back_length,
-                front_length=meas.front_length, armscye_depth=meas.armscye_depth,
+                bust=meas.bust,
+                waist=meas.waist,
+                hip=meas.hip,
+                hip_depth=meas.hip_depth,
+                bust_depth=meas.bust_depth,
+                neck_size=meas.neck_size,
+                bust_span=meas.bust_span,
+                shoulder_width=meas.shoulder_width,
+                back_length=meas.back_length,
+                front_length=meas.front_length,
+                armscye_depth=meas.armscye_depth,
                 bust_width=meas.bust_width + 5 * CM,  # deliberately wrong
-                waist_width=meas.waist_width, hip_width=meas.hip_width,
-                back_width=meas.back_width, armscye_width=meas.armscye_width,
+                waist_width=meas.waist_width,
+                hip_width=meas.hip_width,
+                back_width=meas.back_width,
+                armscye_width=meas.armscye_width,
                 chest_width=meas.chest_width,
             )
 
@@ -167,6 +193,7 @@ class TestBlouseMeasurements(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # GarmentConfig
 # ---------------------------------------------------------------------------
+
 
 class TestGarmentConfig(unittest.TestCase):
     """Tests for GarmentConfig validation."""
@@ -196,15 +223,22 @@ class TestGarmentConfig(unittest.TestCase):
 # make_measurements_trouser
 # ---------------------------------------------------------------------------
 
+
 class TestMakeMeasurementsTrouser(unittest.TestCase):
     """Tests for make_measurements_trouser factory."""
 
     def setUp(self):
         from sewpat.measurements import TrouserEase
+
         # Use boy gender: inseam is provided directly, no sTaH needed
         self.person = Person(
-            bust=60 * CM, waist=58 * CM, hip=70 * CM, hip_depth=16 * CM,
-            body_rise=22 * CM, inseam=60 * CM, height=130 * CM,
+            bust=60 * CM,
+            waist=58 * CM,
+            hip=70 * CM,
+            hip_depth=16 * CM,
+            body_rise=22 * CM,
+            inseam=60 * CM,
+            height=130 * CM,
             gender=Gender.boy,
         )
         self.ease = TrouserEase()
@@ -217,16 +251,12 @@ class TestMakeMeasurementsTrouser(unittest.TestCase):
     def test_waist_width_includes_ease(self):
         """waist_width = waist + waist_ease."""
         meas = make_measurements_trouser(self.person, self.ease)
-        self.assertAlmostEqual(
-            meas.waist_width, self.person.waist + self.ease.waist_ease
-        )
+        self.assertAlmostEqual(meas.waist_width, self.person.waist + self.ease.waist_ease)
 
     def test_hip_width_includes_ease(self):
         """hip_width = hip + hip_ease."""
         meas = make_measurements_trouser(self.person, self.ease)
-        self.assertAlmostEqual(
-            meas.hip_width, self.person.hip + self.ease.hip_ease
-        )
+        self.assertAlmostEqual(meas.hip_width, self.person.hip + self.ease.hip_ease)
 
     def test_with_balance_adjustments(self):
         """BalanceAdjustments are accepted without raising."""
@@ -238,6 +268,7 @@ class TestMakeMeasurementsTrouser(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # make_top_measurements
 # ---------------------------------------------------------------------------
+
 
 class TestMakeTopMeasurements(unittest.TestCase):
     """Tests for make_top_measurements factory."""
@@ -298,11 +329,3 @@ class TestMakeTopMeasurements(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-
-
-
-
-
-

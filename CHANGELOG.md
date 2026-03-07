@@ -83,4 +83,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ConstructionGrid`, `PatternPart`, `Pattern`, `PatternElement`.
 - `CubicBezier`, `Segment`, `Ray`, `Line`, `Circle`, `Rect`, `Triangle` geometry.
 - SVG export via `export_pattern_svg_mm()`.
-

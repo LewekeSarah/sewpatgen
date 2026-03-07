@@ -17,12 +17,23 @@ def _make_blouse_meas() -> BlouseMeasurements:
     cw = bust / 4 - 4.0 * CM
     bust_width = 2 * (bw + aw + cw)
     return BlouseMeasurements(
-        bust=bust, waist=70 * CM, hip=96 * CM, hip_depth=20 * CM,
-        bust_depth=26 * CM, neck_size=7 * CM, bust_span=9 * CM,
-        shoulder_width=13 * CM, back_length=41 * CM, front_length=43 * CM,
-        armscye_depth=bust / 10 + 11 * CM, bust_width=bust_width,
-        waist_width=72 * CM, hip_width=98 * CM,
-        back_width=bw, armscye_width=aw, chest_width=cw,
+        bust=bust,
+        waist=70 * CM,
+        hip=96 * CM,
+        hip_depth=20 * CM,
+        bust_depth=26 * CM,
+        neck_size=7 * CM,
+        bust_span=9 * CM,
+        shoulder_width=13 * CM,
+        back_length=41 * CM,
+        front_length=43 * CM,
+        armscye_depth=bust / 10 + 11 * CM,
+        bust_width=bust_width,
+        waist_width=72 * CM,
+        hip_width=98 * CM,
+        back_width=bw,
+        armscye_width=aw,
+        chest_width=cw,
     )
 
 
@@ -33,9 +44,7 @@ class TestTopGrid(unittest.TestCase):
         self.meas = _make_blouse_meas()
         self.fc = FitClass(pk=4)
         self.config = GarmentConfig(length=70 * CM)
-        self.grid = TopGrid.from_measurements(
-            meas=self.meas, fit_class=self.fc, config=self.config
-        )
+        self.grid = TopGrid.from_measurements(meas=self.meas, fit_class=self.fc, config=self.config)
 
     def test_returns_top_grid_instance(self):
         """from_measurements returns a TopGrid."""
@@ -48,9 +57,22 @@ class TestTopGrid(unittest.TestCase):
     def test_all_segments_are_segments(self):
         """Every named grid attribute is a Segment."""
         attrs = [
-            "shoulder_front", "shoulder_back", "chest", "waist", "hip", "hem",
-            "center_back", "hip_adj", "neck", "dart_back", "armscye_back",
-            "side_back", "side_front", "armscye_front", "bust_point", "center_front",
+            "shoulder_front",
+            "shoulder_back",
+            "chest",
+            "waist",
+            "hip",
+            "hem",
+            "center_back",
+            "hip_adj",
+            "neck",
+            "dart_back",
+            "armscye_back",
+            "side_back",
+            "side_front",
+            "armscye_front",
+            "bust_point",
+            "center_front",
         ]
         for attr in attrs:
             with self.subTest(attr=attr):
@@ -65,7 +87,9 @@ class TestTopGrid(unittest.TestCase):
         """A non-zero hip_offset shifts the hip_adj line position."""
         grid_default = self.grid
         grid_offset = TopGrid.from_measurements(
-            meas=self.meas, fit_class=self.fc, config=self.config,
+            meas=self.meas,
+            fit_class=self.fc,
+            config=self.config,
             hip_offset=1.0 * CM,
         )
         # hip_adj.p1.x should differ by the scaled offset
@@ -77,9 +101,12 @@ class TestTopGrid(unittest.TestCase):
     def test_custom_layout_anchor_applied(self):
         """Custom PatternConfig anchor shifts the grid origin."""
         from sewpat.geometry import Point
+
         layout = PatternConfig(anchor=Point(20 * CM, 20 * CM))
         grid = TopGrid.from_measurements(
-            meas=self.meas, fit_class=self.fc, config=self.config,
+            meas=self.meas,
+            fit_class=self.fc,
+            config=self.config,
             layout=layout,
         )
         # shoulder_back (y=0 offset) should start at anchor y
@@ -88,6 +115,7 @@ class TestTopGrid(unittest.TestCase):
     def test_chest_width_mismatch_raises(self):
         """_check_chest_width raises ValueError when the grid is inconsistent."""
         from sewpat.grids import _check_chest_width
+
         # Corrupt the grid by passing wrong expected width
         with self.assertRaises(ValueError):
             _check_chest_width(self.grid, 9999 * CM)
@@ -95,4 +123,3 @@ class TestTopGrid(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

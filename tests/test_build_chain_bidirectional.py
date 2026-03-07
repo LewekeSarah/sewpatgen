@@ -57,8 +57,6 @@ def test_four_elements_scrambled():
 def test_disconnected_remainder_appended():
     """Genuinely disconnected element is still appended at end (dart case)."""
     far = Point(999, 999)
-    chain = build_chain(
-        [Segment(A, B), Segment(B, C), Segment(far, far.translate(1, 0))]
-    )
+    chain = build_chain([Segment(A, B), Segment(B, C), Segment(far, far.translate(1, 0))])
     assert len(chain) == 3
     assert _xs(chain)[:2] == [(0, 10), (10, 20)]

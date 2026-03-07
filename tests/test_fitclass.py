@@ -2,8 +2,6 @@
 
 import unittest
 
-import pytest
-
 from sewpat.fitclass import EASE_FIELDS, FitClass
 from sewpat.units import CM
 
@@ -28,9 +26,7 @@ class TestFitClassDefaults(unittest.TestCase):
     def test_bust_width_ease_derived(self):
         """bust_width_ease = 2 × (back + armscye_width + chest)."""
         expected = 2.0 * (
-            self.fc.back_width_ease
-            + self.fc.armscye_width_ease
-            + self.fc.chest_width_ease
+            self.fc.back_width_ease + self.fc.armscye_width_ease + self.fc.chest_width_ease
         )
         self.assertAlmostEqual(self.fc.bust_width_ease, expected)
 
@@ -117,4 +113,3 @@ class TestFitClassValidation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -21,22 +21,23 @@ if TYPE_CHECKING:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _clamp(value: float, lo: float, hi: float) -> float:
     """Clamp *value* to the closed interval [lo, hi]."""
     return max(lo, min(hi, value))
 
 
 # Fractions used by calculate_waist_distribution().
-_SN_FRACTION: float = 0.25    # fraction of hip_shortfall → each side seam
+_SN_FRACTION: float = 0.25  # fraction of hip_shortfall → each side seam
 _FRONT_FRACTION: float = 0.40  # fraction of residual → front waist dart
 
 # Map from FitClass resolved property names → body measurement field names.
 _BODY_EASE_MAP: dict[str, str] = {
-    "back_width_ease":      "back_width",
-    "armscye_width_ease":   "armscye_width",
-    "chest_width_ease":     "chest_width",
-    "armscye_depth_ease":   "armscye_depth",
-    "shoulder_width_ease":  "shoulder_width",
+    "back_width_ease": "back_width",
+    "armscye_width_ease": "armscye_width",
+    "chest_width_ease": "chest_width",
+    "armscye_depth_ease": "armscye_depth",
+    "shoulder_width_ease": "shoulder_width",
 }
 
 
@@ -52,10 +53,11 @@ class TrouserEase:
         inseam_ease:    Added to inside-leg length (SrH).
         hip_ease:       Added to hip circumference (HüU).
     """
-    body_rise_ease: float = 0.0   # SiH — Sitzhöhe-Zugabe
-    inseam_ease:    float = 0.0   # SrH — Schritthöhe-Zugabe
-    hip_ease:       float = 0.0   # HüU — Hüftumfang-Zugabe
-    waist_ease:     float = 0.0   # TaU — Taillenumfang-Zugabe
+
+    body_rise_ease: float = 0.0  # SiH — Sitzhöhe-Zugabe
+    inseam_ease: float = 0.0  # SrH — Schritthöhe-Zugabe
+    hip_ease: float = 0.0  # HüU — Hüftumfang-Zugabe
+    waist_ease: float = 0.0  # TaU — Taillenumfang-Zugabe
 
 
 @dataclass
@@ -77,32 +79,31 @@ class TrouserMeasurements:
         front_trouser_width: vHoB — Vorderhosenbreite (defaults to 25 % of hip_width).
         gender: Used for gender-specific construction formulas.
     """
-    waist: float          # TaU — Taillenumfang
-    hip: float            # HüU — Hüftumfang
-    body_rise: float      # SiH — Sitzhöhe
-    waist_width: float    # TaW — Taillenweite fertig
-    hip_width: float      # HüW — Hüftweite fertig
-    hip_depth: float | None = None   # HüT — Hüfttiefe
-    inseam: float | None = None      # SrH — Schritthöhe
+
+    waist: float  # TaU — Taillenumfang
+    hip: float  # HüU — Hüftumfang
+    body_rise: float  # SiH — Sitzhöhe
+    waist_width: float  # TaW — Taillenweite fertig
+    hip_width: float  # HüW — Hüftweite fertig
+    hip_depth: float | None = None  # HüT — Hüfttiefe
+    inseam: float | None = None  # SrH — Schritthöhe
     sTaH: float | None = None
-    knee_height: float | None = None       # Kniehöhe
+    knee_height: float | None = None  # Kniehöhe
     front_trouser_width: float | None = None  # vHoB — Vorderhosenbreite
     gender: Gender = Gender.female
 
     def __post_init__(self) -> None:
         """Derive ``front_trouser_width`` and ``knee_height`` when not explicitly set."""
         self.front_trouser_width = (
-            0.25 * self.hip_width if self.front_trouser_width is None
-            else self.front_trouser_width
+            0.25 * self.hip_width if self.front_trouser_width is None else self.front_trouser_width
         )
         if self.gender in [Gender.boy, Gender.girl]:
-            self.knee_height = (
-                0.5 * self.inseam if self.knee_height is None else self.knee_height
-            )
+            self.knee_height = 0.5 * self.inseam if self.knee_height is None else self.knee_height
             self.sTaH = self.inseam + self.body_rise
         elif self.gender == Gender.female:
             self.knee_height = (
-                0.5 * self.inseam - self.inseam / 10 if self.knee_height is None
+                0.5 * self.inseam - self.inseam / 10
+                if self.knee_height is None
                 else self.knee_height
             )
             self.inseam = self.sTaH - self.inseam
@@ -139,36 +140,37 @@ class BlouseMeasurements:
         chest_width: BrB — Brustbreite (chest width, with ease).
         gender: Used for gender-specific construction formulas.
     """
-    bust: float             # BrU — Brustumfang
-    waist: float            # TaU — Taillenumfang
-    hip: float              # HüU — Hüftumfang
-    hip_depth: float        # HüT — Hüfttiefe
-    bust_depth: float       # BrT — Brusttiefe
-    neck_size: float        # HlB — Halslochbreite
-    bust_span: float        # BrPA — Brustpunktabstand
-    shoulder_width: float   # SuB — Schulterbreite
-    back_length: float      # RüL — Rückenlänge
-    front_length: float     # VL  — Vorderlänge
-    bust_width: float       # BrW — Brustbreite fertig (half-width)
-    waist_width: float      # TaW — Taillenweite fertig (half-width)
-    hip_width: float        # HüW — Hüftweite fertig (half-width)
-    armscye_depth: float    # AlT — Armlochtiefe
-    back_width: float       # RüB — Rückenbreite
-    armscye_width: float    # ArD — Armdurchmesser
-    chest_width: float      # BrB — Brustbreite
+
+    bust: float  # BrU — Brustumfang
+    waist: float  # TaU — Taillenumfang
+    hip: float  # HüU — Hüftumfang
+    hip_depth: float  # HüT — Hüfttiefe
+    bust_depth: float  # BrT — Brusttiefe
+    neck_size: float  # HlB — Halslochbreite
+    bust_span: float  # BrPA — Brustpunktabstand
+    shoulder_width: float  # SuB — Schulterbreite
+    back_length: float  # RüL — Rückenlänge
+    front_length: float  # VL  — Vorderlänge
+    bust_width: float  # BrW — Brustbreite fertig (half-width)
+    waist_width: float  # TaW — Taillenweite fertig (half-width)
+    hip_width: float  # HüW — Hüftweite fertig (half-width)
+    armscye_depth: float  # AlT — Armlochtiefe
+    back_width: float  # RüB — Rückenbreite
+    armscye_width: float  # ArD — Armdurchmesser
+    chest_width: float  # BrB — Brustbreite
     gender: Gender = Gender.female
 
     def __post_init__(self) -> None:
         """Validate that back + armscye + chest widths sum to bust_width / 2."""
-        if abs(
-            self.bust_width / 2
-            - (self.back_width + self.armscye_width + self.chest_width)
-        ) > 1e-6:
+        if (
+            abs(self.bust_width / 2 - (self.back_width + self.armscye_width + self.chest_width))
+            > 1e-6
+        ):
             raise ValueError(
                 f"Bust width components do not match bust_width: "
-                f"bust_width/2={self.bust_width/2:.6f} != "
+                f"bust_width/2={self.bust_width / 2:.6f} != "
                 f"back+armscye+chest="
-                f"{self.back_width+self.armscye_width+self.chest_width:.6f}"
+                f"{self.back_width + self.armscye_width + self.chest_width:.6f}"
             )
 
 
@@ -194,13 +196,14 @@ class GarmentConfig:
         waist_dart_front_tip:  Distance from the waist dart centre to its lower
                                (hem-side) tip on the front piece.
     """
-    length: float                             # MoL — Modell-Länge
+
+    length: float  # MoL — Modell-Länge
     seam_allowance: float = 1 * CM
-    hem_width: float | None = None            # SaW — Saumweite
-    shoulder_gather: float = 1 * CM           # Schulter-Weite — shoulder seam gather
-    armscye_fit: float = 0.0                  # Armlochpassform — 0 regular, 1 tight
-    waist_dart_back_tip: float = 16 * CM      # hAbI-Spitze — back waist dart lower tip
-    waist_dart_front_tip: float = 12 * CM     # vAbI-Spitze — front waist dart lower tip
+    hem_width: float | None = None  # SaW — Saumweite
+    shoulder_gather: float = 1 * CM  # Schulter-Weite — shoulder seam gather
+    armscye_fit: float = 0.0  # Armlochpassform — 0 regular, 1 tight
+    waist_dart_back_tip: float = 16 * CM  # hAbI-Spitze — back waist dart lower tip
+    waist_dart_front_tip: float = 12 * CM  # vAbI-Spitze — front waist dart lower tip
 
     def __post_init__(self) -> None:
         """Validate ``armscye_fit`` and ``waist_dart_back_tip`` are within permitted ranges."""
@@ -223,6 +226,7 @@ class TrouserConfig(GarmentConfig):
     Attributes:
         front_trouser_ease: Zugabe vordere Hosenbreite (ZuvHoB).
     """
+
     front_trouser_ease: float | None = None  # ZuvHoB — Zugabe vordere Hosenbreite
 
 
@@ -244,13 +248,13 @@ class WaistDistribution:
                            (0 if perfectly distributed).
     """
 
-    front_waist_width: float   # vTaB — vordere Taillenbreite
-    back_waist_width: float    # hTaB — hintere Taillenbreite
-    total_waist_width: float   # TaB  — Taillenbreite gesamt
-    hip_shortfall: float       # Ausfallbetrag
-    side_seam_intake: float    # SaEinzug — Seitennaht-Einzug
-    front_dart_width: float    # vAbI — vorderer Abnäher-Einzug
-    back_dart_width: float     # hAbI — hinterer Abnäher-Einzug
+    front_waist_width: float  # vTaB — vordere Taillenbreite
+    back_waist_width: float  # hTaB — hintere Taillenbreite
+    total_waist_width: float  # TaB  — Taillenbreite gesamt
+    hip_shortfall: float  # Ausfallbetrag
+    side_seam_intake: float  # SaEinzug — Seitennaht-Einzug
+    front_dart_width: float  # vAbI — vorderer Abnäher-Einzug
+    back_dart_width: float  # hAbI — hinterer Abnäher-Einzug
     remainder: float
 
 
@@ -267,10 +271,10 @@ class HipDistribution:
         hip_shortfall:    Hip excess = total_hip_width − hip_width / 2.
     """
 
-    front_hip_width: float   # vHüB — vordere Hüftbreite
-    back_hip_width: float    # hHüB — hintere Hüftbreite
-    total_hip_width: float   # HüB  — Hüftbreite gesamt
-    hip_shortfall: float     # Fehlbetrag
+    front_hip_width: float  # vHüB — vordere Hüftbreite
+    back_hip_width: float  # hHüB — hintere Hüftbreite
+    total_hip_width: float  # HüB  — Hüftbreite gesamt
+    hip_shortfall: float  # Fehlbetrag
 
 
 def calculate_hip_distribution(
@@ -295,9 +299,9 @@ def calculate_hip_distribution(
     from sewpat.geometry import Segment  # noqa: PLC0415
 
     front_hip_width = Segment(pt_hip_cf, pt_hip_sf).length
-    back_hip_width  = Segment(pt_hip_sb, pt_hip_cb).length
+    back_hip_width = Segment(pt_hip_sb, pt_hip_cb).length
     total_hip_width = front_hip_width + back_hip_width
-    hip_shortfall   = total_hip_width - meas.hip_width / 2
+    hip_shortfall = total_hip_width - meas.hip_width / 2
 
     return HipDistribution(
         front_hip_width=front_hip_width,
@@ -333,21 +337,23 @@ def calculate_waist_distribution(
     from sewpat.geometry import Segment  # noqa: PLC0415
 
     front_waist_width = Segment(pt_waist_cf, pt_waist_sf).length
-    back_waist_width  = Segment(pt_waist_sb, pt_waist_cb).length
+    back_waist_width = Segment(pt_waist_sb, pt_waist_cb).length
     total_waist_width = front_waist_width + back_waist_width
-    hip_shortfall     = total_waist_width - meas.waist_width / 2
+    hip_shortfall = total_waist_width - meas.waist_width / 2
 
     side_seam_intake = _clamp(hip_shortfall * _SN_FRACTION, 0.0, 2.0 * CM)
     rest = hip_shortfall - 2.0 * side_seam_intake
     rest_pos = max(0.0, rest)
     front_dart_width = _clamp(
         rest * _FRONT_FRACTION,
-        min(1.0 * CM, rest_pos), min(3.0 * CM, rest_pos),
+        min(1.0 * CM, rest_pos),
+        min(3.0 * CM, rest_pos),
     )
     remaining_after_front = rest_pos - front_dart_width
     back_dart_width = _clamp(
         rest - front_dart_width,
-        min(2.0 * CM, remaining_after_front), min(4.0 * CM, remaining_after_front),
+        min(2.0 * CM, remaining_after_front),
+        min(4.0 * CM, remaining_after_front),
     )
     remainder = max(0.0, rest - front_dart_width - back_dart_width)
 
@@ -381,9 +387,9 @@ def make_top_measurements(
         if body_key in measurements:
             measurements[body_key] += getattr(fit_class, fc_attr)
 
-    measurements["bust_width"]  = measurements["bust"]  + fit_class.bust_width_ease
+    measurements["bust_width"] = measurements["bust"] + fit_class.bust_width_ease
     measurements["waist_width"] = measurements["waist"] + fit_class.waist_ease
-    measurements["hip_width"]   = measurements["hip"]   + fit_class.hip_ease
+    measurements["hip_width"] = measurements["hip"] + fit_class.hip_ease
 
     measurements.pop("height", None)
     return BlouseMeasurements(**measurements)
@@ -409,7 +415,7 @@ def make_measurements_trouser(
         measurements["inseam"] += ease.inseam_ease
 
     measurements["waist_width"] = measurements["waist"] + ease.waist_ease
-    measurements["hip_width"]   = measurements["hip"]   + ease.hip_ease
+    measurements["hip_width"] = measurements["hip"] + ease.hip_ease
 
     measurements.pop("height", None)
 
@@ -419,8 +425,13 @@ def make_measurements_trouser(
                 measurements[key] += val
 
     trouser_keys = [
-        "waist", "hip", "hip_depth", "body_rise",
-        "inseam", "waist_width", "hip_width",
+        "waist",
+        "hip",
+        "hip_depth",
+        "body_rise",
+        "inseam",
+        "waist_width",
+        "hip_width",
     ]
     trouser_dict = {k: v for k, v in measurements.items() if k in trouser_keys}
     trouser_dict["gender"] = person.gender

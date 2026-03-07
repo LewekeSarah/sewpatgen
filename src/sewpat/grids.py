@@ -119,10 +119,7 @@ class TopGrid:
                 ("Side Back", hip_adj + meas.back_width + meas.armscye_width * 2 / 3),
                 (
                     "Side Front",
-                    hip_adj
-                    + meas.back_width
-                    + meas.armscye_width * 2 / 3
-                    + layout.margin,
+                    hip_adj + meas.back_width + meas.armscye_width * 2 / 3 + layout.margin,
                 ),
                 (
                     "Armscye Front",

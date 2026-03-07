@@ -1,24 +1,21 @@
 """Tests for person.py — Person, PersonalAdjustments, PersonAnalyser, BalancedPerson."""
 
 import unittest
-from unittest.mock import patch
-
-import pytest
 
 from sewpat.person import (
     BalanceAdjustments,
     BalancedPerson,
     Gender,
     Person,
-    PersonAnalyser,
     PersonalAdjustments,
+    PersonAnalyser,
 )
 from sewpat.units import CM
-
 
 # ---------------------------------------------------------------------------
 # Person
 # ---------------------------------------------------------------------------
+
 
 class TestPerson(unittest.TestCase):
     """Tests for Person dataclass."""
@@ -47,6 +44,7 @@ class TestPerson(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # PersonalAdjustments
 # ---------------------------------------------------------------------------
+
 
 class TestPersonalAdjustments(unittest.TestCase):
     """Tests for PersonalAdjustments validation."""
@@ -87,6 +85,7 @@ class TestPersonalAdjustments(unittest.TestCase):
 # PersonAnalyser helper — a realistic Person fixture
 # ---------------------------------------------------------------------------
 
+
 def _make_person() -> Person:
     """Return a fully-specified Person in the 80–89 cm bust range."""
     bust = 86 * CM
@@ -114,6 +113,7 @@ def _make_person() -> Person:
 # ---------------------------------------------------------------------------
 # PersonAnalyser
 # ---------------------------------------------------------------------------
+
 
 class TestPersonAnalyser(unittest.TestCase):
     """Tests for PersonAnalyser measurement derivation and balancing."""
@@ -220,6 +220,7 @@ class TestPersonAnalyser(unittest.TestCase):
 # BalancedPerson
 # ---------------------------------------------------------------------------
 
+
 class TestBalancedPerson(unittest.TestCase):
     """Tests for BalancedPerson proxy."""
 
@@ -244,4 +245,3 @@ class TestBalancedPerson(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

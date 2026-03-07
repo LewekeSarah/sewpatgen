@@ -78,16 +78,12 @@ class TestHipDistributionGeometry:
 
     def test_fehlbetrag_positive_when_pattern_wider_than_half_measurement(self):
         """Pattern wider than hip_width/2 → positive hip_shortfall."""
-        hd = calculate_hip_distribution(
-            _make_meas(99.0 * CM), *_make_points(30.0 * CM, 30.0 * CM)
-        )
+        hd = calculate_hip_distribution(_make_meas(99.0 * CM), *_make_points(30.0 * CM, 30.0 * CM))
         assert hd.hip_shortfall > 0
 
     def test_fehlbetrag_negative_when_pattern_narrower_than_half_measurement(self):
         """Pattern narrower than hip_width/2 → negative hip_shortfall."""
-        hd = calculate_hip_distribution(
-            _make_meas(99.0 * CM), *_make_points(20.0 * CM, 20.0 * CM)
-        )
+        hd = calculate_hip_distribution(_make_meas(99.0 * CM), *_make_points(20.0 * CM, 20.0 * CM))
         assert hd.hip_shortfall < 0
 
     def test_fehlbetrag_zero_when_pattern_matches_half_measurement(self):
@@ -97,7 +93,5 @@ class TestHipDistributionGeometry:
         assert hd.hip_shortfall == pytest.approx(0.0, abs=1e-9)
 
     def test_returns_hip_distribution_instance(self):
-        hd = calculate_hip_distribution(
-            _make_meas(99.0 * CM), *_make_points(26.0 * CM, 26.0 * CM)
-        )
+        hd = calculate_hip_distribution(_make_meas(99.0 * CM), *_make_points(26.0 * CM, 26.0 * CM))
         assert isinstance(hd, HipDistribution)

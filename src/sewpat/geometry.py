@@ -91,10 +91,7 @@ class Point:
     def __str__(self) -> str:
         """Return a human-readable string representation."""
         if self.name:
-            return (
-                f"Point(name={self.name}, "
-                f"x={self.coords[0]:.6g}, y={self.coords[1]:.6g})"
-            )
+            return f"Point(name={self.name}, x={self.coords[0]:.6g}, y={self.coords[1]:.6g})"
         else:
             return f"Point(x={self.coords[0]:.6g}, y={self.coords[1]:.6g})"
 
@@ -113,8 +110,8 @@ class Point:
         endpoint.
         """
         p1 = seg.p1.coords
-        d  = seg.p2.coords - p1
-        t  = float(np.dot(self.coords - p1, d) / np.dot(d, d))
+        d = seg.p2.coords - p1
+        t = float(np.dot(self.coords - p1, d) / np.dot(d, d))
         foot = Point(*(p1 + max(0.0, min(1.0, t)) * d))
         return self.distance_to(foot)
 
@@ -152,9 +149,7 @@ class Point:
         """Scalar equality: True when both coordinates and name match exactly."""
         if not isinstance(other, Point):
             return NotImplemented
-        return (
-            bool(np.array_equal(self.coords, other.coords)) and self.name == other.name
-        )
+        return bool(np.array_equal(self.coords, other.coords)) and self.name == other.name
 
     def __hash__(self) -> int:
         """Hash based on rounded coordinates and name."""
@@ -260,9 +255,7 @@ class Segment:
 
     def translate(self, dx: float, dy: float) -> Segment:
         """Return a copy translated by (dx, dy)."""
-        return Segment(
-            self.p1.translate(dx, dy), self.p2.translate(dx, dy), name=self.name
-        )
+        return Segment(self.p1.translate(dx, dy), self.p2.translate(dx, dy), name=self.name)
 
     @property
     def start(self) -> Point:
@@ -323,9 +316,7 @@ class Segment:
         if not (0.0 < t < 1.0):
             raise ValueError(f"t must be in (0, 1), got {t}")
         mid = self.point_at_t(t)
-        return Segment(self.p1, mid, name=self.name), Segment(
-            mid, self.p2, name=self.name
-        )
+        return Segment(self.p1, mid, name=self.name), Segment(mid, self.p2, name=self.name)
 
     def split_at_points(
         self,
@@ -512,10 +503,7 @@ class Ray:
     def __str__(self) -> str:
         """Return a human-readable string representation."""
         if self.name:
-            return (
-                f"Ray(name={self.name}, origin={self.origin}, "
-                f"direction={self.direction})"
-            )
+            return f"Ray(name={self.name}, origin={self.origin}, direction={self.direction})"
         else:
             return f"Ray(origin={self.origin}, direction={self.direction})"
 
@@ -618,10 +606,7 @@ class Line:
     def __str__(self) -> str:
         """Return a human-readable string representation."""
         if self.name:
-            return (
-                f"Line(name={self.name}, point={self.point}, "
-                f"direction={self.direction})"
-            )
+            return f"Line(name={self.name}, point={self.point}, direction={self.direction})"
         else:
             return f"Line(point={self.point}, direction={self.direction})"
 
@@ -711,23 +696,15 @@ class Rect:
                 f"Rect(name={self.name}, origin={self.origin}, "
                 f"width={self.width:.6g}, height={self.height:.6g})"
             )
-        return (
-            f"Rect(origin={self.origin}, "
-            f"width={self.width:.6g}, height={self.height:.6g})"
-        )
+        return f"Rect(origin={self.origin}, width={self.width:.6g}, height={self.height:.6g})"
 
     def __repr__(self) -> str:
         """Return an unambiguous string representation."""
-        return (
-            f"Rect(origin={self.origin}, "
-            f"width={self.width:.6g}, height={self.height:.6g})"
-        )
+        return f"Rect(origin={self.origin}, width={self.width:.6g}, height={self.height:.6g})"
 
     def translate(self, dx: float, dy: float) -> Rect:
         """Return a copy translated by (dx, dy)."""
-        return Rect(
-            self.origin.translate(dx, dy), self.width, self.height, name=self.name
-        )
+        return Rect(self.origin.translate(dx, dy), self.width, self.height, name=self.name)
 
     def set_name(self, name: str) -> Rect:
         """Set the name of this rectangle and return ``self`` for fluent chaining."""
@@ -748,9 +725,7 @@ class Triangle:
         name: Optional label.
     """
 
-    def __init__(
-        self, p1: Point, p2: Point, p3: Point, name: str | None = None
-    ) -> None:
+    def __init__(self, p1: Point, p2: Point, p3: Point, name: str | None = None) -> None:
         """Initialise from three vertices *p1*, *p2*, *p3* and optional *name*."""
         self.p1 = p1
         self.p2 = p2
@@ -760,9 +735,7 @@ class Triangle:
     def __str__(self) -> str:
         """Return a human-readable string representation."""
         if self.name:
-            return (
-                f"Triangle(name={self.name}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
-            )
+            return f"Triangle(name={self.name}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
         return f"Triangle(p1={self.p1}, p2={self.p2}, p3={self.p3})"
 
     def __repr__(self) -> str:
@@ -853,10 +826,7 @@ class Circle:
     def __str__(self) -> str:
         """Return a human-readable string representation."""
         if self.name:
-            return (
-                f"Circle(name={self.name}, center={self.center}, "
-                f"radius={self.radius:.6g})"
-            )
+            return f"Circle(name={self.name}, center={self.center}, radius={self.radius:.6g})"
         else:
             return f"Circle(center={self.center}, radius={self.radius:.6g})"
 
@@ -879,9 +849,7 @@ class Circle:
         """Return True if *point* lies on the circle boundary within *tolerance*."""
         return abs(self.center.distance_to(point) - self.radius) < tolerance
 
-    def contains_point_inside(
-        self, point: Point, include_boundary: bool = True
-    ) -> bool:
+    def contains_point_inside(self, point: Point, include_boundary: bool = True) -> bool:
         """Return True if *point* is inside (or on) the circle."""
         d = self.center.distance_to(point)
         return d <= self.radius if include_boundary else d < self.radius
@@ -975,9 +943,7 @@ class CubicBezier:
         p3: End point of the curve.
     """
 
-    def __init__(
-        self, p0: Point, p1: Point, p2: Point, p3: Point, name: str | None = None
-    ) -> None:
+    def __init__(self, p0: Point, p1: Point, p2: Point, p3: Point, name: str | None = None) -> None:
         """Initialize a cubic Bezier curve with four control points.
 
         Args:
@@ -996,8 +962,7 @@ class CubicBezier:
     def __str__(self) -> str:
         """Return a human-readable string representation."""
         return (
-            f"CubicBezier(name={self.name}, p0={self.p0}, p1={self.p1}, "
-            f"p2={self.p2}, p3={self.p3})"
+            f"CubicBezier(name={self.name}, p0={self.p0}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
         )
 
     def __repr__(self) -> str:
@@ -1045,19 +1010,9 @@ class CubicBezier:
         mt2 = mt * mt
         mt3 = mt2 * mt
 
-        x = (
-            mt3 * self.p0.x
-            + 3 * mt2 * t * self.p1.x
-            + 3 * mt * t2 * self.p2.x
-            + t3 * self.p3.x
-        )
+        x = mt3 * self.p0.x + 3 * mt2 * t * self.p1.x + 3 * mt * t2 * self.p2.x + t3 * self.p3.x
 
-        y = (
-            mt3 * self.p0.y
-            + 3 * mt2 * t * self.p1.y
-            + 3 * mt * t2 * self.p2.y
-            + t3 * self.p3.y
-        )
+        y = mt3 * self.p0.y + 3 * mt2 * t * self.p1.y + 3 * mt * t2 * self.p2.y + t3 * self.p3.y
 
         return Point(x, y)
 
@@ -1179,9 +1134,7 @@ class CubicBezier:
         svg = self._svg()
         eps = tolerance / total_len
 
-        ts: list[float] = sorted(
-            _bezier_closest_t(svg, complex(pt.x, pt.y)) for pt in points
-        )
+        ts: list[float] = sorted(_bezier_closest_t(svg, complex(pt.x, pt.y)) for pt in points)
         breakpoints: list[float] = [t for t in ts if eps < t < 1.0 - eps]
 
         if not breakpoints:
@@ -1392,14 +1345,10 @@ class CubicBezier:
         left, right = self.split(0.5)
         return left.offset_adaptive(
             d, center=None, eps=eps, _depth=_depth + 1, _max_depth=_max_depth
-        ) + right.offset_adaptive(
-            d, center=None, eps=eps, _depth=_depth + 1, _max_depth=_max_depth
-        )
+        ) + right.offset_adaptive(d, center=None, eps=eps, _depth=_depth + 1, _max_depth=_max_depth)
 
 
-def _intersect_bezier_bezier(
-    a: CubicBezier, b: CubicBezier, tol: float = 1e-12
-) -> list[Point]:
+def _intersect_bezier_bezier(a: CubicBezier, b: CubicBezier, tol: float = 1e-12) -> list[Point]:
     """Find intersections between two cubic Bézier curves.
 
     Uses ``svgpathtools`` as a backend, which implements the numerically robust
@@ -1427,9 +1376,7 @@ def _intersect_bezier_bezier(
 
 def _bezier_shapely(b: CubicBezier, n: int = 64) -> _sg.LineString:
     """Discretise a CubicBezier into a Shapely LineString with *n* segments."""
-    return _sg.LineString(
-        [(b.point_at_t(i / n).x, b.point_at_t(i / n).y) for i in range(n + 1)]
-    )
+    return _sg.LineString([(b.point_at_t(i / n).x, b.point_at_t(i / n).y) for i in range(n + 1)])
 
 
 def geom_to_shapely(g: Segment | CubicBezier) -> _sg.LineString:
@@ -1480,9 +1427,7 @@ def _shapely_to_points(result: _sg.base.BaseGeometry) -> list[Point]:
     return []
 
 
-GEOMETRIC_TYPE = (
-    Point | Line | Ray | Circle | Segment | Rect | Triangle | InfoBox | CubicBezier
-)
+GEOMETRIC_TYPE = Point | Line | Ray | Circle | Segment | Rect | Triangle | InfoBox | CubicBezier
 
 
 def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
@@ -1700,10 +1645,7 @@ def miter_corner(
     if check_reflex and float(np.dot(pt - end_a.coords, ta)) < 0.0:
         return bevel_mid
 
-    if (
-        sa_distance > 1e-9
-        and float(np.linalg.norm(pt - end_a.coords)) > miter_limit * sa_distance
-    ):
+    if sa_distance > 1e-9 and float(np.linalg.norm(pt - end_a.coords)) > miter_limit * sa_distance:
         return bevel_mid
     return Point(*pt)
 
@@ -1799,9 +1741,7 @@ def buffer_chain(
     if not poly.is_valid:
         poly = poly.buffer(0)
     return list(
-        poly.buffer(
-            distance, join_style=join_style, mitre_limit=mitre_limit
-        ).exterior.coords
+        poly.buffer(distance, join_style=join_style, mitre_limit=mitre_limit).exterior.coords
     )
 
 
@@ -1942,9 +1882,7 @@ class Dart:
         try:
             dart_type = DartType(dart_type)
         except ValueError:
-            raise ValueError(
-                f"dart_type must be 'triangle' or 'rhombus', got {dart_type!r}"
-            )
+            raise ValueError(f"dart_type must be 'triangle' or 'rhombus', got {dart_type!r}")
         self.leg_a = leg_a
         self.leg_b = leg_b
         self.center = center
@@ -1954,6 +1892,7 @@ class Dart:
         self.second_tip: Point | None = second_tip
         if second_tip is not None and dart_type is not DartType.RHOMBUS:
             import warnings
+
             warnings.warn(
                 f"second_tip is only used for rhombus darts, but dart_type is "
                 f"{dart_type!r}. The second_tip will be ignored.",
@@ -2178,19 +2117,13 @@ class Dart:
             # Segment or CubicBezier — find t via Shapely projection.
             t = float(
                 np.clip(
-                    geom_to_shapely(geom).project(
-                        _sg.Point(point.x, point.y), normalized=True
-                    ),
+                    geom_to_shapely(geom).project(_sg.Point(point.x, point.y), normalized=True),
                     0.0,
                     1.0,
                 )
             )
             center = geom.point_at_t(t)
-            normal = (
-                geom.normal_at_t(t)
-                if isinstance(geom, CubicBezier)
-                else geom.unit_normal
-            )
+            normal = geom.normal_at_t(t) if isinstance(geom, CubicBezier) else geom.unit_normal
 
         tip = center + Point(*normal) * depth
         leg_a = center.move_towards(geom, -width / 2.0)
@@ -2230,9 +2163,7 @@ class Dart:
                 f"got {type(geom).__name__!r}"
             )
         center = geom.point_at_t(t)
-        tip = reference_point.move_towards(
-            Segment(reference_point, center), tip_shortfall
-        )
+        tip = reference_point.move_towards(Segment(reference_point, center), tip_shortfall)
         leg_a = center.move_towards(geom, -width / 2.0)
         leg_b = center.move_towards(geom, +width / 2.0)
         return cls(
@@ -2372,9 +2303,7 @@ class Dart:
             if c is None:
                 return None
             if isinstance(c, Segment):
-                return Segment(
-                    c.p1.rotate(pivot, angle_rad), c.p2.rotate(pivot, angle_rad)
-                )
+                return Segment(c.p1.rotate(pivot, angle_rad), c.p2.rotate(pivot, angle_rad))
             # CubicBezier — attributes are p0, p1, p2, p3
             return CubicBezier(
                 c.p0.rotate(pivot, angle_rad),
@@ -2390,9 +2319,7 @@ class Dart:
             tip=self.tip.rotate(pivot, angle_rad),
             dart_type=self.dart_type,
             name=self.name,
-            second_tip=self.second_tip.rotate(pivot, angle_rad)
-            if self.second_tip
-            else None,
+            second_tip=self.second_tip.rotate(pivot, angle_rad) if self.second_tip else None,
             stitch_curve_a=_rotate_curve(self.stitch_curve_a),
             stitch_curve_b=_rotate_curve(self.stitch_curve_b),
         )

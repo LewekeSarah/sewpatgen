@@ -90,7 +90,7 @@ if __name__ == "__main__":
     pattern = create_block(person_balanced, fit_class, adjustments, config)
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
-    grid_parts    = [] #[Part.GRID]
+    grid_parts = []  # [Part.GRID]
 
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
@@ -101,7 +101,7 @@ if __name__ == "__main__":
         parts=grid_parts + pattern_parts,
         show_bezier_control_points=False,
         show_construction=True,
-        show_seam_allowance=True
+        show_seam_allowance=True,
     )
 
 # #marker_single  top_waisted_dart.pdf ./
