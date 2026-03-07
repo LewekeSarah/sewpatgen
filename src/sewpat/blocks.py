@@ -45,7 +45,7 @@ from .measurements import (
     calculate_hip_distribution,
     calculate_waist_distribution,
 )
-from .pattern import PatternConfig, PatternPart
+from .pattern import PatternConfig, PatternElement, PatternPart
 from .person import PersonalAdjustments
 from .style import STYLE_HEM, STYLE_STITCH, STYLE_STITCH_BEVEL
 from .units import CM
@@ -175,7 +175,7 @@ class _SideSeams:
     hem_side_to_center_front: Segment
 
     # Construction lines
-    waist_offset: Line
+    waist_offset: Segment
 
 
 @dataclass(frozen=True)
@@ -483,10 +483,10 @@ def _build_darts(
     meas: BlouseMeasurements,
     back: _BackGeometry,
     front: _FrontGeometry,
-    armscye_back_elem: PatternPart,
+    armscye_back_elem: PatternElement,
     wd: WaistDistribution,
     config: GarmentConfig,
-) -> _Darts:
+) -> tuple[_Darts, Dart]:
     """Build all dart objects for both pieces."""
     # Back waist dart
     waist_dart_back_center = intersect(grid.waist, grid.dart_back)[0]
@@ -581,11 +581,15 @@ def _assemble_back_part(
 
     # Construction reference points — visible when show_construction=True
     part.append(
-        Point(*back.armscye_control.coords, name="Armscye Control Back"),
+        Point(back.armscye_control.x, back.armscye_control.y, name="Armscye Control Back"),
         is_construction=True,
     )
     part.append(
-        Point(*back.shoulder_dart_notch.coords, name="Shoulder Dart Notch Back"),
+        Point(
+            back.shoulder_dart_notch.x,
+            back.shoulder_dart_notch.y,
+            name="Shoulder Dart Notch Back",
+        ),
         is_construction=True,
     )
 
@@ -815,6 +819,11 @@ class TopBlock:
         adj = adjustments or PersonalAdjustments()
         layout = layout if layout is not None else PatternConfig()
         seam_allowance = config.seam_allowance
+
+        if fit_class is None:
+            from .fitclass import FitClass as _FitClass
+
+            fit_class = _FitClass(pk=4)
 
         if grid is None:
             grid = TopGrid.from_measurements(
