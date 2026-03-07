@@ -1,7 +1,7 @@
 """Sewpat — a Python library for generating sewing patterns."""
 
 from .blocks import TopBlock, TopBlockBack, TopBlockFront
-from .element import PatternElement, PrecisionPoint
+from .element import GeometryType, PatternElement, PrecisionPoint
 from .fitclass import FitClass
 from .geometry import (
     Circle,
@@ -68,6 +68,7 @@ from .style import (
     STYLE_PRECISION_POINT,
     STYLE_SEAM_ALLOWANCE,
     STYLE_STITCH,
+    STYLE_STITCH_BEVEL,
     STYLE_WAISTBAND,
     Marker,
     StyleOptions,
@@ -101,6 +102,7 @@ __all__ = [
     "TopBlockBack",
     "TopBlockFront",
     # Pattern element
+    "GeometryType",
     "PatternElement",
     "PrecisionPoint",
     # Dart result
@@ -148,6 +150,7 @@ __all__ = [
     "STYLE_FOLD",
     "STYLE_HEM",
     "STYLE_STITCH",
+    "STYLE_STITCH_BEVEL",
     "STYLE_CUT",
     "STYLE_WAISTBAND",
     "STYLE_CENTER_LINE",

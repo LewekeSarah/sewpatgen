@@ -14,11 +14,12 @@ import copy
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import cast
 
 import numpy as np
 import shapely.geometry as _sg
 
-from .element import PatternElement, PrecisionPoint
+from .element import GeometryType, PatternElement, PrecisionPoint
 from .geometry import (
     CubicBezier,
     Dart,
@@ -177,7 +178,7 @@ class PatternPart(NamedAccessMixin):
 
     def append(
         self,
-        geometry: object,
+        geometry: GeometryType,
         style: StyleOptions | None = None,
         is_outline: bool = False,
         is_construction: bool = False,
@@ -203,7 +204,7 @@ class PatternPart(NamedAccessMixin):
         """
         construction = is_construction or self.is_construction
         elem = PatternElement(
-            geometry=geometry,  # type: ignore[arg-type]
+            geometry=geometry,
             style=style,
             is_outline=is_outline,
             is_construction=construction,
@@ -616,10 +617,11 @@ class PatternPart(NamedAccessMixin):
         for e in outline_elements:
             if not isinstance(e.geometry, (Segment, CubicBezier)):
                 continue
-            if getattr(e.style, "seam_allowance", None) is None:
+            sa_val = getattr(e.style, "seam_allowance", None)
+            if sa_val is None:
                 continue
             _lg: Segment | CubicBezier = e.geometry
-            elem_sa[_ep_key(_lg)] = float(e.style.seam_allowance)  # type: ignore[arg-type]
+            elem_sa[_ep_key(_lg)] = float(sa_val)
 
         # Per-element SA direction override: dart roof segments store the tip
         # as _sa_center so the offset goes away from the tip (outward) rather
@@ -629,10 +631,11 @@ class PatternPart(NamedAccessMixin):
         for e in outline_elements:
             if not isinstance(e.geometry, (Segment, CubicBezier)):
                 continue
-            if getattr(e, "_sa_center", None) is None:
+            sa_center = getattr(e, "_sa_center", None)
+            if sa_center is None:
                 continue
             _lg2: Segment | CubicBezier = e.geometry
-            elem_center[_ep_key(_lg2)] = e._sa_center  # type: ignore[assignment]
+            elem_center[_ep_key(_lg2)] = cast(Point, sa_center)
 
         _valid_cj = {"miter", "round", "bevel"}
         elem_cj: dict[frozenset, str] = {}
@@ -1201,8 +1204,7 @@ class PatternPart(NamedAccessMixin):
         ]
         # Narrowed geometry list — mypy can now see Segment | CubicBezier everywhere.
         outline_geoms: list[Segment | CubicBezier] = [
-            e.geometry  # type: ignore[misc]
-            for e in outline_elems
+            cast(Segment | CubicBezier, e.geometry) for e in outline_elems
         ]
         grid_geoms = [
             e.geometry
