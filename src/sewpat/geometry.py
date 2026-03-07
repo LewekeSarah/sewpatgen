@@ -1428,7 +1428,9 @@ def _shapely_to_points(result: _sg.base.BaseGeometry) -> list[Point]:
     return []
 
 
-GEOMETRIC_TYPE = Point | Line | Ray | Circle | Segment | Rect | Triangle | InfoBox | CubicBezier
+type GEOMETRIC_TYPE = (
+    Point | Line | Ray | Circle | Segment | Rect | Triangle | InfoBox | CubicBezier
+)
 
 
 def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
