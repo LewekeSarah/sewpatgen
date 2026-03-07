@@ -557,7 +557,8 @@ class TestAddNotches(unittest.TestCase):
         """The SA triangle (is_seam_allowance=True) has its base
         on the SA edge (y≈-10)."""
     def test_sa_notch_sits_on_sa_edge(self):
-        """The SA triangle (is_seam_allowance=True) has its base on the SA edge (y≈-10)."""
+        """The SA triangle (is_seam_allowance=True)
+        has its base on the SA edge (y≈-10)."""
         sa_dist = 10.0
         part = self._square_part_with_sa(sa_dist)
         seam_seg = Segment(Point(0, 0), Point(100, 0))

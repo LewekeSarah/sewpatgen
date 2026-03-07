@@ -3,7 +3,9 @@
 import math
 import warnings
 
-from sewpat import Dart, DartResult, DartType, Point, Segment
+import pytest
+
+from sewpat import CubicBezier, Dart, DartResult, DartType, Point, Segment
 from sewpat.element import PatternElement
 from sewpat.pattern import PatternPart
 from sewpat.style import STYLE_DART_FOLD, STYLE_DART_STITCH, StyleOptions

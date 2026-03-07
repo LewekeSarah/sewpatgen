@@ -23,6 +23,7 @@ Example::
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .geometry import (
     Circle,
@@ -39,6 +40,8 @@ from .grids import TopGrid
 from .measurements import (
     BlouseMeasurements,
     GarmentConfig,
+    HipDistribution,
+    WaistDistribution,
     calculate_hip_distribution,
     calculate_waist_distribution,
 )
@@ -46,6 +49,9 @@ from .pattern import PatternConfig, PatternPart
 from .person import PersonalAdjustments
 from .style import STYLE_HEM, STYLE_STITCH, STYLE_STITCH_BEVEL
 from .units import CM
+
+if TYPE_CHECKING:
+    from .fitclass import FitClass
 
 # ---------------------------------------------------------------------------
 # Construction constants
@@ -808,7 +814,7 @@ class TopBlock:
         cls,
         meas: BlouseMeasurements,
         config: GarmentConfig,
-        fit_class: FitClass | None = None,
+        fit_class: "FitClass | None" = None,
         adjustments: PersonalAdjustments | None = None,
         grid: TopGrid | None = None,
         layout: PatternConfig = PatternConfig(),

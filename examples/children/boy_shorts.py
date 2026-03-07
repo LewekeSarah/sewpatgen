@@ -17,6 +17,7 @@ from sewpat.geometry import (
     intersect,
 )
 from sewpat.measurements import (
+    TrouserConfig,
     TrouserEase,
     TrouserMeasurements,
     make_measurements_trouser,
