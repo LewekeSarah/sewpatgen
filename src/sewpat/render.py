@@ -16,8 +16,6 @@ from sewpat.geometry import (
     Rect,
     Segment,
     Triangle,
-    geom_end,
-    geom_start,
 )
 from sewpat.markers import ARROW_DEFS, SCISSOR_BLADE_OVERHANG
 from sewpat.pattern import (
@@ -465,7 +463,7 @@ def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
         return ""
 
     parts: list[str] = []
-    first_pt = geom_start(geoms[0])
+    first_pt = geoms[0].start
     parts.append(f"M {first_pt.x},{first_pt.y}")
 
     for g in geoms:
@@ -474,7 +472,7 @@ def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
         else:  # CubicBezier
             parts.append(f"C {g.p1.x},{g.p1.y} {g.p2.x},{g.p2.y} {g.p3.x},{g.p3.y}")
 
-    last_pt = geom_end(geoms[-1])
+    last_pt = geoms[-1].end
     if float(np.linalg.norm(last_pt.coords - first_pt.coords)) < 0.01:
         parts.append("Z")
 

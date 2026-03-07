@@ -18,7 +18,6 @@ from .geometry import (
     edge_tangent,
     intersect,
     seam_length,
-    segment_to_intersection,
 )
 from .measurements import (
     BlouseMeasurements,
@@ -91,7 +90,6 @@ __all__ = [
     # Geometry helpers
     "edge_tangent",
     "intersect",
-    "segment_to_intersection",
     "seam_length",
     # Units
     "MM",

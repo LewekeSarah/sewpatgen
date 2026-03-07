@@ -1,11 +1,11 @@
 """Tests for the bidirectional build_chain fix."""
 
-from sewpat.geometry import Point, Segment, build_chain, geom_end, geom_start
+from sewpat.geometry import Point, Segment, build_chain
 
 
 def _xs(chain):
     """Extract (start_x, end_x) tuples from chain for easy assertions."""
-    return [(round(geom_start(g).x, 4), round(geom_end(g).x, 4)) for g in chain]
+    return [(round(g.start.x, 4), round(g.end.x, 4)) for g in chain]
 
 
 A = Point(0, 0)

@@ -32,8 +32,6 @@ from .geometry import (
     buffer_chain,
     build_chain,
     edge_tangent,
-    geom_end,
-    geom_start,
     geom_to_shapely,
     miter_corner,
     outline_polygon,
@@ -607,7 +605,7 @@ class PatternPart(NamedAccessMixin):
 
         def _ep_key(g: Segment | CubicBezier) -> frozenset[tuple[float, float]]:
             """Return a frozenset of the two rounded endpoint coordinate pairs."""
-            s, e = geom_start(g), geom_end(g)
+            s, e = g.start, g.end
             return frozenset([(round(s.x, 6), round(s.y, 6)), (round(e.x, 6), round(e.y, 6))])
 
         # seam_allowance=None  → not in dict → use global distance
@@ -671,28 +669,28 @@ class PatternPart(NamedAccessMixin):
             key_a = _ep_key(chain_mixed[i])
             key_b = _ep_key(chain_mixed[j])
             effective_cj = elem_cj.get(key_a) or elem_cj.get(key_b) or corner_join
-            gap = geom_end(ga).distance_to(geom_start(gb))
+            gap = ga.end.distance_to(gb.start)
             # Apply corner join when there is a geometric gap, OR when bevel is
             # explicitly requested (covers zero-gap corners where offsets diverge,
             # e.g. a Bézier with a degenerate start control point).
             if gap > 0.01 or effective_cj == "bevel":
                 if effective_cj == "miter":
                     corner = miter_corner(ga, gb, distance)
-                    offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), corner)
-                    offset_groups[j][0] = with_endpoints(gb, corner, geom_end(gb))
+                    offset_groups[i][-1] = with_endpoints(ga, ga.start, corner)
+                    offset_groups[j][0] = with_endpoints(gb, corner, gb.end)
                 elif effective_cj == "round":
                     arc = round_corner(ga, gb)
                     if isinstance(arc, CubicBezier):
-                        offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), arc.p0)
-                        offset_groups[j][0] = with_endpoints(gb, arc.p3, geom_end(gb))
+                        offset_groups[i][-1] = with_endpoints(ga, ga.start, arc.p0)
+                        offset_groups[j][0] = with_endpoints(gb, arc.p3, gb.end)
                         arc_inserts.append((i, arc))
                     else:
-                        offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), arc)
-                        offset_groups[j][0] = with_endpoints(gb, arc, geom_end(gb))
+                        offset_groups[i][-1] = with_endpoints(ga, ga.start, arc)
+                        offset_groups[j][0] = with_endpoints(gb, arc, gb.end)
                 else:  # bevel — clipped miter: tangent intersection capped at 3× SA
                     corner = miter_corner(ga, gb, distance, miter_limit=3.0, check_reflex=False)
-                    offset_groups[i][-1] = with_endpoints(ga, geom_start(ga), corner)
-                    offset_groups[j][0] = with_endpoints(gb, corner, geom_end(gb))
+                    offset_groups[i][-1] = with_endpoints(ga, ga.start, corner)
+                    offset_groups[j][0] = with_endpoints(gb, corner, gb.end)
 
         flat: list[Segment | CubicBezier] = []
         for group in offset_groups:
@@ -1215,8 +1213,8 @@ class PatternPart(NamedAccessMixin):
         # Build map of forward tangents at each outline endpoint for corner detection.
         ep_tangents: dict[tuple, list] = {}
         for og in outline_geoms:
-            s = geom_start(og)
-            end_pt = geom_end(og)
+            s = og.start
+            end_pt = og.end
             sk = (round(s.x, 3), round(s.y, 3))
             ek = (round(end_pt.x, 3), round(end_pt.y, 3))
             ep_tangents.setdefault(sk, []).append(edge_tangent(og, at_end=False))
@@ -1225,7 +1223,7 @@ class PatternPart(NamedAccessMixin):
         def _is_corner_endpoint(pt: Point) -> bool:
             """Return True when *pt* is within *tolerance* of a sharp corner or free endpoint."""
             for og in outline_geoms:
-                for ep in (geom_start(og), geom_end(og)):
+                for ep in (og.start, og.end):
                     if pt.distance_to(ep) >= tolerance:
                         continue
                     key = (round(ep.x, 3), round(ep.y, 3))
@@ -1241,12 +1239,12 @@ class PatternPart(NamedAccessMixin):
         def _is_horizontal(g: Segment | CubicBezier | Ray) -> bool:
             """Return ``True`` if *g* is a horizontal segment (Δy < 1e-6)."""
             if isinstance(g, Segment):
-                return abs(geom_start(g).y - geom_end(g).y) < 1e-6
+                return abs(g.start.y - g.end.y) < 1e-6
             return False
 
         corner_vertices: list[Point] = []
         for og in outline_geoms:
-            for ep in (geom_start(og), geom_end(og)):
+            for ep in (og.start, og.end):
                 key = (round(ep.x, 3), round(ep.y, 3))
                 tangents = ep_tangents.get(key, [])
                 if len(tangents) < 2:
