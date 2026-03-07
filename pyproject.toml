@@ -47,11 +47,13 @@ ignore = [
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.isort]
+known-first-party = ["sewpat"]
+
 [tool.ruff.lint.per-file-ignores]
 # ── tests / examples: no docstrings or annotations required ──────────────────
 "tests/**"    = ["ANN", "D"]
 "examples/**" = ["ANN", "D"]
-
 
 [tool.ruff.format]
 quote-style = "double"
