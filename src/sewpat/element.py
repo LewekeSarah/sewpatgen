@@ -15,6 +15,11 @@ from .geometry import (
 from .style import STYLE_CONSTRUCTION_GRID, STYLE_PRECISION_POINT, StyleOptions
 from .units import MM
 
+#: Union of all geometry types accepted by :class:`PatternElement`.
+type GeometryType = (
+    Segment | Rect | Circle | Triangle | CubicBezier | Line | Ray | Point | InfoBox | Dart
+)
+
 
 class PatternElement:
     """A geometric shape with a style and metadata flags.
@@ -37,16 +42,7 @@ class PatternElement:
 
     def __init__(
         self,
-        geometry: Segment
-        | Rect
-        | Circle
-        | Triangle
-        | CubicBezier
-        | Line
-        | Ray
-        | Point
-        | InfoBox
-        | Dart,
+        geometry: GeometryType,
         style: StyleOptions | None = None,
         name: str | None = None,
         role: str | None = None,
