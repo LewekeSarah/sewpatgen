@@ -90,6 +90,7 @@ class TrouserMeasurements:
     gender: Gender = Gender.female
 
     def __post_init__(self) -> None:
+        """Derive ``front_trouser_width`` and ``knee_height`` when not explicitly set."""
         self.front_trouser_width = (
             0.25 * self.hip_width if self.front_trouser_width is None
             else self.front_trouser_width
@@ -158,6 +159,7 @@ class BlouseMeasurements:
     gender: Gender = Gender.female
 
     def __post_init__(self) -> None:
+        """Validate that back + armscye + chest widths sum to bust_width / 2."""
         if abs(
             self.bust_width / 2
             - (self.back_width + self.armscye_width + self.chest_width)
@@ -201,6 +203,7 @@ class GarmentConfig:
     waist_dart_front_tip: float = 12 * CM     # vAbI-Spitze — front waist dart lower tip
 
     def __post_init__(self) -> None:
+        """Validate ``armscye_fit`` and ``waist_dart_back_tip`` are within permitted ranges."""
         if not (0.0 - 1e-9 <= self.armscye_fit <= 1.0 * CM + 1e-9):
             raise ValueError(
                 f"armscye_fit={self.armscye_fit / CM:.2f} cm is outside the valid "

@@ -54,6 +54,7 @@ class PatternElement:
         is_seam_allowance: bool = False,
         is_construction: bool = False,
     ) -> None:
+        """Wrap *geometry* in a styled, flagged pattern element."""
         self.geometry = geometry
         if style is None and is_construction:
             self.style = STYLE_CONSTRUCTION_GRID
@@ -171,6 +172,7 @@ class PrecisionPoint:
         inner_radius: float = 0.2 * MM,
         style: StyleOptions | None = None,
     ) -> None:
+        """Initialise with *center*, radii, and optional style override."""
         self.center = center
         self.outer_radius = outer_radius
         self.inner_radius = inner_radius

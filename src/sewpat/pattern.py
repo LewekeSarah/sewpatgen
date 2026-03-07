@@ -99,10 +99,12 @@ class DartResult:
     """
 
     def __init__(self, dart: Dart, elements: list[PatternElement]) -> None:
+        """Store the dart geometry and the list of created elements."""
         self.dart = dart
         self.elements = elements
 
     def __repr__(self) -> str:
+        """Return a concise representation showing the dart and element count."""
         return f"DartResult(dart={self.dart!r}, elements={len(self.elements)})"
 
     def __iter__(self) -> Iterator[object]:
@@ -139,6 +141,7 @@ class NamedAccessMixin:
     elements: list[PatternElement]  # provided by PatternPart
 
     def __getattr__(self, snake: str) -> PatternElement:
+        """Look up a PatternElement by snake_case name (e.g. ``part.center_back``)."""
         # Avoid infinite recursion for dunder / private attributes.
         if snake.startswith("_"):
             raise AttributeError(snake)
@@ -161,6 +164,14 @@ class PatternPart(NamedAccessMixin):
         elements: list[PatternElement] | None = None,
         is_construction: bool = False,
     ) -> None:
+        """Initialise a PatternPart.
+
+        Args:
+            name: Human-readable label for this piece.
+            elements: Initial list of elements; defaults to an empty list.
+            is_construction: When ``True`` every appended element is stamped
+                ``is_construction=True`` automatically.
+        """
         self.name = name
         self.elements: list[PatternElement] = elements if elements is not None else []
         self.is_construction: bool = is_construction
@@ -371,6 +382,9 @@ class PatternPart(NamedAccessMixin):
             end: End point of the grainline.
             name: Label for the segment. Defaults to ``"grainline / Fadenlauf"``.
             style: Optional style override; defaults to :data:`STYLE_GRAINLINE`.
+
+        Returns:
+            The newly created :class:`PatternElement`.
         """
         start = self._nudge_point_inside(start, end)
         end = self._nudge_point_inside(end, start)
@@ -456,12 +470,20 @@ class PatternPart(NamedAccessMixin):
         ]
 
         def _closest_sa_edge(ref: Point) -> Segment | CubicBezier | None:
+            """Return the SA edge geometrically closest to *ref*, or ``None``."""
             if not sa_geoms:
                 return None
             sp = _sg.Point(ref.x, ref.y)
             return min(sa_geoms, key=lambda g: sp.distance(geom_to_shapely(g)))
 
-        def _place_symbol(notch_pt: Point, along, normal, symbol, is_sa: bool) -> list:
+        def _place_symbol(
+            notch_pt: Point,
+            along: np.ndarray,
+            normal: np.ndarray,
+            symbol: str,
+            is_sa: bool,
+        ) -> list[PatternElement]:
+            """Place one or two notch triangles and return the created elements."""
             along_pt = Point(*along)
             normal_pt = Point(*normal)
             offsets = (
@@ -598,7 +620,8 @@ class PatternPart(NamedAccessMixin):
         center = self.centroid
         chain_mixed = build_chain(geoms)
 
-        def _ep_key(g: Segment | CubicBezier) -> frozenset:
+        def _ep_key(g: Segment | CubicBezier) -> frozenset[tuple[float, float]]:
+            """Return a frozenset of the two rounded endpoint coordinate pairs."""
             s, e = geom_start(g), geom_end(g)
             return frozenset(
                 [(round(s.x, 6), round(s.y, 6)), (round(e.x, 6), round(e.y, 6))]
@@ -724,6 +747,7 @@ class PatternPart(NamedAccessMixin):
         inward_ref = self.centroid
 
         def _closest_sa_edge(ref: Point) -> Segment | CubicBezier | None:
+            """Return the SA edge geometrically closest to *ref*."""
             sp = _sg.Point(ref.x, ref.y)
             return min(sa_geoms, key=lambda g: sp.distance(geom_to_shapely(g)))
 
@@ -1001,6 +1025,7 @@ class PatternPart(NamedAccessMixin):
                 created.append(stub)
 
         def _add(elem: PatternElement) -> PatternElement:
+            """Append *elem* to both the part and the local *created* list."""
             self.elements.append(elem)
             created.append(elem)
             return elem
@@ -1158,6 +1183,15 @@ class PatternPart(NamedAccessMixin):
 
         *name* is applied directly to *geometry* so it is the single source of
         truth and can be retrieved via :meth:`~sewpat.pattern.PatternPart.get_element`.
+
+        Args:
+            geometry: A :class:`~sewpat.geometry.Segment` or
+                :class:`~sewpat.geometry.Ray` to add as a construction line.
+            name: Optional label; applied to *geometry* before appending.
+            style: Defaults to :data:`~sewpat.style.STYLE_CONSTRUCTION_GRID`.
+
+        Returns:
+            The newly created :class:`PatternElement`.
         """
         if name is not None:
             geometry = geometry.set_name(name)
@@ -1231,6 +1265,7 @@ class PatternPart(NamedAccessMixin):
             return False
 
         def _is_horizontal(g: Segment | CubicBezier | Ray) -> bool:
+            """Return ``True`` if *g* is a horizontal segment (Δy < 1e-6)."""
             if isinstance(g, Segment):
                 return abs(geom_start(g).y - geom_end(g).y) < 1e-6
             return False
@@ -1249,6 +1284,7 @@ class PatternPart(NamedAccessMixin):
                         corner_vertices.append(ep)
 
         def _is_near_corner(pt: Point) -> bool:
+            """Return ``True`` if *pt* is within *corner_clearance* mm of any corner vertex."""
             return any(pt.distance_to(v) <= corner_clearance for v in corner_vertices)
 
         seen: list[Point] = []
@@ -1260,6 +1296,7 @@ class PatternPart(NamedAccessMixin):
         created: list[PatternElement] = []
 
         def _is_dup(pt: Point) -> bool:
+            """Return ``True`` if *pt* is within *min_spacing* mm of any already-placed notch."""
             return any(pt.distance_to(s) < min_spacing for s in seen)
 
         candidates: list[tuple[int, Segment | CubicBezier, Point]] = []
@@ -1281,6 +1318,7 @@ class PatternPart(NamedAccessMixin):
         elem_has_horizontal: set[int] = set()
 
         def _is_dup_on_elem(geom: Segment | CubicBezier, pt: Point) -> bool:
+            """Return ``True`` if *pt* is within *min_spacing* mm of a notch already on *geom*."""
             for placed_pt in elem_placed.get(id(geom), []):
                 if pt.distance_to(placed_pt) < min_spacing:
                     return True
@@ -1324,6 +1362,7 @@ class ConstructionGridPart(PatternPart):
         name: str = "Konstruktionsgitter",
         elements: list[PatternElement] | None = None,
     ) -> None:
+        """Initialise a construction-grid part; all elements stamped ``is_construction=True``."""
         super().__init__(name=name, elements=elements, is_construction=True)
 
 
@@ -1339,6 +1378,7 @@ class Block(PatternPart):
     """
 
     def __init__(self, name: str, elements: list[PatternElement] | None = None) -> None:
+        """Initialise a base-block part with *name* and optional *elements*."""
         super().__init__(name=name, elements=elements)
 
 
@@ -1370,6 +1410,7 @@ class OverlayPart(PatternPart):
         parent: PatternPart,
         elements: list[PatternElement] | None = None,
     ) -> None:
+        """Initialise an overlay piece that shares coordinate space with *parent*."""
         super().__init__(name=name, elements=elements)
         self.parent = parent
 
@@ -1438,6 +1479,7 @@ class ConstructionGrid:
         part_name: str = "Konstruktionsgitter",
         style: StyleOptions | None = None,
     ) -> None:
+        """Store grid parameters; pass ``None`` for verticals/horizontals to get an empty axis."""
         self.anchor = anchor
         self.verticals: list[tuple[str, float]] = verticals or []
         self.horizontals: list[tuple[str, float]] = horizontals or []
@@ -1485,6 +1527,7 @@ class Pattern:
         parts: list[PatternPart] | None = None,
         anchor: Point | None = None,
     ) -> None:
+        """Initialise a pattern with *name*, optional *parts*, and optional page *anchor*."""
         self.name = name
         self.parts: list[PatternPart] = parts if parts is not None else []
         self.reference_square: PatternElement | None = None

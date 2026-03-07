@@ -63,7 +63,18 @@ def _xml_escape(text: str) -> str:
 
 
 def _svg_text(x: float, y: float, font_size_mm: float, text: str, **extra: str) -> str:
-    """Return an SVG ``<text>`` element."""
+    """Return an SVG ``<text>`` element.
+
+    Args:
+        x: X coordinate in mm.
+        y: Y coordinate in mm.
+        font_size_mm: Font size in mm.
+        text: Text content (will be XML-escaped).
+        **extra: Additional SVG attribute key-value pairs.
+
+    Returns:
+        SVG ``<text>`` element string.
+    """
     attrs = f'x="{x}" y="{y}" font-size="{font_size_mm}" fill="black"'
     for key, value in extra.items():
         attrs += f' {key}="{value}"'
@@ -73,7 +84,15 @@ def _svg_text(x: float, y: float, font_size_mm: float, text: str, **extra: str) 
 def _common_stroke_attrs(
     style_dict: dict[str, Any], *, force_fill: str | None = None
 ) -> str:
-    """Build common stroke/fill/opacity SVG attribute string from a style dict."""
+    """Build common stroke/fill/opacity SVG attribute string from a style dict.
+
+    Args:
+        style_dict: Resolved style attributes dict from :meth:`StyleOptions.as_dict`.
+        force_fill: When given, overrides the ``fill`` value from *style_dict*.
+
+    Returns:
+        Space-separated SVG attribute string ready for embedding in an element tag.
+    """
     stroke = style_dict.get("stroke", "black") or "black"
     stroke_width = style_dict.get("stroke-width", 0.5)
     stroke_linejoin = style_dict.get("stroke-linejoin", "miter")
@@ -98,7 +117,17 @@ def _render_cubic_bezier(
     style_dict: dict[str, Any],
     show_control_points: bool,
 ) -> list[str]:
-    """Return SVG elements for a CubicBezier curve."""
+    """Return SVG elements for a CubicBezier curve.
+
+    Args:
+        element: The Bézier curve geometry to render.
+        style_dict: Resolved style attributes.
+        show_control_points: When ``True``, render the control-point handles
+            as dashed red lines with small circles at each control point.
+
+    Returns:
+        List of SVG element strings.
+    """
     nodes: list[str] = []
     font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
 
@@ -140,7 +169,15 @@ def _render_segment(
     element: Segment,
     style_dict: dict[str, Any],
 ) -> list[str]:
-    """Return SVG elements for a Segment."""
+    """Return SVG elements for a Segment.
+
+    Args:
+        element: The segment geometry to render.
+        style_dict: Resolved style attributes.
+
+    Returns:
+        List of SVG element strings.
+    """
     nodes: list[str] = []
     font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
     attrs = _common_stroke_attrs(style_dict, force_fill="none")
@@ -204,6 +241,13 @@ def _render_line(element: Line, style_dict: dict[str, Any]) -> list[str]:
 
     The line is extended 1500 mm in each direction from its base point and
     then rendered as a regular :class:`Segment`.
+
+    Args:
+        element: The infinite line to render.
+        style_dict: Resolved style attributes.
+
+    Returns:
+        List of SVG element strings.
     """
     extent = 1500.0
     p1 = element.point_at_distance(-extent)
@@ -216,6 +260,13 @@ def _render_ray(element: Ray, style_dict: dict[str, Any]) -> list[str]:
     """Render a semi-infinite :class:`Ray` by clipping it to a finite extent.
 
     The ray starts at its origin and extends 1500 mm in its direction.
+
+    Args:
+        element: The ray to render.
+        style_dict: Resolved style attributes.
+
+    Returns:
+        List of SVG element strings.
     """
     extent = 1500.0
     seg = Segment(element.origin, element.point_at_distance(extent), name=element.name)
@@ -228,6 +279,13 @@ def _render_circle(element: Circle, style_dict: dict[str, Any]) -> list[str]:
     The stroke is painted on the inside of the radius so the outer edge of the
     visible stroke coincides exactly with the declared radius.  This mirrors
     the ``stroke-alignment: inside`` behaviour used by ``_render_rect``.
+
+    Args:
+        element: The circle geometry to render.
+        style_dict: Resolved style attributes.
+
+    Returns:
+        List of SVG element strings (clipPath + circle).
     """
     attrs = _common_stroke_attrs(style_dict)
     cx, cy, r = element.center.x, element.center.y, element.radius
@@ -240,7 +298,15 @@ def _render_circle(element: Circle, style_dict: dict[str, Any]) -> list[str]:
 
 
 def _render_triangle(element: Triangle, style_dict: dict[str, Any]) -> list[str]:
-    """Return an SVG polygon element for a filled Triangle (e.g. a notch)."""
+    """Return an SVG polygon element for a filled Triangle (e.g. a notch).
+
+    Args:
+        element: The triangle geometry to render.
+        style_dict: Resolved style attributes.
+
+    Returns:
+        List of SVG element strings.
+    """
     stroke = style_dict.get("stroke", "black") or "black"
     stroke_width = style_dict.get("stroke-width", 0.3)
     fill = style_dict.get("fill", "none")
@@ -261,7 +327,15 @@ def _render_triangle(element: Triangle, style_dict: dict[str, Any]) -> list[str]
 
 
 def _render_info_box(element: InfoBox, style_dict: dict[str, Any]) -> list[str]:
-    """Render an InfoBox as SVG text: header in bold, notes below."""
+    """Render an InfoBox as SVG text: header in bold, notes below.
+
+    Args:
+        element: The info box to render.
+        style_dict: Resolved style attributes.
+
+    Returns:
+        List of SVG ``<text>`` element strings.
+    """
     nodes: list[str] = []
     font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
     line_height = font_size_mm * 1.6
@@ -300,6 +374,13 @@ def _render_rect(element: Rect, style_dict: dict[str, Any]) -> list[str]:
 
     A unique ``clipPath`` id is derived from the element's pixel-exact origin
     so that multiple rects on the same canvas don't collide.
+
+    Args:
+        element: The rectangle geometry to render.
+        style_dict: Resolved style attributes.
+
+    Returns:
+        List of SVG element strings (clipPath + rect + optional label).
     """
     nodes: list[str] = []
     font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
@@ -339,7 +420,15 @@ def _render_rect(element: Rect, style_dict: dict[str, Any]) -> list[str]:
 
 
 def _render_point(element: Point, style_dict: dict[str, Any]) -> list[str]:
-    """Return SVG elements for a Point."""
+    """Return SVG elements for a Point.
+
+    Args:
+        element: The point geometry to render.
+        style_dict: Resolved style attributes.
+
+    Returns:
+        List of SVG element strings.
+    """
     nodes: list[str] = []
     font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
     attrs = _common_stroke_attrs(style_dict, force_fill=style_dict.get("fill", "black"))
@@ -357,7 +446,15 @@ def _render_point(element: Point, style_dict: dict[str, Any]) -> list[str]:
 def _make_renderers(
     show_bezier_control_points: bool,
 ) -> dict[type, Callable[[Any, dict[str, Any]], list[str]]]:
-    """Build a mapping from geometry type to its render callable."""
+    """Build a mapping from geometry type to its render callable.
+
+    Args:
+        show_bezier_control_points: Passed through to :func:`_render_cubic_bezier`.
+
+    Returns:
+        Dict mapping each geometry type to a ``(element, style_dict) → list[str]``
+        callable.
+    """
     return {
         CubicBezier: lambda el, sd: _render_cubic_bezier(
             el, sd, show_bezier_control_points
@@ -430,6 +527,13 @@ def _render_elements(
 
     Elements with ``is_construction=True`` are skipped when *show_construction*
     is ``False``.
+
+    Args:
+        elements: PatternElements to render.
+        svg_nodes: List to append SVG strings to (mutated in-place).
+        show_bezier_control_points: Render Bézier control-point handles.
+        show_construction: Include construction elements in output.
+        styles: Optional type-level style overrides.
     """
     _TYPE_KEY = {
         Segment: "segment",
@@ -521,7 +625,22 @@ def _build_svg(
     show_seam_allowance: bool = True,
     styles: dict[str, StyleOptions] | None = None,
 ) -> str:
-    """Build and return the SVG string for one or more element groups."""
+    """Build and return the SVG string for one or more element groups.
+
+    Args:
+        title: Label rendered in the top-left corner of the canvas.
+        element_groups: Each sub-list is one pattern part's elements.
+        width_mm: Canvas width in mm.
+        height_mm: Canvas height in mm.
+        margin_mm: Canvas margin in mm.
+        show_construction: Include construction elements.
+        show_bezier_control_points: Render Bézier control-point handles.
+        show_seam_allowance: Include SA offset lines.
+        styles: Optional type-level style overrides.
+
+    Returns:
+        Complete SVG document as a string.
+    """
     resolved = styles if styles is not None else _DEFAULT_STYLES
     svg_nodes: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" '

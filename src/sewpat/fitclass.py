@@ -134,6 +134,7 @@ class FitClass:
         bust_point_ease: float | None = None,
         shoulder_width_ease: float | None = None,
     ) -> None:
+        """Initialise FitClass from *pk* with optional per-field ease overrides."""
         self.pk = pk
         self._back_width_ease = back_width_ease
         self._armscye_width_ease = armscye_width_ease
@@ -146,6 +147,7 @@ class FitClass:
         self.__post_init__()
 
     def __post_init__(self) -> None:
+        """Validate *pk* and resolve ease fields from the table."""
         if not (0 <= self.pk <= 12):
             raise ValueError(f"FitClass pk must be 0–12, got {self.pk!r}")
         if self.pk not in _TABLE:

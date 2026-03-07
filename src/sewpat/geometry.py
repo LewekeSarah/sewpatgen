@@ -74,6 +74,7 @@ class Point:
     name: str | None = None
 
     def __init__(self, x: float, y: float, name: str | None = None) -> None:
+        """Initialise with coordinates *x*, *y* and optional *name*."""
         object.__setattr__(self, "coords", np.array([x, y], dtype=float))
         object.__setattr__(self, "name", name)
 
@@ -88,6 +89,7 @@ class Point:
         return float(self.coords[1])
 
     def __str__(self) -> str:
+        """Return a human-readable string representation."""
         if self.name:
             return (
                 f"Point(name={self.name}, "
@@ -155,6 +157,7 @@ class Point:
         )
 
     def __hash__(self) -> int:
+        """Hash based on rounded coordinates and name."""
         return hash(
             (
                 round(float(self.coords[0]), 9),
@@ -196,6 +199,7 @@ class Segment:
     """A line segment from p1 to p2."""
 
     def __init__(self, p1: Point, p2: Point, name: str | None = None) -> None:
+        """Initialise from endpoints *p1* and *p2* with optional *name*."""
         self.p1 = p1
         self.p2 = p2
         self.name = name
@@ -239,12 +243,14 @@ class Segment:
         return cls(start, Point(*end_coords), name=name)
 
     def __str__(self) -> str:
+        """Return a human-readable string representation."""
         if self.name:
             return f"Segment(name={self.name}; p1={self.p1}, p2={self.p2})"
         else:
             return f"Segment(p1={self.p1}, p2={self.p2})"
 
     def __repr__(self) -> str:
+        """Return the same as ``__str__``."""
         return self.__str__()
 
     def set_name(self, name: str) -> Segment:
@@ -504,6 +510,7 @@ class Ray:
         self.name = name
 
     def __str__(self) -> str:
+        """Return a human-readable string representation."""
         if self.name:
             return (
                 f"Ray(name={self.name}, origin={self.origin}, "
@@ -609,6 +616,7 @@ class Line:
         self.name = name
 
     def __str__(self) -> str:
+        """Return a human-readable string representation."""
         if self.name:
             return (
                 f"Line(name={self.name}, point={self.point}, "
@@ -690,12 +698,14 @@ class Rect:
         height: float,
         name: str | None = None,
     ) -> None:
+        """Initialise from top-left *origin*, *width*, *height*, and optional *name*."""
         self.origin = origin
         self.width = width
         self.height = height
         self.name = name
 
     def __str__(self) -> str:
+        """Return a human-readable string representation."""
         if self.name:
             return (
                 f"Rect(name={self.name}, origin={self.origin}, "
@@ -707,6 +717,7 @@ class Rect:
         )
 
     def __repr__(self) -> str:
+        """Return an unambiguous string representation."""
         return (
             f"Rect(origin={self.origin}, "
             f"width={self.width:.6g}, height={self.height:.6g})"
@@ -740,12 +751,14 @@ class Triangle:
     def __init__(
         self, p1: Point, p2: Point, p3: Point, name: str | None = None
     ) -> None:
+        """Initialise from three vertices *p1*, *p2*, *p3* and optional *name*."""
         self.p1 = p1
         self.p2 = p2
         self.p3 = p3
         self.name = name
 
     def __str__(self) -> str:
+        """Return a human-readable string representation."""
         if self.name:
             return (
                 f"Triangle(name={self.name}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
@@ -753,6 +766,7 @@ class Triangle:
         return f"Triangle(p1={self.p1}, p2={self.p2}, p3={self.p3})"
 
     def __repr__(self) -> str:
+        """Return the same as ``__str__``."""
         return self.__str__()
 
     def translate(self, dx: float, dy: float) -> Triangle:
@@ -788,15 +802,18 @@ class InfoBox:
         header: str,
         notes: list[str] | None = None,
     ) -> None:
+        """Initialise with display *position*, bold *header*, and optional *notes*."""
         self.position = position
         self.header = header
         self.notes: list[str] = notes if notes is not None else []
         self.name: str | None = None
 
     def __str__(self) -> str:
+        """Return a human-readable string representation."""
         return f"InfoBox(header={self.header!r}, position={self.position})"
 
     def __repr__(self) -> str:
+        """Return the same as ``__str__``."""
         return self.__str__()
 
     def translate(self, dx: float, dy: float) -> InfoBox:
@@ -834,6 +851,7 @@ class Circle:
         self.name = name
 
     def __str__(self) -> str:
+        """Return a human-readable string representation."""
         if self.name:
             return (
                 f"Circle(name={self.name}, center={self.center}, "
@@ -976,12 +994,14 @@ class CubicBezier:
         self.name = name
 
     def __str__(self) -> str:
+        """Return a human-readable string representation."""
         return (
             f"CubicBezier(name={self.name}, p0={self.p0}, p1={self.p1}, "
             f"p2={self.p2}, p3={self.p3})"
         )
 
     def __repr__(self) -> str:
+        """Return the same as ``__str__``."""
         return self.__str__()
 
     @property
@@ -1918,6 +1938,7 @@ class Dart:
         stitch_curve_b: Segment | CubicBezier | None = None,
         _edge_element: object | None = None,
     ) -> None:
+        """Initialise a dart from its four key points and optional metadata."""
         try:
             dart_type = DartType(dart_type)
         except ValueError:
@@ -2425,6 +2446,7 @@ class Dart:
         return dart_a, dart_b
 
     def __repr__(self) -> str:
+        """Return an unambiguous string representation."""
         return (
             f"Dart(name={self.name!r}, leg_a={self.leg_a}, leg_b={self.leg_b}, "
             f"center={self.center}, tip={self.tip}, dart_type={self.dart_type!r})"

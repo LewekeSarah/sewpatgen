@@ -175,6 +175,7 @@ class PersonalAdjustments:
     balance: BalanceAdjustments = field(default_factory=BalanceAdjustments)
 
     def __post_init__(self) -> None:
+        """Validate hip_offset and shoulder_drop are within permitted ranges."""
         if not (1.0 * CM - 1e-9 <= self.hip_offset <= 3.0 * CM + 1e-9):
             raise ValueError(
                 f"hip_offset={self.hip_offset / CM:.2f} cm is outside the valid "
@@ -201,6 +202,7 @@ class BalancedPerson:
     def __init__(
         self, person: Person
     ) -> None:  # private — only PersonAnalyser calls this
+        """Wrap a validated, balanced *person*. Use :meth:`PersonAnalyser.get_balanced_person`."""
         self._person = person
 
     @property
@@ -213,6 +215,7 @@ class BalancedPerson:
         return getattr(self._person, name)
 
     def __repr__(self) -> str:
+        """Return an unambiguous string representation."""
         return f"BalancedPerson({self._person!r})"
 
 
@@ -231,6 +234,7 @@ class PersonAnalyser:
     def __init__(
         self, person: Person, balance_adjustments: BalanceAdjustments | None = None
     ) -> None:
+        """Initialise, derive missing measurements, and balance *person* immediately."""
         self.person = person
         self.person_balanced: BalancedPerson | None = None
         self.balance = balance_adjustments

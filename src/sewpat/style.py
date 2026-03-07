@@ -95,11 +95,13 @@ class StyleOptions:
         self.corner_join: str | None = corner_join
 
     def __eq__(self, other: object) -> bool:
+        """Return ``True`` when all style attributes are equal."""
         if not isinstance(other, StyleOptions):
             return NotImplemented
         return self.__dict__ == other.__dict__
 
     def __repr__(self) -> str:
+        """Return a compact representation showing only non-default attributes."""
         parts = []
         defaults = StyleOptions()
         for k, v in self.__dict__.items():
