@@ -484,7 +484,9 @@ class PatternPart(NamedAccessMixin):
             if seam_edge is not None:
                 notch_pt, along, normal = project_onto_edge(seam_edge, pt, inward_ref)
             else:
-                notch_pt, along, normal = pt, np.array([1.0, 0.0]), np.array([0.0, -1.0])
+                notch_pt, along, normal = (
+                    pt, np.array([1.0, 0.0]), np.array([0.0, -1.0])
+                )
             seam_elems = _place_symbol(notch_pt, along, normal, symbol, is_sa=False)
 
             if sa_geoms:
@@ -1268,7 +1270,7 @@ class PatternPart(NamedAccessMixin):
                 is_horiz = _is_horizontal(gg)
                 try:
                     pts = _intersect(oe.geometry, gg)
-                except TypeError, Exception:
+                except (TypeError, Exception):
                     continue
                 priority = 0 if is_horiz else 1
                 for pt in pts:

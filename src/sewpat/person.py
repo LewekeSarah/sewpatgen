@@ -279,7 +279,11 @@ class PersonAnalyser:
         return self.person_balanced
 
     def get_optimal_balance(self) -> float:
-        if self.person.bust is not None and (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
+        if (
+            self.person.bust is not None
+            and (self.person.bust > 80 * CM)
+            and (self.person.bust <= 89 * CM)
+        ):
             return 3.5 * CM
         else:
             raise NotImplementedError(

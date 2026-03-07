@@ -112,7 +112,9 @@ def _render_cubic_bezier(
     nodes.append(f'<path d="{path_data}" {attrs} />')
 
     if getattr(element, "name", None):
-        nodes.append(_svg_text(element.p0.x, element.p0.y, font_size_mm, str(element.name)))
+        nodes.append(
+            _svg_text(element.p0.x, element.p0.y, font_size_mm, str(element.name))
+        )
 
     if show_control_points:
         c_stroke = "red"

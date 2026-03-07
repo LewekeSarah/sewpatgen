@@ -812,7 +812,7 @@ class TopBlock:
         fit_class: FitClass | None = None,
         adjustments: PersonalAdjustments | None = None,
         grid: TopGrid | None = None,
-        layout: PatternConfig = PatternConfig(),
+        layout: PatternConfig | None = None,
         back_name: str = "Block Back",
         front_name: str = "Block Front",
     ) -> TopBlock:
@@ -836,6 +836,7 @@ class TopBlock:
             A :class:`TopBlock` with fully constructed ``.back`` and ``.front`` pieces.
         """
         adj            = adjustments or PersonalAdjustments()
+        layout         = layout if layout is not None else PatternConfig()
         seam_allowance = config.seam_allowance
 
         if grid is None:

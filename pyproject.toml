@@ -31,15 +31,27 @@ line-length = 88
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "B", "D", "ANN"]
-# N = pep8-naming, UP = pyupgrade, B = bugbear, D = pydocstyle, ANN = annotations
+select = ["E", "F", "I", "UP", "B"]
+# E  = pycodestyle errors
+# F  = pyflakes
+# I  = isort
+# UP = pyupgrade (modernise syntax automatically)
+# B  = flake8-bugbear (common bugs and design issues)
+#
+# Intentionally NOT enabled yet (separate incremental steps):
+#   N   — pep8-naming: too many false positives from German domain abbreviations
+#           (sTaH, HüU, BrU, …) and single-letter geometry variables
+#   D   — pydocstyle: ~80 missing docstrings — tracked in docs/rename_map.md
+#   ANN — flake8-annotations: ~40 missing annotations — covered by mypy
 
-[tool.ruff.lint.pydocstyle]
-convention = "google"
+ignore = [
+    "B904",   # raise … from err — too noisy in existing exception chains
+    "B006",   # mutable default argument — intentional in dataclasses with field()
+]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ANN", "D"]
-"examples/**" = ["ANN", "D"]
+"tests/**"   = ["B", "UP"]
+"examples/**" = ["B", "UP"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["sewpat"]
