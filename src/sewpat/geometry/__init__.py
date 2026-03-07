@@ -24,6 +24,11 @@ from ._bezier import (
     _bezier_shapely,  # noqa: F401 — imported by tests via sewpat.geometry
     _true_offset_ls,  # noqa: F401 — imported by tests via sewpat.geometry
 )
+from ._bezier_offset import (
+    bezier_offset,
+    bezier_offset_adaptive,
+    bezier_offset_error,
+)
 from ._dart import (
     Dart,
     DartType,
@@ -51,6 +56,9 @@ __all__ = [
     "InfoBox",
     # Bezier
     "CubicBezier",
+    "bezier_offset",
+    "bezier_offset_error",
+    "bezier_offset_adaptive",
     # Dart
     "DartType",
     "Dart",

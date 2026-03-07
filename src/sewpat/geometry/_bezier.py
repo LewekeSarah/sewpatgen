@@ -1,70 +1,67 @@
-"""CubicBezier curve and its private helpers."""
+"""CubicBezier curve and shape-utility helpers.
 
-import math
+This module defines :class:`CubicBezier` and the private helper functions that
+operate directly on curve geometry (discretisation, closest-t lookup, and
+Bézier–Bézier intersection).  The numerically-intensive offset subsystem lives
+in :mod:`sewpat.geometry._bezier_offset`.
+"""
 
 import numpy as np
 import shapely.geometry as _sg
 from svgpathtools import CubicBezier as _SvgCubicBezier
 
-from ._primitives import Point
+from ._primitives import Point, _split_at_ts
 
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
 
 
-def _solve_quadratic(a: float, b: float, c: float) -> list[float]:
-    """Solve ax² + bx + c = 0. Used by CubicBezier.bounding_box()."""
-    if abs(a) < 1e-14:
-        return [] if abs(b) < 1e-14 else [-c / b]
-    discriminant = b * b - 4 * a * c
-    if discriminant < 0:
-        return []
-    if abs(discriminant) < 1e-14:
-        return [-b / (2 * a)]
-    s = math.sqrt(discriminant)
-    q = -0.5 * (b + s) if b >= 0 else -0.5 * (b - s)
-    x1, x2 = q / a, c / q
-    return [x1, x2] if x1 <= x2 else [x2, x1]
-
-
 def _bezier_closest_t(svg_bezier: _SvgCubicBezier, pt_c: complex) -> float:
-    """Return *t* ∈ [0, 1] of the point on *svg_bezier* closest to *pt_c*."""
+    """Return the parameter *t* ∈ [0, 1] at which *svg_bezier* is closest to *pt_c*.
+
+    Uses svgpathtools' ``radialrange`` (minimum-distance scan) internally.
+    """
     return float(svg_bezier.radialrange(pt_c)[0][1])
 
 
 def _bezier_shapely(b: CubicBezier, n: int = 64) -> _sg.LineString:
-    """Discretise a CubicBezier into a Shapely LineString with *n* segments."""
-    return _sg.LineString([(b.point_at_t(i / n).x, b.point_at_t(i / n).y) for i in range(n + 1)])
+    """Discretise *b* into a Shapely LineString using *n+1* uniformly-spaced samples.
+
+    The resulting polyline has *n* segments connecting the sample points at
+    ``t = 0, 1/n, 2/n, …, 1``.  Used for Hausdorff-distance checks.
+    """
+    pts = [b.point_at_t(i / n) for i in range(n + 1)]
+    return _sg.LineString([(p.x, p.y) for p in pts])
 
 
 def _true_offset_ls(b: CubicBezier, d: float, n: int = 64) -> _sg.LineString:
-    """Sample the true parallel offset of *b* at signed distance *d* into a Shapely LineString."""
-    pts = []
-    for i in range(n + 1):
+    """Return the true parallel offset of *b* at signed distance *d* as a Shapely LineString.
+
+    Each of the *n+1* sample points is displaced by *d* mm along the unit
+    normal at the corresponding *t* value.  Positive *d* moves left of the
+    direction of travel (counter-clockwise normal convention).
+    """
+
+    def _offset_pt(i: int) -> tuple[float, float]:
         t = i / n
-        pt = b.point_at_t(t)
-        nor = b.normal_at_t(t)
-        pts.append((pt.x + d * nor[0], pt.y + d * nor[1]))
-    return _sg.LineString(pts)
+        p, nr = b.point_at_t(t), b.normal_at_t(t)
+        return p.x + d * nr[0], p.y + d * nr[1]
+
+    return _sg.LineString([_offset_pt(i) for i in range(n + 1)])
 
 
 def _intersect_bezier_bezier(a: CubicBezier, b: CubicBezier, tol: float = 1e-12) -> list[Point]:
-    """Find intersections between two cubic Bézier curves using svgpathtools."""
-    svg_a = _SvgCubicBezier(
-        complex(a.p0.x, a.p0.y),
-        complex(a.p1.x, a.p1.y),
-        complex(a.p2.x, a.p2.y),
-        complex(a.p3.x, a.p3.y),
-    )
-    svg_b = _SvgCubicBezier(
-        complex(b.p0.x, b.p0.y),
-        complex(b.p1.x, b.p1.y),
-        complex(b.p2.x, b.p2.y),
-        complex(b.p3.x, b.p3.y),
-    )
+    """Return the intersection points between cubic Bézier curves *a* and *b*.
+
+    Uses svgpathtools' Bézier-clipping algorithm.  Duplicate points closer than
+    *tol* mm to each other are suppressed so that the result contains at most
+    one representative per geometric crossing.
+
+    Returns an empty list when the curves do not intersect.
+    """
     intersections: list[Point] = []
-    for t1, _t2 in svg_a.intersect(svg_b):
+    for t1, _t2 in a._svg().intersect(b._svg()):
         pt = a.point_at_t(t1)
         if not any(pt.distance_to(ex) < tol for ex in intersections):
             intersections.append(pt)
@@ -77,20 +74,35 @@ def _intersect_bezier_bezier(a: CubicBezier, b: CubicBezier, tol: float = 1e-12)
 
 
 class CubicBezier:
-    """A 2D cubic Bezier curve defined by four control points.
+    """A 2-D cubic Bézier curve defined by four control points.
 
-    The curve starts at p0, is influenced by control points p1 and p2,
-    and ends at p3. The parameter t varies from 0 to 1.
+    The curve is parameterised by *t* ∈ [0, 1] using the standard cubic
+    Bernstein basis::
+
+        B(t) = (1-t)³·p0 + 3(1-t)²t·p1 + 3(1-t)t²·p2 + t³·p3
+
+    ``p0`` and ``p3`` are the on-curve endpoints; ``p1`` and ``p2`` are the
+    off-curve control points that pull the curve without lying on it.
 
     Attributes:
-        p0: Start point of the curve.
-        p1: First control point.
-        p2: Second control point.
-        p3: End point of the curve.
+        p0: Start point (on-curve, ``t=0``).
+        p1: First control point (off-curve).
+        p2: Second control point (off-curve).
+        p3: End point (on-curve, ``t=1``).
+        name: Optional human-readable label.  Preserved through ``split``,
+            ``translate``, and all copy-returning operations.
     """
 
     def __init__(self, p0: Point, p1: Point, p2: Point, p3: Point, name: str | None = None) -> None:
-        """Initialize a cubic Bezier curve with four control points."""
+        """Initialise a cubic Bézier from four control points.
+
+        Args:
+            p0: Start point of the curve (``t=0``).
+            p1: First off-curve control point.
+            p2: Second off-curve control point.
+            p3: End point of the curve (``t=1``).
+            name: Optional label used in string representations and debugging.
+        """
         self.p0 = p0
         self.p1 = p1
         self.p2 = p2
@@ -98,27 +110,30 @@ class CubicBezier:
         self.name = name
 
     def __str__(self) -> str:
-        """Return a human-readable string representation."""
+        """Return a human-readable representation including all four control points."""
         return (
             f"CubicBezier(name={self.name}, p0={self.p0}, p1={self.p1}, p2={self.p2}, p3={self.p3})"
         )
 
     def __repr__(self) -> str:
-        """Return the same as ``__str__``."""
+        """Return the same string as :meth:`__str__`."""
         return self.__str__()
 
     @property
     def start(self) -> Point:
-        """Start point of the curve (alias for p0)."""
+        """On-curve start point; alias for :attr:`p0`."""
         return self.p0
 
     @property
     def end(self) -> Point:
-        """End point of the curve (alias for p3)."""
+        """On-curve end point; alias for :attr:`p3`."""
         return self.p3
 
     def translate(self, dx: float, dy: float) -> CubicBezier:
-        """Return a copy translated by (dx, dy)."""
+        """Return a copy of this curve shifted by *(dx, dy)* mm.
+
+        All four control points are translated; :attr:`name` is preserved.
+        """
         return CubicBezier(
             self.p0.translate(dx, dy),
             self.p1.translate(dx, dy),
@@ -128,12 +143,16 @@ class CubicBezier:
         )
 
     def set_name(self, name: str) -> CubicBezier:
-        """Set the name of this curve and return ``self`` for fluent chaining."""
+        """Set :attr:`name` and return ``self`` for fluent chaining."""
         self.name = name
         return self
 
     def point_at_t(self, t: float) -> Point:
-        """Evaluate the Bezier curve at parameter t."""
+        """Evaluate the curve at parameter *t* ∈ [0, 1].
+
+        Computed directly from the Bernstein basis — no library call.
+        ``t=0`` returns :attr:`p0`; ``t=1`` returns :attr:`p3`.
+        """
         t2 = t * t
         t3 = t2 * t
         mt = 1.0 - t
@@ -146,7 +165,12 @@ class CubicBezier:
         return Point(x, y)
 
     def _svg(self) -> _SvgCubicBezier:
-        """Return an equivalent svgpathtools CubicBezier for delegated calculations."""
+        """Return an equivalent ``svgpathtools.CubicBezier`` for delegated maths.
+
+        A new object is constructed on each call; there is no caching.  Call
+        sites that need multiple operations on the same curve should store the
+        result in a local variable rather than calling ``_svg()`` repeatedly.
+        """
         return _SvgCubicBezier(
             complex(self.p0.x, self.p0.y),
             complex(self.p1.x, self.p1.y),
@@ -156,16 +180,40 @@ class CubicBezier:
 
     @property
     def length(self) -> float:
-        """Exact arc length via Gauss-Legendre quadrature (delegated to svgpathtools)."""
+        """Arc length in mm, computed via Gauss-Legendre quadrature (svgpathtools)."""
         return float(self._svg().length())
 
     def tangent_at_t(self, t: float) -> np.ndarray:
-        """Tangent vector at *t* (not normalised), via svgpathtools B'(t)."""
+        """Return the (unnormalised) tangent vector B'(t) at parameter *t*.
+
+        The vector points in the direction of travel and has magnitude
+        proportional to the curve speed at *t*.  Use :meth:`normal_at_t` for
+        the perpendicular unit vector.
+
+        Returns:
+            A length-2 NumPy array ``[dx, dy]`` in mm/unit-t.
+        """
         d = self._svg().derivative(t)
         return np.array([d.real, d.imag])
 
     def normal_at_t(self, t: float) -> np.ndarray:
-        """Unit normal at *t*: 90° counter-clockwise from the tangent (left of travel)."""
+        """Return the unit normal vector at parameter *t*.
+
+        The normal is rotated 90° counter-clockwise from the tangent, i.e. it
+        points *left* of the direction of travel.
+
+        Falls back gracefully when the tangent is degenerate (zero-length
+        derivative):
+
+        1. Try ``svg.normal(t)`` directly.
+        2. If that raises ``ValueError``, nudge *t* by ±1e-4 toward the
+           nearer interior and retry.
+        3. If still degenerate, use a finite-difference approximation over a
+           ±1e-4 window.
+
+        Returns:
+            A length-2 NumPy array ``[nx, ny]`` with ``‖n‖ = 1``.
+        """
         svg = self._svg()
         try:
             n = svg.normal(t)
@@ -178,31 +226,54 @@ class CubicBezier:
                 return np.array([n.real, n.imag])
             except ValueError:
                 dt = 1e-4
-                t0 = max(0.0, t - dt)
-                t1 = min(1.0, t + dt)
-                p0 = self.point_at_t(t0)
-                p1 = self.point_at_t(t1)
-                dx, dy = p1.x - p0.x, p1.y - p0.y
+                pt_lo = self.point_at_t(max(0.0, t - dt))
+                pt_hi = self.point_at_t(min(1.0, t + dt))
+                dx, dy = pt_hi.x - pt_lo.x, pt_hi.y - pt_lo.y
                 length = (dx**2 + dy**2) ** 0.5 or 1.0
                 return np.array([-dy / length, dx / length])
 
     def point_at_length(self, arc_length: float) -> Point:
-        """Return the point at *arc_length* mm from p0; raises ValueError if out of range."""
-        total = self.length
+        """Return the point at *arc_length* mm from :attr:`p0` along the curve.
+
+        Args:
+            arc_length: Distance in mm, measured along the curve.  Must satisfy
+                ``0 ≤ arc_length ≤ self.length``.
+
+        Returns:
+            The :class:`Point` at the requested arc length.
+
+        Raises:
+            ValueError: If *arc_length* is negative or exceeds the total curve
+                length (a 1 nm tolerance is allowed for floating-point noise).
+        """
+        svg = self._svg()
+        total = float(svg.length())
         if arc_length < 0 or arc_length > total + 1e-9:
             raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
-        t = self._svg().ilength(arc_length)
-        return self.point_at_t(t)
+        return self.point_at_t(svg.ilength(arc_length))
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
-        """Return the point *arc_length* mm further along this curve from *point*."""
+        """Return the point *arc_length* mm further along the curve from *point*.
+
+        *point* is snapped to the nearest location on the curve via
+        :func:`_bezier_closest_t`, so it need not lie exactly on the curve.
+
+        Args:
+            point: Reference location on (or near) the curve.
+            arc_length: Additional distance to travel in mm.  May be negative
+                to travel backwards.
+        """
         svg = self._svg()
         t0 = _bezier_closest_t(svg, complex(point.x, point.y))
         pos = float(svg.length(t1=t0))
         return self.point_at_length(pos + arc_length)
 
     def split(self, t: float) -> tuple[CubicBezier, CubicBezier]:
-        """Split at *t* into (left, right) using de Casteljau (delegated to svgpathtools)."""
+        """Split the curve at *t* ∈ (0, 1) and return ``(left, right)``.
+
+        Uses de Casteljau subdivision (delegated to svgpathtools).  Both
+        sub-curves inherit :attr:`name` from this curve.
+        """
         left, right = self._svg().split(t)
         return (
             CubicBezier(
@@ -210,12 +281,14 @@ class CubicBezier:
                 Point(left.control1.real, left.control1.imag),
                 Point(left.control2.real, left.control2.imag),
                 Point(left.end.real, left.end.imag),
+                name=self.name,
             ),
             CubicBezier(
                 Point(right.start.real, right.start.imag),
                 Point(right.control1.real, right.control1.imag),
                 Point(right.control2.real, right.control2.imag),
                 Point(right.end.real, right.end.imag),
+                name=self.name,
             ),
         )
 
@@ -224,72 +297,74 @@ class CubicBezier:
         points: list[Point],
         tolerance: float = 0.5,
     ) -> list[CubicBezier]:
-        """Split at a list of points that lie on this curve."""
+        """Split the curve at each point in *points* and return the sub-curves in order.
+
+        Each point is projected onto the curve via :func:`_bezier_closest_t`.
+        Points that project within *tolerance* mm of either endpoint are treated
+        as outside the curve interior and ignored.  Duplicate projections (two
+        points mapping to the same *t*) are deduplicated by the sort; only one
+        split is performed at each unique *t*.
+
+        Args:
+            points: Points that lie on (or very near) the curve.
+            tolerance: Points whose projected *t* falls within
+                ``tolerance / length`` of 0 or 1 are discarded.  Defaults to
+                0.5 mm.
+
+        Returns:
+            An ordered list of sub-curves.  Returns ``[self-copy]`` when
+            *points* is empty or all points fall outside the interior.
+        """
         total_len = self.length
         if total_len == 0.0:
-            return [CubicBezier(self.p0, self.p1, self.p2, self.p3)]
+            return [CubicBezier(self.p0, self.p1, self.p2, self.p3, name=self.name)]
 
         svg = self._svg()
         eps = tolerance / total_len
-
         ts: list[float] = sorted(_bezier_closest_t(svg, complex(pt.x, pt.y)) for pt in points)
         breakpoints: list[float] = [t for t in ts if eps < t < 1.0 - eps]
 
         if not breakpoints:
-            return [CubicBezier(self.p0, self.p1, self.p2, self.p3)]
+            return [CubicBezier(self.p0, self.p1, self.p2, self.p3, name=self.name)]
 
-        tail: CubicBezier = CubicBezier(self.p0, self.p1, self.p2, self.p3)
-        sub_curves: list[CubicBezier] = []
-        consumed: float = 0.0
-        for t in breakpoints:
-            local_t = (t - consumed) / (1.0 - consumed)
-            head, tail = tail.split(local_t)
-            sub_curves.append(head)
-            consumed = t
-        sub_curves.append(tail)
-        return sub_curves
+        return _split_at_ts(
+            CubicBezier(self.p0, self.p1, self.p2, self.p3, name=self.name), breakpoints
+        )
 
     def bounding_box(self) -> tuple[Point, Point]:
-        """Compute the axis-aligned bounding box by finding B'(t)=0 extrema."""
-        x_coords = [self.p0.x, self.p3.x]
-        y_coords = [self.p0.y, self.p3.y]
+        """Return the tight axis-aligned bounding box of the curve.
 
-        a_x = 3 * (self.p3.x - 3 * self.p2.x + 3 * self.p1.x - self.p0.x)
-        b_x = 6 * (self.p2.x - 2 * self.p1.x + self.p0.x)
-        c_x = 3 * (self.p1.x - self.p0.x)
+        Delegates to ``svgpathtools.CubicBezier.bbox()``, which finds the
+        exact extrema by solving B'(t) = 0 analytically.  The result reflects
+        the actual curve extent, not the convex hull of the control points.
 
-        a_y = 3 * (self.p3.y - 3 * self.p2.y + 3 * self.p1.y - self.p0.y)
-        b_y = 6 * (self.p2.y - 2 * self.p1.y + self.p0.y)
-        c_y = 3 * (self.p1.y - self.p0.y)
-
-        for a, b, c in [(a_x, b_x, c_x), (a_y, b_y, c_y)]:
-            if abs(a) > 1e-10:
-                roots = _solve_quadratic(a, b, c)
-                for t in roots:
-                    if 0 <= t <= 1:
-                        point = self.point_at_t(t)
-                        x_coords.append(point.x)
-                        y_coords.append(point.y)
-            elif abs(b) > 1e-10:
-                t = -c / b
-                if 0 <= t <= 1:
-                    point = self.point_at_t(t)
-                    x_coords.append(point.x)
-                    y_coords.append(point.y)
-
-        min_x, max_x = min(x_coords), max(x_coords)
-        min_y, max_y = min(y_coords), max(y_coords)
-
-        return Point(min_x, min_y), Point(max_x, max_y)
+        Returns:
+            ``(min_corner, max_corner)`` where *min_corner* is
+            ``Point(xmin, ymin)`` and *max_corner* is ``Point(xmax, ymax)``.
+        """
+        xmin, xmax, ymin, ymax = self._svg().bbox()
+        return Point(xmin, ymin), Point(xmax, ymax)
 
     def point_perpendicular(self, distance: float, t: float) -> Point:
-        """Return a point offset by *distance* mm in the normal direction at *t*."""
+        """Return a point offset perpendicularly from the curve at parameter *t*.
+
+        Args:
+            distance: Offset in mm.  Positive moves left of travel (the
+                counter-clockwise normal direction); negative moves right.
+            t: Curve parameter ∈ [0, 1] at which to apply the offset.
+        """
         pt = self.point_at_t(t)
         nor = self.normal_at_t(t)
         return Point(pt.x + distance * nor[0], pt.y + distance * nor[1])
 
     def contains_point(self, point: Point, tolerance: float = 0.01) -> bool:
-        """Return True if *point* is within *tolerance* mm of the curve."""
+        """Return ``True`` if *point* is within *tolerance* mm of the curve.
+
+        The check is approximate: the curve is discretised into 64 segments
+        and the Shapely distance to the resulting polyline is tested.  Points
+        very close to the true curve but between sample locations may read as
+        outside when *tolerance* is very tight.
+        """
         ls = _bezier_shapely(self)
         return bool(ls.distance(_sg.Point(point.x, point.y)) <= tolerance)
 
@@ -299,60 +374,39 @@ class CubicBezier:
         center: Point | None = None,
         hausdorff_limit: float = 1.5,
     ) -> CubicBezier:
-        """Return an approximate offset curve using the hodograph approximation."""
-        if center is not None:
-            mid = self.point_at_t(0.5)
-            n_mid = self.normal_at_t(0.5)
-            sign = 1.0 if np.dot(n_mid, mid.coords - center.coords) >= 0 else -1.0
-            d = sign * abs(distance)
-        else:
-            d = distance
+        """Return a single-Bézier approximation of the parallel offset curve.
 
-        def _hodograph(curve: CubicBezier) -> CubicBezier:
-            def _shifted(pt: Point, t: float) -> Point:
-                n = curve.normal_at_t(t)
-                return Point(pt.x + d * n[0], pt.y + d * n[1])
+        Args:
+            distance: Signed offset in mm.  Positive moves left of travel.
+            center: When given, the sign of *distance* is overridden so the
+                offset moves *away* from *center*.
+            hausdorff_limit: Quality threshold as a multiple of
+                ``abs(distance)``.  If the hodograph approximation's Hausdorff
+                error exceeds this, the curve is bisected and re-approximated.
+                Pass ``math.inf`` to skip the quality check.
 
-            return CubicBezier(
-                _shifted(curve.p0, 0.0),
-                _shifted(curve.p1, 1 / 3),
-                _shifted(curve.p2, 2 / 3),
-                _shifted(curve.p3, 1.0),
-                name=curve.name,
-            )
+        Delegates to :func:`~sewpat.geometry._bezier_offset.bezier_offset`.
+        """
+        from ._bezier_offset import bezier_offset  # local import avoids circular dep
 
-        approx = _hodograph(self)
-
-        if abs(distance) > 1e-9 and math.isfinite(hausdorff_limit):
-            ls_true = _true_offset_ls(self, d)
-            ls_off = _bezier_shapely(approx)
-            if ls_true.hausdorff_distance(ls_off) > hausdorff_limit * abs(distance):
-                left, right = self.split(0.5)
-                left_off = _hodograph(left)
-                right_off = _hodograph(right)
-                return CubicBezier(
-                    left_off.p0,
-                    left_off.p2,
-                    right_off.p1,
-                    right_off.p3,
-                    name=self.name,
-                )
-
-        return approx
+        return bezier_offset(self, distance, center=center, hausdorff_limit=hausdorff_limit)
 
     def offset_error(self, distance: float, center: Point | None = None) -> float:
-        """Return the Hausdorff distance (mm) between the hodograph and the true offset."""
-        if center is not None:
-            mid = self.point_at_t(0.5)
-            n_mid = self.normal_at_t(0.5)
-            sign = 1.0 if np.dot(n_mid, mid.coords - center.coords) >= 0 else -1.0
-            d = sign * abs(distance)
-        else:
-            d = distance
-        approx = self.offset(distance, center=center, hausdorff_limit=math.inf)
-        ls_true = _true_offset_ls(self, d)
-        ls_off = _bezier_shapely(approx)
-        return float(ls_true.hausdorff_distance(ls_off))
+        """Return the Hausdorff error (mm) between the hodograph approximation and the true offset.
+
+        Args:
+            distance: Signed offset in mm.
+            center: When given, determines the sign of *distance* (see
+                :meth:`offset`).
+
+        Returns:
+            Non-negative Hausdorff error in mm.
+
+        Delegates to :func:`~sewpat.geometry._bezier_offset.bezier_offset_error`.
+        """
+        from ._bezier_offset import bezier_offset_error
+
+        return bezier_offset_error(self, distance, center=center)
 
     def offset_adaptive(
         self,
@@ -362,36 +416,34 @@ class CubicBezier:
         _depth: int = 0,
         _max_depth: int = 8,
     ) -> list[CubicBezier]:
-        """Return the offset as a list of Béziers, split until Hausdorff error < *eps* mm."""
-        if center is not None:
-            mid = self.point_at_t(0.5)
-            n_mid = self.normal_at_t(0.5)
-            sign = 1.0 if np.dot(n_mid, mid.coords - center.coords) >= 0 else -1.0
-            d = sign * abs(distance)
-        else:
-            d = distance
+        """Return the offset as a list of Béziers with Hausdorff error < *eps* mm.
 
-        def _shifted(pt: Point, t: float) -> Point:
-            n = self.normal_at_t(t)
-            return Point(pt.x + d * n[0], pt.y + d * n[1])
+        The curve is recursively bisected at ``t=0.5`` until every segment's
+        hodograph approximation is within *eps* mm of the true parallel offset,
+        or the recursion reaches *_max_depth* levels (default 8, giving at most
+        256 output segments).
 
-        approx = CubicBezier(
-            _shifted(self.p0, 0.0),
-            _shifted(self.p1, 1 / 3),
-            _shifted(self.p2, 2 / 3),
-            _shifted(self.p3, 1.0),
-            name=self.name,
+        Args:
+            distance: Signed offset in mm.  Positive moves left of travel.
+            center: When given, determines the sign of *distance* (see
+                :meth:`offset`).
+            eps: Maximum allowed Hausdorff error per segment in mm.
+            _depth: Current recursion depth — **do not set manually**.
+            _max_depth: Hard recursion cap — **do not set manually**.
+
+        Returns:
+            An ordered list of :class:`CubicBezier` segments whose union
+            approximates the true parallel offset within *eps* mm.
+
+        Delegates to :func:`~sewpat.geometry._bezier_offset.bezier_offset_adaptive`.
+        """
+        from ._bezier_offset import bezier_offset_adaptive
+
+        return bezier_offset_adaptive(
+            self,
+            distance,
+            center=center,
+            eps=eps,
+            _depth=_depth,
+            _max_depth=_max_depth,
         )
-
-        if _depth >= _max_depth:
-            return [approx]
-
-        ls_true = _true_offset_ls(self, d)
-        ls_off = _bezier_shapely(approx)
-        if ls_true.hausdorff_distance(ls_off) <= eps:
-            return [approx]
-
-        left, right = self.split(0.5)
-        return left.offset_adaptive(
-            d, center=None, eps=eps, _depth=_depth + 1, _max_depth=_max_depth
-        ) + right.offset_adaptive(d, center=None, eps=eps, _depth=_depth + 1, _max_depth=_max_depth)

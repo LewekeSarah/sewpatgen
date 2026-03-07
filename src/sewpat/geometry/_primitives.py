@@ -334,6 +334,32 @@ class _LinearGeom(ABC):
 
 
 # ---------------------------------------------------------------------------
+# Shared split helper
+# ---------------------------------------------------------------------------
+
+
+def _split_at_ts[T](obj: T, breakpoints: list[float]) -> list[T]:
+    """Split *obj* at each *t* in *breakpoints* using ``obj.split(t)``.
+
+    *breakpoints* must be sorted, non-empty, and all strictly inside (0, 1).
+    The ``consumed`` / ``local_t`` bookkeeping maps each global-*t* back to
+    the parameter space of the running tail after every previous split.
+
+    Returns a list of ``len(breakpoints) + 1`` sub-objects in order.
+    """
+    tail = obj
+    pieces: list[T] = []
+    consumed: float = 0.0
+    for t in breakpoints:
+        local_t = (t - consumed) / (1.0 - consumed)
+        head, tail = tail.split(local_t)  # type: ignore[attr-defined]
+        pieces.append(head)
+        consumed = t
+    pieces.append(tail)
+    return pieces
+
+
+# ---------------------------------------------------------------------------
 # Segment
 # ---------------------------------------------------------------------------
 
@@ -453,16 +479,7 @@ class Segment(_LinearGeom):
         if not breakpoints:
             return [Segment(self.p1, self.p2, name=self.name)]
 
-        tail: Segment = Segment(self.p1, self.p2, name=self.name)
-        sub_segments: list[Segment] = []
-        consumed: float = 0.0
-        for t in breakpoints:
-            local_t = (t - consumed) / (1.0 - consumed)
-            head, tail = tail.split(local_t)
-            sub_segments.append(head)
-            consumed = t
-        sub_segments.append(tail)
-        return sub_segments
+        return _split_at_ts(Segment(self.p1, self.p2, name=self.name), breakpoints)
 
     def point_perpendicular(
         self,
