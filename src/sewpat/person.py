@@ -240,9 +240,10 @@ class PersonAnalyser:
 
     def _set_armscye_depth(self) -> None:
         """Derive armscye depth from bust circumference if not already set."""
-        if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
+        bust = self.person.bust
+        if bust is not None and (bust > 80 * CM) and (bust <= 89 * CM):
             self.person.armscye_depth = (
-                self.person.bust / 10 + 11 * CM
+                bust / 10 + 11 * CM
                 if self.person.armscye_depth is None
                 else self.person.armscye_depth
             )
@@ -253,9 +254,10 @@ class PersonAnalyser:
 
     def _set_armscye_width(self) -> None:
         """Derive armscye width from bust circumference if not already set."""
-        if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
+        bust = self.person.bust
+        if bust is not None and (bust > 80 * CM) and (bust <= 89 * CM):
             self.person.armscye_width = (
-                self.person.bust / 8 - 1.5 * CM
+                bust / 8 - 1.5 * CM
                 if self.person.armscye_width is None
                 else self.person.armscye_width
             )
@@ -266,11 +268,10 @@ class PersonAnalyser:
 
     def _set_chest_width(self) -> None:
         """Derive chest width from bust circumference if not already set."""
-        if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
+        bust = self.person.bust
+        if bust is not None and (bust > 80 * CM) and (bust <= 89 * CM):
             self.person.chest_width = (
-                self.person.bust / 4 - 4.0 * CM
-                if self.person.chest_width is None
-                else self.person.chest_width
+                bust / 4 - 4.0 * CM if self.person.chest_width is None else self.person.chest_width
             )
         if self.person.chest_width is None:
             raise NotImplementedError(
@@ -279,11 +280,10 @@ class PersonAnalyser:
 
     def _set_back_width(self) -> None:
         """Derive back width from bust circumference if not already set."""
-        if (self.person.bust > 80 * CM) and (self.person.bust <= 89 * CM):
+        bust = self.person.bust
+        if bust is not None and (bust > 80 * CM) and (bust <= 89 * CM):
             self.person.back_width = (
-                self.person.bust / 8 + 5.5 * CM
-                if self.person.back_width is None
-                else self.person.back_width
+                bust / 8 + 5.5 * CM if self.person.back_width is None else self.person.back_width
             )
         if self.person.back_width is None:
             raise NotImplementedError("Matching formula for given bustline is not yet implemented.")
@@ -303,7 +303,13 @@ class PersonAnalyser:
             for key, val in self.balance.__dict__.items():
                 person_balanced.__setattr__(key, person_balanced.__getattribute__(key) + val)
         if person_balanced.gender == Gender.female:
-            if (person_balanced.front_length - person_balanced.back_length) > self.optimal_balance:
+            fl = person_balanced.front_length
+            bl = person_balanced.back_length
+            if fl is None or bl is None:
+                raise ValueError(
+                    "front_length and back_length must both be set to balance the person."
+                )
+            if (fl - bl) > self.optimal_balance:
                 raise ValueError("front_length and back_length are not properly balanced")
             else:
                 self.person_balanced = BalancedPerson(person_balanced)

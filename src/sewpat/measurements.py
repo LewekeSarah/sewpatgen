@@ -98,15 +98,22 @@ class TrouserMeasurements:
             0.25 * self.hip_width if self.front_trouser_width is None else self.front_trouser_width
         )
         if self.gender in [Gender.boy, Gender.girl]:
-            self.knee_height = 0.5 * self.inseam if self.knee_height is None else self.knee_height
-            self.sTaH = self.inseam + self.body_rise
+            inseam = self.inseam
+            if inseam is None:
+                raise ValueError("inseam must be set for boy/girl trouser construction.")
+            self.knee_height = 0.5 * inseam if self.knee_height is None else self.knee_height
+            self.sTaH = inseam + self.body_rise
         elif self.gender == Gender.female:
+            inseam = self.inseam
+            stah = self.sTaH
+            if inseam is None:
+                raise ValueError("inseam must be set for female trouser construction.")
+            if stah is None:
+                raise ValueError("sTaH must be set for female trouser construction.")
             self.knee_height = (
-                0.5 * self.inseam - self.inseam / 10
-                if self.knee_height is None
-                else self.knee_height
+                0.5 * inseam - inseam / 10 if self.knee_height is None else self.knee_height
             )
-            self.inseam = self.sTaH - self.inseam
+            self.inseam = stah - inseam
         if self.knee_height is None:
             raise NotImplementedError("knee_height is missing.")
 
