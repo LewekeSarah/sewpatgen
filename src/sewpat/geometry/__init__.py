@@ -32,6 +32,12 @@ from ._bezier_offset import (
 from ._dart import (
     Dart,
     DartType,
+    dart_from_edge_at_legs,
+    dart_from_edge_at_point,
+    dart_from_edge_at_t,
+    dart_from_edge_free_tip,
+    dart_from_tip_and_legs,
+    dart_from_tip_center_width,
 )
 from ._primitives import (
     Circle,
@@ -62,6 +68,12 @@ __all__ = [
     # Dart
     "DartType",
     "Dart",
+    "dart_from_tip_center_width",
+    "dart_from_edge_at_legs",
+    "dart_from_tip_and_legs",
+    "dart_from_edge_at_t",
+    "dart_from_edge_at_point",
+    "dart_from_edge_free_tip",
     # Algorithms
     "GEOMETRIC_TYPE",
     "intersect",
