@@ -402,8 +402,8 @@ class TestAddPrecisionPoints(unittest.TestCase):
         part = PatternPart(name="Body")
         part.add_precision_points(Point(0, 0))
         radii = sorted(e.geometry.radius for e in part.elements if isinstance(e.geometry, Circle))
-        self.assertAlmostEqual(radii[0], 0.2 * MM)
-        self.assertAlmostEqual(radii[1], 2.0 * MM)
+        self.assertAlmostEqual(radii[0], 0.5 * MM)
+        self.assertAlmostEqual(radii[1], 5.0 * MM)
 
 
 # ---------------------------------------------------------------------------

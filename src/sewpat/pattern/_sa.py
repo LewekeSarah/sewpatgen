@@ -79,11 +79,32 @@ def _closest_sa_edge(
 ) -> Segment | CubicBezier | None:
     """Return the SA edge geometrically closest to *ref*, or ``None``.
 
-    Uses :meth:`Point.distance_to` for consistency with the rest of the API.
+    Finds the SA edge where the closest point on the edge to *ref* has the
+    minimum distance. This ensures we select the correct SA edge even when
+    the start points are far from *ref*.
     """
     if not sa_geoms:
         return None
-    return min(sa_geoms, key=lambda g: ref.distance_to(g.start))
+
+    def distance_to_edge(geom: Segment | CubicBezier) -> float:
+        """Calculate minimum distance from ref to any point on the edge."""
+        if isinstance(geom, Segment):
+            # For segments, use the projection to find the closest point
+            projected = geom.project_point(ref)
+            return ref.distance_to(projected)
+        else:
+            # For CubicBezier, sample points along the curve
+            # This is more expensive but accurate
+            min_dist = float("inf")
+            for i in range(21):  # Sample 21 points (0.0, 0.05, 0.1, ..., 1.0)
+                t = i / 20.0
+                pt = geom.point_at_t(t)
+                dist = ref.distance_to(pt)
+                if dist < min_dist:
+                    min_dist = dist
+            return min_dist
+
+    return min(sa_geoms, key=distance_to_edge)
 
 
 # ---------------------------------------------------------------------------

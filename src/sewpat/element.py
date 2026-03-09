@@ -159,8 +159,8 @@ class PrecisionPoint:
 
     Args:
         center: The point at which to place the precision mark.
-        outer_radius: Radius of the outer circle in mm. Defaults to 2 mm.
-        inner_radius: Radius of the inner circle in mm. Defaults to 0.2 mm.
+        outer_radius: Radius of the outer circle in mm. Defaults to 5 mm.
+        inner_radius: Radius of the inner circle in mm. Defaults to 0.5 mm.
         style: Visual style for both circles. Defaults to
             :data:`~sewpat.style.STYLE_PRECISION_POINT`.
     """

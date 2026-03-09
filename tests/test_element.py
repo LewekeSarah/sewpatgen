@@ -96,8 +96,8 @@ class TestPrecisionPoint(unittest.TestCase):
         """Default outer and inner radii are correct."""
         p = Point(5 * CM, 5 * CM)
         pp = PrecisionPoint(p)
-        self.assertAlmostEqual(pp.outer_radius, 2.0 * MM)
-        self.assertAlmostEqual(pp.inner_radius, 0.2 * MM)
+        self.assertAlmostEqual(pp.outer_radius, 5.0 * MM)
+        self.assertAlmostEqual(pp.inner_radius, 0.5 * MM)
 
     def test_custom_radii(self):
         """Custom radii are stored correctly."""

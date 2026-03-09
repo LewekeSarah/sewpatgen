@@ -52,3 +52,16 @@ repos:
         types: [python]
         pass_filenames: false
         files: ^src/
+
+  # ── pytest — tests + coverage ─────────────────────────────────────────────
+  # Run tests before commit to catch failures early, matching the CI pipeline.
+  # Requires 80% coverage to pass (same threshold as CI).
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest — tests + coverage
+        language: system
+        entry: uv run pytest --cov=sewpat --cov-report=term-missing:skip-covered --cov-fail-under=80
+        types: [python]
+        pass_filenames: false
+        always_run: true
