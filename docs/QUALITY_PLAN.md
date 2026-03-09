@@ -1,6 +1,6 @@
 # Quality Plan — sewpat
 
-> **Status as of 2026-03-07 (v0.4.0):** All debt items resolved. Codebase is fully clean.
+> **Status as of 2026-03-09 (v0.4.0):** All debt items resolved. Codebase is fully clean.
 
 ---
 
@@ -11,7 +11,7 @@
 | Formatting | ruff-format | `uv run ruff format --check src tests` | zero diffs |
 | Lint | ruff | `uv run ruff check src tests` | zero errors |
 | Type-check | mypy | `uv run mypy src/sewpat/ --ignore-missing-imports` | **0 errors** ✅ |
-| Tests | pytest | `uv run pytest` | 627 passed |
+| Tests | pytest | `uv run pytest` | 728 passed |
 | Coverage | pytest-cov | (bundled with pytest) | ≥ 80 % (currently 91 %) |
 | Pre-commit | pre-commit | `uv run pre-commit run --all-files` | all 9 hooks pass |
 
@@ -95,36 +95,52 @@ The following 166 mypy errors were systematically resolved between v0.3.0 and v0
 ## Coverage report (v0.4.0)
 
 ```
-Name                       Stmts   Miss  Cover
-----------------------------------------------
-src/sewpat/__init__.py        11      0   100%
-src/sewpat/blocks.py         187      5    97%
-src/sewpat/element.py         45      1    98%
-src/sewpat/fitclass.py        93      0   100%
-src/sewpat/geometry.py       963    105    89%
-src/sewpat/grids.py           25      0   100%
-src/sewpat/markers.py         12      0   100%
-src/sewpat/measurements.py   106      3    97%
-src/sewpat/pages.py           19      0   100%
-src/sewpat/pattern.py        628     43    93%
-src/sewpat/person.py         122     17    86%
-src/sewpat/render.py         233     49    79%
-src/sewpat/style.py           59      7    88%
-src/sewpat/units.py            3      0   100%
-----------------------------------------------
-TOTAL                       2527    236    91%
+Name                                      Stmts   Miss  Cover
+---------------------------------------------------------------
+src/sewpat/__init__.py                       11      0   100%
+src/sewpat/blocks.py                        195      7    96%
+src/sewpat/element.py                        46      1    98%
+src/sewpat/fitclass.py                       93      0   100%
+src/sewpat/geometry/__init__.py               6      0   100%
+src/sewpat/geometry/_algorithms.py          209     18    91%
+src/sewpat/geometry/_bezier.py              123     11    91%
+src/sewpat/geometry/_bezier_offset.py        45      0   100%
+src/sewpat/geometry/_dart.py                196      6    97%
+src/sewpat/geometry/_primitives.py          360     47    87%
+src/sewpat/grids.py                          27      0   100%
+src/sewpat/markers.py                        12      0   100%
+src/sewpat/measurements.py                  115      6    95%
+src/sewpat/pages.py                          19      0   100%
+src/sewpat/pattern/__init__.py                4      0   100%
+src/sewpat/pattern/_dart_integration.py      96      8    92%
+src/sewpat/pattern/_notches.py               96      5    95%
+src/sewpat/pattern/_sa.py                   243     29    88%
+src/sewpat/pattern/construction.py           25      0   100%
+src/sewpat/pattern/part.py                  201     14    93%
+src/sewpat/person.py                        130     18    86%
+src/sewpat/render.py                        233     49    79%
+src/sewpat/style.py                          60      7    88%
+src/sewpat/units.py                           3      0   100%
+---------------------------------------------------------------
+TOTAL                                      2548    226    91%
 ```
 
-**627 tests · 90.66 % total coverage** (threshold: 80 %)
+**728 tests · 91.13 % total coverage** (threshold: 80 %)
 
 ### Known coverage gaps (backlog)
 
 | File | Miss | Notes |
 |------|------|-------|
-| `geometry.py` | 105 | Several advanced Bézier offset / intersection paths; rare error branches |
-| `render.py` | 49 | PDF export path, multi-page layout, grid rendering |
-| `person.py` | 17 | `__repr__` / `__str__` and unused `Person` factory variants |
-| `pattern.py` | 43 | `OverlayPart.explode`, `add_grid_notches` edge cases |
+| `render.py` | 49 | PDF export path, multi-page layout, `Ray`/`Line` render paths |
+| `geometry/_primitives.py` | 47 | `__repr__`, `__str__`, and rare error branches in `Ray`/`Line`/`Circle` |
+| `pattern/_sa.py` | 29 | Round/bevel corner edge cases, open-path SA branches |
+| `blocks.py` | 7 | Trouser block branches (lines 379–381, 397–398, 845–847) |
+| `person.py` | 18 | `Person.__repr__`/`__str__`, `PersonAnalyser` outside bust-range branches |
+| `geometry/_algorithms.py` | 18 | Advanced Bézier offset / intersection error paths |
+| `geometry/_bezier.py` | 11 | Rare split/arc-length edge cases |
+| `pattern/part.py` | 14 | `OverlayPart` no-outline path, `add_dart` guard branches |
+| `pattern/_dart_integration.py` | 8 | Dart-mouth split error branches |
+| `style.py` | 7 | `Style.__repr__` and fallback colour paths |
 
 ---
 

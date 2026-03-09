@@ -194,7 +194,7 @@ def test_offset_adaptive_better_than_single_offset_on_tight_curve():
     """offset_adaptive must achieve lower max Hausdorff error than single offset."""
     import shapely.geometry as _sg
 
-    from sewpat.geometry import _bezier_shapely, _true_offset_ls
+    from sewpat.geometry._bezier import _bezier_shapely, _true_offset_ls
 
     distance = 10.0
     curve = _tight()
