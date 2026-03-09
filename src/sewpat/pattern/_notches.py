@@ -143,7 +143,7 @@ def add_notches(
     sa_geoms: list[Segment | CubicBezier] = [
         e.geometry
         for e in part.elements
-        if e.is_seam_allowance and isinstance(e.geometry, (Segment, CubicBezier))
+        if e.is_seam_allowance and isinstance(e.geometry, (Segment | CubicBezier))
     ]
 
     for pt in points:
