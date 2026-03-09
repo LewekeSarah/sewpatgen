@@ -161,13 +161,13 @@ def _orient_dart_roof_pairs(
 
         # Orient g0: must END at peak (leg → roof).
         if g0.start.distance_to(peak) < g0.end.distance_to(peak):
-            new_e0 = copy.copy(result[i0])
+            new_e0 = copy.deepcopy(result[i0])
             new_e0.geometry = _reverse_geom(g0)
             result[i0] = new_e0
 
         # Orient g1: must START at peak (roof → leg).
         if g1.end.distance_to(peak) < g1.start.distance_to(peak):
-            new_e1 = copy.copy(result[i1])
+            new_e1 = copy.deepcopy(result[i1])
             new_e1.geometry = _reverse_geom(g1)
             result[i1] = new_e1
 
@@ -464,7 +464,7 @@ def add_seam_allowance(
     # Collect Segment/CubicBezier outline elements; orient dart roof pairs so
     # build_chain can traverse them as a clean through-path.
     seam_elems: list[PatternElement] = [
-        e for e in outline_elements if isinstance(e.geometry, (Segment, CubicBezier))
+        copy.deepcopy(e) for e in outline_elements if isinstance(e.geometry, (Segment, CubicBezier))
     ]
     seam_elems = _orient_dart_roof_pairs(seam_elems)
     geoms = cast(list[Segment | CubicBezier], [e.geometry for e in seam_elems])
