@@ -47,7 +47,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
             ("linke Kante", 0),
             ("rechte Kante", model.width),
         ],
-        part_name="Konstruktionsgitter Beutel",
+        part_name="Grid Beutel",
     )
     grid_part = grid.build()
     pattern.add_part(grid_part)
@@ -75,6 +75,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
         Segment(bottom_left, top_left),
         style=STYLE_STITCH,
         is_outline=True,
+        role="side",
     )
     body.append(
         Segment(top_left, top_right),
@@ -85,6 +86,7 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
         Segment(top_right, bottom_right),
         style=STYLE_STITCH,
         is_outline=True,
+        role="side",
     )
     body.append(
         Segment(bottom_right, bottom_left, name="Wendeöffnung (Futterstoff)"),
@@ -126,9 +128,10 @@ def make_drawstring_pouch(model: DrawstringPouchConfig) -> Pattern:
         ]
     )
 
-    ## Notches — automatically placed where outline edges cross grid lines
+    ## Notches at the drawstring channel lines on both side seams
     body.add_grid_notches(
         grid_part,
+        role_map={"side": ["Tunnelzug oben", "Tunnelzug unten"]},
         corner_clearance=0.0,
     )
 

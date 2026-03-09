@@ -1,0 +1,42 @@
+........................................................................ [ 11%]
+........................................................................ [ 22%]
+........................................F............................... [ 33%]
+........................................................................ [ 45%]
+........................................................................ [ 56%]
+...........................................................F............ [ 67%]
+........................................................................ [ 78%]
+........................................................................ [ 90%]
+................................................................         [100%]
+=================================== FAILURES ===================================
+____________________ TestPrecisionPoint.test_default_radii _____________________
+tests/test_element.py:99: in test_default_radii
+    self.assertAlmostEqual(pp.outer_radius, 2.0 * MM)
+E   AssertionError: 5.0 != 2.0 within 7 places (3.0 difference)
+___________________ TestAddPrecisionPoints.test_circle_radii ___________________
+tests/test_part.py:405: in test_circle_radii
+    self.assertAlmostEqual(radii[0], 0.2 * MM)
+E   AssertionError: 0.5 != 0.2 within 7 places (0.3 difference)
+=============================== warnings summary ===============================
+tests/test_blocks.py: 1435 warnings
+tests/test_construction_grid.py: 40 warnings
+  /Users/sarah/Documents/GitHub/sewpatgen/src/sewpat/pattern/_notches.py:92: DeprecationWarning: Arrays of 2-dimensional vectors are deprecated. Use arrays of 3-dimensional vectors instead. (deprecated in NumPy 2.0)
+    return abs(float(np.cross(outline_tan, grid_dir)))
+
+tests/test_blocks.py: 35 warnings
+  /Users/sarah/Documents/GitHub/sewpatgen/src/sewpat/geometry/_algorithms.py:642: RuntimeWarning: invalid value encountered in divide
+    along = np.asarray(d / np.linalg.norm(d))
+
+tests/test_dart.py::TestAddDartOuter::test_roof_inherits_edge_style
+  /Users/sarah/Documents/GitHub/sewpatgen/src/sewpat/pattern/part.py:517: UserWarning: add_dart('test'): _edge_element is not in the part's element list — the outline edge will not be split at the dart mouth. Seam allowance may be incorrect.
+    return _dart_integration.add_dart(
+
+tests/test_dart_no_name.py::test_add_dart_no_name_tip_elements
+tests/test_dart_no_name.py::test_svg_export_no_name
+  /Users/sarah/Documents/GitHub/sewpatgen/src/sewpat/pattern/part.py:517: UserWarning: add_dart(None): _edge_element is not in the part's element list — the outline edge will not be split at the dart mouth. Seam allowance may be incorrect.
+    return _dart_integration.add_dart(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_element.py::TestPrecisionPoint::test_default_radii - Assert...
+FAILED tests/test_part.py::TestAddPrecisionPoints::test_circle_radii - Assert...
+2 failed, 638 passed, 1513 warnings in 14.04s

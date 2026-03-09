@@ -46,12 +46,42 @@ from .measurements import (
     calculate_waist_distribution,
 )
 from .pattern import PatternConfig, PatternElement, PatternPart
+from .pattern._notches import RoleMap
 from .person import PersonalAdjustments
-from .style import STYLE_HEM, STYLE_STITCH, STYLE_STITCH_BEVEL
+from .style import STYLE_CENTER_LINE, STYLE_HEM, STYLE_STITCH, STYLE_STITCH_BEVEL
 from .units import CM
 
 if TYPE_CHECKING:
     from .fitclass import FitClass
+
+# ---------------------------------------------------------------------------
+# Role → grid-line maps for TopBlock notch placement
+# ---------------------------------------------------------------------------
+
+#: Notch rules for the **back** pattern piece of a top/blouse block.
+#: Each key is a :attr:`~sewpat.element.PatternElement.role` tag; each value
+#: is a list of construction-grid element names (from :class:`~sewpat.grids.TopGrid`)
+#: whose intersections with that role's outline edges produce notches.
+#: An empty list suppresses notches for that role entirely.
+TOP_BLOCK_BACK_ROLE_MAP: RoleMap = {
+    "side": ["Waist", "Hip"],
+    "center_back": ["Waist", "Hip"],
+    "armscye": [],
+    "shoulder": [],
+    "neckline": [],
+}
+
+#: Notch rules for the **front** pattern piece of a top/blouse block.
+#: Center-front elements carry ``STYLE_CENTER_LINE`` which has ``no_notch=True``,
+#: so the Waist/Hip grid lines listed here produce no notches in practice —
+#: the fold-line constraint is enforced automatically by the style flag.
+TOP_BLOCK_FRONT_ROLE_MAP: RoleMap = {
+    "side": ["Waist", "Hip"],
+    "center_front": ["Waist", "Hip"],
+    "armscye": [],
+    "shoulder": [],
+    "neckline": [],
+}
 
 # ---------------------------------------------------------------------------
 # Construction constants
@@ -540,6 +570,7 @@ def _assemble_back_part(
     darts: _Darts,
     shoulder_dart_back: Dart,
     seam_allowance: float,
+    grid: TopGrid,
 ) -> None:
     """Add all elements to the back PatternPart in drawing order.
 
@@ -553,6 +584,7 @@ def _assemble_back_part(
         Segment(back.anchor, back.waist_center_back_adj, name="Center Back"),
         style=STYLE_STITCH,
         is_outline=True,
+        role="center_back",
     )
     part.append(
         Segment(
@@ -562,40 +594,41 @@ def _assemble_back_part(
         ),
         style=STYLE_STITCH,
         is_outline=True,
+        role="center_back",
     )
-    part.append(back.neckline_back, style=STYLE_STITCH_BEVEL, is_outline=True)
-    part.append(back.shoulder_back_orig.set_name("Shoulder Back Orig"), is_construction=True)
-    part.append(back.shoulder_blade, is_construction=True)
+    part.append(back.neckline_back, style=STYLE_STITCH_BEVEL, is_outline=True, role="neckline")
+    part.add_construction_line(back.shoulder_back_orig, name="Shoulder Back Orig")
+    part.add_construction_line(back.shoulder_blade)
     part.append(
         back.shoulder_back.set_name("Shoulder Back"),
         style=STYLE_STITCH,
         is_outline=True,
+        role="shoulder",
     )
     part.add_dart(shoulder_dart_back)
-    part.append(sides.side_chest_waist_back, style=STYLE_STITCH, is_outline=True)
+    part.append(sides.side_chest_waist_back, style=STYLE_STITCH, is_outline=True, role="side")
     part.add_dart(darts.waist_dart_back)
-    part.append(sides.waist_offset, is_construction=True)
-    part.append(sides.side_waist_hip_back, is_outline=True, style=STYLE_STITCH)
-    part.append(sides.side_hip_hem_back, style=STYLE_STITCH, is_outline=True)
+    part.add_construction_line(sides.waist_offset)
+    part.append(sides.side_waist_hip_back, is_outline=True, style=STYLE_STITCH, role="side")
+    part.append(sides.side_hip_hem_back, style=STYLE_STITCH, is_outline=True, role="side")
     part.append(sides.hem_side_to_center_back, style=STYLE_HEM, is_outline=True)
 
     # Construction reference points — visible when show_construction=True
-    part.append(
+    part.add_construction_line(
         Point(back.armscye_control.x, back.armscye_control.y, name="Armscye Control Back"),
-        is_construction=True,
     )
-    part.append(
+    part.add_construction_line(
         Point(
             back.shoulder_dart_notch.x,
             back.shoulder_dart_notch.y,
             name="Shoulder Dart Notch Back",
         ),
-        is_construction=True,
     )
 
     if seam_allowance > 0:
         part.add_seam_allowance(seam_allowance)
     part.add_notches(back.armscye_control, seam_edge=back.armscye_back_lower)
+    part.add_grid_notches(grid.part, is_back=True, role_map=TOP_BLOCK_BACK_ROLE_MAP)
 
 
 def _assemble_front_part(
@@ -613,57 +646,51 @@ def _assemble_front_part(
             intersect(grid.center_front, grid.hem)[0],
             name="Center Front",
         ),
-        style=STYLE_STITCH_BEVEL,
+        style=STYLE_CENTER_LINE,
         is_outline=True,
+        role="center_front",
     )
     part.append(
         front.neckline_front.set_name("Neckline Front"),
         style=STYLE_STITCH,
         is_outline=True,
+        role="neckline",
     )
     if front.neckline_front_stub is not None:
-        part.append(
-            front.neckline_front_stub.set_name("Neckline Front Stub"),
-            is_construction=True,
-        )
-    part.append(
-        front.shoulder_front_aux_orig.set_name("Shoulder Front Orig"),
-        is_construction=True,
-    )
-    part.append(
-        front.shoulder_front_dart_orig.set_name("Shoulder Front Dart Orig"),
-        is_construction=True,
-    )
+        part.add_construction_line(front.neckline_front_stub, name="Neckline Front Stub")
+    part.add_construction_line(front.shoulder_front_aux_orig, name="Shoulder Front Orig")
+    part.add_construction_line(front.shoulder_front_dart_orig, name="Shoulder Front Dart Orig")
     part.append(
         front.shoulder_armscye.set_name("Shoulder Front"),
         style=STYLE_STITCH,
         is_outline=True,
+        role="shoulder",
     )
     part.append(
         front.shoulder_neckline.set_name("Shoulder Front Dart"),
         style=STYLE_STITCH,
         is_outline=True,
+        role="shoulder",
     )
     part.add_dart(darts.shoulder_dart_front)
     if front.armscye_front_upper is not None:
-        part.append(
-            front.armscye_front_upper.set_name("Armscye Front Upper"),
-            is_construction=True,
-        )
+        part.add_construction_line(front.armscye_front_upper, name="Armscye Front Upper")
     part.append(
         front.armscye_front_lower.set_name("Armscye Front"),
         style=STYLE_STITCH,
         is_outline=True,
+        role="armscye",
     )
-    part.append(sides.side_chest_waist_front, style=STYLE_STITCH, is_outline=True)
+    part.append(sides.side_chest_waist_front, style=STYLE_STITCH, is_outline=True, role="side")
     part.add_dart(darts.waist_dart_front)
-    part.append(sides.side_waist_hip_front, is_outline=True, style=STYLE_STITCH)
-    part.append(sides.side_hip_hem_front, style=STYLE_STITCH, is_outline=True)
+    part.append(sides.side_waist_hip_front, is_outline=True, style=STYLE_STITCH, role="side")
+    part.append(sides.side_hip_hem_front, style=STYLE_STITCH, is_outline=True, role="side")
     part.append(sides.hem_side_to_center_front, style=STYLE_HEM, is_outline=True)
 
     if seam_allowance > 0:
         part.add_seam_allowance(seam_allowance)
     part.add_notches(front.armscye_control, seam_edge=front.armscye_front_lower)
+    part.add_grid_notches(grid.part, role_map=TOP_BLOCK_FRONT_ROLE_MAP)
 
 
 # ---------------------------------------------------------------------------
@@ -873,17 +900,21 @@ class TopBlock:
             back_geom.armscye_back_lower.set_name("Armscye Back Lower"),
             style=STYLE_STITCH,
             is_outline=True,
+            role="armscye",
         )
         armscye_back_elem = block_back.append(
             back_geom.armscye_back_upper.set_name("Armscye Back Upper"),
             style=STYLE_STITCH,
             is_outline=True,
+            role="armscye",
         )
         darts, shoulder_dart_back = _build_darts(
             grid, meas, back_geom, front_geom, armscye_back_elem, wd, config
         )
 
-        _assemble_back_part(block_back, back_geom, sides, darts, shoulder_dart_back, seam_allowance)
+        _assemble_back_part(
+            block_back, back_geom, sides, darts, shoulder_dart_back, seam_allowance, grid
+        )
         _assemble_front_part(block_front, front_geom, sides, darts, grid, seam_allowance)
 
         # ── 5. Pack into public dataclasses and return ────────────────────────

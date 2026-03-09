@@ -8,7 +8,7 @@ buffer_chain       -- outward-buffer a closed chain using Shapely
 outline_polygon    -- build a Shapely Polygon from a mixed segment/Bézier list
 offset_adaptive    -- per-piece adaptive offset (exact for Segment, split for Bézier)
 edge_tangent       -- unit tangent of a segment or Bézier at its start or end
-seam_length        -- total arc length in mm of a segment/Bézier list
+seam_length        -- total arc length in mm of Segment/Bézier/Circle/Rect/Triangle
 with_endpoints     -- copy a segment or Bézier with new start/end points
 miter_corner       -- miter-join point between two consecutive edges
 round_corner       -- G1-continuous cubic Bézier arc at a convex corner
@@ -575,21 +575,23 @@ def outline_polygon(
     return _sg.Polygon(coords)
 
 
-def seam_length(geoms: list[Segment | CubicBezier]) -> float:
-    """Return the total arc length in mm of a list of Segments and/or CubicBeziers.
+def seam_length(geoms: list[Segment | CubicBezier | Circle | Rect | Triangle]) -> float:
+    """Return the total arc length in mm of a list of measurable geometry objects.
+
+    Supported types and what ``length`` means for each:
+
+    * :class:`Segment` — Euclidean distance between endpoints.
+    * :class:`CubicBezier` — arc length via numerical integration.
+    * :class:`Circle` — full circumference (``2 * π * radius``).
+    * :class:`Rect` — full perimeter (``2 * (width + height)``).
+    * :class:`Triangle` — full perimeter (sum of the three side lengths).
 
     Args:
-        geoms: A list of :class:`Segment` and/or :class:`CubicBezier` objects
-            whose lengths are to be summed.  May be empty.
+        geoms: A list of measurable geometry objects.  May be empty.
 
     Returns:
         Total arc length in mm as a :class:`float`.  Returns ``0.0`` for an
         empty list.
-
-    Note:
-        Arc length for a :class:`CubicBezier` is computed via numerical
-        integration; for a :class:`Segment` it is the Euclidean distance
-        between its endpoints.
     """
     return sum(g.length for g in geoms)
 
@@ -637,7 +639,11 @@ def project_onto_edge(
         notch_pt = Point(nearest.x, nearest.y)
         t_c = _bezier_closest_t(edge._svg(), complex(nearest.x, nearest.y))
         d = edge.tangent_at_t(t_c)
-        along = np.asarray(d / np.linalg.norm(d))
+        norm = np.linalg.norm(d)
+        if norm > 1e-12:
+            along = np.asarray(d / norm)
+        else:
+            along = np.zeros(2)
         normal = edge.normal_at_t(t_c)
 
     if inward_ref is not None:

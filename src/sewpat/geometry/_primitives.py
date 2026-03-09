@@ -682,6 +682,11 @@ class Rect:
         self.name = name
         return self
 
+    @property
+    def length(self) -> float:
+        """Perimeter of the rectangle: ``2 * (width + height)``."""
+        return 2 * (self.width + self.height)
+
 
 # ---------------------------------------------------------------------------
 # Triangle
@@ -721,6 +726,20 @@ class Triangle:
         """Set the name of this triangle and return ``self`` for fluent chaining."""
         self.name = name
         return self
+
+    @property
+    def base_midpoint(self) -> Point:
+        """Midpoint of the base edge (``p1`` ↔ ``p2``)."""
+        return Point((self.p1.x + self.p2.x) / 2, (self.p1.y + self.p2.y) / 2)
+
+    @property
+    def length(self) -> float:
+        """Perimeter of the triangle: sum of the three side lengths."""
+        return (
+            self.p1.distance_to(self.p2)
+            + self.p2.distance_to(self.p3)
+            + self.p3.distance_to(self.p1)
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -823,6 +842,15 @@ class Circle:
         """Set the name of this circle and return ``self`` for fluent chaining."""
         self.name = name
         return self
+
+    @property
+    def length(self) -> float:
+        """Circumference of the circle: ``2 * π * radius``.
+
+        Alias for :attr:`circumference` so that :class:`Circle` participates
+        uniformly in :meth:`~sewpat.pattern.PatternPart.seam_length`.
+        """
+        return self.circumference
 
     def point_along_from(self, point: Point, arc_length: float) -> Point:
         """Return the point *arc_length* mm further along this circle from *point* (CCW)."""

@@ -168,8 +168,8 @@ class PrecisionPoint:
     def __init__(
         self,
         center: Point,
-        outer_radius: float = 2.0 * MM,
-        inner_radius: float = 0.2 * MM,
+        outer_radius: float = 5.0 * MM,
+        inner_radius: float = 0.5 * MM,
         style: StyleOptions | None = None,
     ) -> None:
         """Initialise with *center*, radii, and optional style override."""

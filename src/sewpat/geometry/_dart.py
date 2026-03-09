@@ -457,17 +457,21 @@ class Dart:
 
     @property
     def fold_line(self) -> Segment:
-        """Full fold/crease line from mouth center to tip.
+        """Full fold/crease line.
 
-        Runs ``center → tip``, i.e. from the base of the dart to its apex.
-        ``fold_line.unit_direction`` therefore points *towards* the tip and is
-        used as the reference direction for dart transfer and rotation.
+        * **Triangle dart** — runs ``center → tip`` (from the mouth base to
+          the apex).  ``fold_line.unit_direction`` points *towards* the tip
+          and is used as the reference direction for dart transfer and
+          rotation.
 
-        Note: :attr:`roof` is a derived *point* on the infinite extension of
-        this segment.  For typical darts it lies on the **far side of**
-        ``center`` from ``tip`` (outward past the seam), though exact position
-        depends on the dart's proportions and edge curvature.
+        * **Rhombus dart** — runs ``tip → effective_second_tip``, spanning
+          the full axis of the diamond from one apex to the other.
+
+        Note: :attr:`roof` (triangle only) is a derived *point* on the
+        infinite extension of the ``center → tip`` segment.
         """
+        if self.dart_type is DartType.RHOMBUS:
+            return Segment(self.tip, self.effective_second_tip)
         return Segment(self.center, self.tip)
 
     @property

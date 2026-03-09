@@ -115,7 +115,7 @@ def _build_block(name: str) -> tuple[Pattern, dict[str, Point]]:
             ("Mitte-Vorne", 0),
             ("Seitennaht", PIECE_W),
         ],
-        part_name="Konstruktionsgitter",
+        part_name="Grid",
     )
     grid_part = grid.build()
     pattern.add_part(grid_part)

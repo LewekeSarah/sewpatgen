@@ -1030,16 +1030,14 @@ class TestSeamLength(unittest.TestCase):
 
     def test_cubic_bezier_straight_line(self):
         """A CubicBezier whose control points lie on the chord is a straight line."""
-        # Collinear control points → arc length equals chord length
         b = CubicBezier(Point(0, 0), Point(25, 0), Point(75, 0), Point(100, 0))
         self.assertAlmostEqual(seam_length([b]), 100.0, places=2)
 
     def test_mixed_segment_and_bezier(self):
         """A straight segment plus a collinear Bézier: lengths add up correctly."""
-        seg = Segment(Point(0, 0), Point(50, 0))  # 50 mm
-        bez = CubicBezier(Point(0, 0), Point(0, 25), Point(0, 75), Point(0, 100))  # 100 mm straight
-        total = seam_length([seg, bez])
-        self.assertAlmostEqual(total, 150.0, places=2)
+        seg = Segment(Point(0, 0), Point(50, 0))
+        bez = CubicBezier(Point(0, 0), Point(0, 25), Point(0, 75), Point(0, 100))
+        self.assertAlmostEqual(seam_length([seg, bez]), 150.0, places=2)
 
     def test_empty_list_returns_zero(self):
         """An empty geometry list returns 0."""
@@ -1047,24 +1045,44 @@ class TestSeamLength(unittest.TestCase):
 
     def test_curved_bezier_longer_than_chord(self):
         """A bulging Bézier is longer than its chord."""
-        chord_len = 40.0
         b = CubicBezier(Point(0, 0), Point(0, 30), Point(40, 30), Point(40, 0))
-        self.assertGreater(seam_length([b]), chord_len)
+        self.assertGreater(seam_length([b]), 40.0)
+
+    def test_circle_circumference(self):
+        """seam_length of a Circle equals 2 * π * r."""
+        import math
+
+        from sewpat.geometry import Circle
+
+        c = Circle(Point(0, 0), radius=10)
+        self.assertAlmostEqual(seam_length([c]), 2 * math.pi * 10, places=6)
+
+    def test_rect_perimeter(self):
+        """seam_length of a Rect equals 2 * (w + h)."""
+        from sewpat.geometry import Rect
+
+        r = Rect(Point(0, 0), width=30, height=20)
+        self.assertAlmostEqual(seam_length([r]), 100.0, places=6)
+
+    def test_triangle_perimeter(self):
+        """seam_length of a Triangle equals the sum of its three sides."""
+        # 3-4-5 right triangle: perimeter = 12
+        t = Triangle(Point(0, 0), Point(30, 0), Point(0, 40))
+        self.assertAlmostEqual(seam_length([t]), 120.0, places=6)
 
     # ── PatternPart.seam_length() ────────────────────────────────────────────
 
-    def test_part_seam_length_by_geometry(self):
-        """PatternPart.seam_length() accepts geometry objects directly."""
+    def test_part_seam_length_by_element(self):
+        """PatternElement returned by append() can be passed directly."""
         part = PatternPart(name="Front")
-        seg = Segment(Point(0, 0), Point(80, 0))
-        part.append(seg, is_outline=True)
-        self.assertAlmostEqual(part.seam_length([seg]), 80.0, places=6)
+        elem = part.append(Segment(Point(0, 0), Point(80, 0)), is_outline=True)
+        self.assertAlmostEqual(part.seam_length([elem]), 80.0, places=6)
 
     def test_part_seam_length_by_name(self):
         """PatternPart.seam_length() looks up elements by name."""
         part = PatternPart(name="Front")
-        part.append(Segment(Point(0, 0), Point(60, 0), name="Seitennaht"), is_outline=True)
-        self.assertAlmostEqual(part.seam_length(["Seitennaht"]), 60.0, places=6)
+        part.append(Segment(Point(0, 0), Point(60, 0), name="Side Seam"), is_outline=True)
+        self.assertAlmostEqual(part.seam_length(["Side Seam"]), 60.0, places=6)
 
     def test_part_seam_length_multiple_named(self):
         """Multiple named segments are summed."""
@@ -1073,37 +1091,38 @@ class TestSeamLength(unittest.TestCase):
         part.append(Segment(Point(0, 0), Point(0, 40), name="B"), is_outline=True)
         self.assertAlmostEqual(part.seam_length(["A", "B"]), 70.0, places=6)
 
-    def test_part_seam_length_mixed_input(self):
-        """Mix of geometry objects and name strings in one call."""
+    def test_part_seam_length_circle_element(self):
+        """A Circle element contributes its circumference."""
+        import math
+
+        from sewpat.geometry import Circle
+
+        part = PatternPart(name="Pocket")
+        elem = part.append(Circle(Point(0, 0), radius=10), is_outline=True)
+        self.assertAlmostEqual(part.seam_length([elem]), 2 * math.pi * 10, places=6)
+
+    def test_part_seam_length_rect_element(self):
+        """A Rect element contributes its full perimeter."""
+        from sewpat.geometry import Rect
+
+        part = PatternPart(name="Patch")
+        elem = part.append(Rect(Point(0, 0), width=30, height=20), is_outline=True)
+        self.assertAlmostEqual(part.seam_length([elem]), 100.0, places=6)
+
+    def test_part_seam_length_unmeasurable_skipped(self):
+        """Elements whose geometry has no length (Point, InfoBox) are silently skipped."""
+        from sewpat.geometry import InfoBox
+
         part = PatternPart(name="Front")
-        seg_named = Segment(Point(0, 0), Point(50, 0), name="Top")
-        seg_unnamed = Segment(Point(0, 0), Point(0, 50))
-        part.append(seg_named, is_outline=True)
-        part.append(seg_unnamed, is_outline=True)
-        self.assertAlmostEqual(part.seam_length(["Top", seg_unnamed]), 100.0, places=6)
+        seg_elem = part.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True)
+        info_elem = part.append(InfoBox(Point(25, 0), header="label"))
+        self.assertAlmostEqual(part.seam_length([seg_elem, info_elem]), 50.0, places=6)
 
     def test_part_seam_length_unknown_name_raises(self):
         """A name that matches no element raises KeyError."""
         part = PatternPart(name="Front")
         with self.assertRaises(KeyError):
             part.seam_length(["DoesNotExist"])
-
-    def test_part_seam_length_by_pattern_element(self):
-        """PatternElement returned by append() can be passed directly."""
-        part = PatternPart(name="Front")
-        elem = part.append(Segment(Point(0, 0), Point(70, 0)), is_outline=True)
-        self.assertAlmostEqual(part.seam_length([elem]), 70.0, places=6)
-
-    def test_part_seam_length_pattern_element_non_geometry_skipped(self):
-        """A PatternElement wrapping a non-geometry object
-        (e.g. Circle) is silently skipped."""
-        from sewpat.geometry import Circle
-
-        part = PatternPart(name="Front")
-        seg_elem = part.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True)
-        circle_elem = part.append(Circle(Point(25, 0), radius=5))
-        # Only the segment contributes; circle is silently ignored
-        self.assertAlmostEqual(part.seam_length([seg_elem, circle_elem]), 50.0, places=6)
 
     def test_part_seam_length_wrong_type_raises(self):
         """Passing an unsupported type raises TypeError."""
@@ -1113,16 +1132,11 @@ class TestSeamLength(unittest.TestCase):
 
     def test_front_vs_back_inseam_comparison(self):
         """Realistic check: compare front and back inseam lengths."""
-        front = PatternPart(name="Vorderteil")
-        back = PatternPart(name="Rückteil")
-        # Front inseam: straight 200 mm
-        front_inseam = Segment(Point(0, 0), Point(0, 200), name="Innennaht")
-        front.append(front_inseam, is_outline=True)
-        # Back inseam: slightly longer (205 mm) — typical easing
-        back_inseam = Segment(Point(0, 0), Point(0, 205), name="Innennaht")
-        back.append(back_inseam, is_outline=True)
-
-        diff = back.seam_length(["Innennaht"]) - front.seam_length(["Innennaht"])
+        front = PatternPart(name="Front")
+        back = PatternPart(name="Back")
+        front.append(Segment(Point(0, 0), Point(0, 200), name="Inseam"), is_outline=True)
+        back.append(Segment(Point(0, 0), Point(0, 205), name="Inseam"), is_outline=True)
+        diff = back.seam_length(["Inseam"]) - front.seam_length(["Inseam"])
         self.assertAlmostEqual(diff, 5.0, places=6)
 
 
@@ -1608,6 +1622,89 @@ class TestOverlayPart(unittest.TestCase):
             len([p for p in pat.parts if not isinstance(p, Block)]),
             2,
         )
+
+    # --- explode: previously dropped attributes ---
+
+    def test_explode_role_preserved(self):
+        """element.role must survive explode."""
+        front = _front_part()
+        pocket = OverlayPart(name="Pocket", parent=front)
+        elem = pocket.append(Segment(Point(10, 10), Point(40, 10)), is_outline=True)
+        elem.role = "pocket_top"
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertEqual(result.elements[0].role, "pocket_top")
+
+    def test_explode_is_construction_preserved(self):
+        """is_construction=True must survive explode."""
+        front = _front_part()
+        pocket = OverlayPart(name="Pocket", parent=front)
+        pocket.add_construction_line(Segment(Point(10, 10), Point(40, 10)))
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertTrue(result.elements[0].is_construction)
+
+    def test_explode_is_seam_notch_preserved(self):
+        """is_seam_notch=True must survive explode."""
+        front = _front_part()
+        pocket = OverlayPart(name="Pocket", parent=front)
+        elem = pocket.append(Segment(Point(10, 10), Point(40, 10)))
+        elem.is_seam_notch = True
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertTrue(result.elements[0].is_seam_notch)
+
+    def test_explode_element_name_preserved(self):
+        """PatternElement.name must survive explode."""
+        front = _front_part()
+        pocket = OverlayPart(name="Pocket", parent=front)
+        pocket.append(Segment(Point(10, 10), Point(40, 10), name="Top Edge"))
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertEqual(result.elements[0].get_name(), "Top Edge")
+
+    def test_explode_style_deep_copied(self):
+        """Mutating the original style must not affect the exploded element's style."""
+        front = _front_part()
+        pocket = OverlayPart(name="Pocket", parent=front)
+        style = StyleOptions(stroke_color="blue")
+        pocket.append(Segment(Point(10, 10), Point(40, 10)), style=style)
+        result = pocket.explode(offset=Point(110, 0))
+        style.stroke_color = "green"
+        self.assertEqual(result.elements[0].style.stroke_color, "blue")
+
+    def test_explode_sa_center_translated(self):
+        """_sa_center Point must be translated by the offset."""
+        front = _front_part()
+        pocket = OverlayPart(name="Pocket", parent=front)
+        elem = pocket.append(Segment(Point(10, 10), Point(40, 10)), is_outline=True)
+        elem._sa_center = Point(25, 10)
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertAlmostEqual(result.elements[0]._sa_center.x, 135.0, places=6)
+        self.assertAlmostEqual(result.elements[0]._sa_center.y, 10.0, places=6)
+
+    def test_explode_dart_ref_cleared(self):
+        """_dart_ref must be cleared — it points into parent-space geometry."""
+        from sewpat.geometry import Dart, DartType
+
+        front = _front_part()
+        pocket = OverlayPart(name="Pocket", parent=front)
+        elem = pocket.append(Segment(Point(10, 10), Point(40, 10)))
+        elem._dart_ref = Dart(
+            Point(10, 10),
+            Point(40, 10),
+            Point(25, 10),
+            Point(25, 30),
+            dart_type=DartType.TRIANGLE,
+        )
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertIsNone(result.elements[0]._dart_ref)
+
+    def test_explode_leg_pt_translated(self):
+        """_leg_pt Point must be translated by the offset."""
+        front = _front_part()
+        pocket = OverlayPart(name="Pocket", parent=front)
+        elem = pocket.append(Segment(Point(10, 10), Point(40, 10)))
+        elem._leg_pt = Point(10, 10)
+        result = pocket.explode(offset=Point(110, 0))
+        self.assertAlmostEqual(result.elements[0]._leg_pt.x, 120.0, places=6)
+        self.assertAlmostEqual(result.elements[0]._leg_pt.y, 10.0, places=6)
 
 
 if __name__ == "__main__":

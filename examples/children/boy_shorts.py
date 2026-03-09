@@ -165,7 +165,9 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
     bz_control3 = pt7.translate(0.2 * CM, 2.5 * CM)
 
     front.append(Segment(pt6, pt0, name="Bund"), style=STYLE_WAISTBAND, is_outline=True)
-    front_size_top = front.append(Segment(pt0, pt1), style=STYLE_STITCH, is_outline=True)
+    front_size_top = front.append(
+        Segment(pt0, pt1), style=STYLE_STITCH, is_outline=True, role="side"
+    )
 
     # Seitennaht & Innennaht
     side = Segment(pt1, pt12)
@@ -180,19 +182,25 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
     pt33 = intersect(g_mol, side)[0]  # grid reuse
 
     # Outline
-    front_side_upper = front.append(Segment(pt1, pt14), style=STYLE_STITCH, is_outline=True)
-    front_side_lower = front.append(Segment(pt14, pt33), style=STYLE_STITCH, is_outline=True)
+    front_side_upper = front.append(
+        Segment(pt1, pt14), style=STYLE_STITCH, is_outline=True, role="side"
+    )
+    front_side_lower = front.append(
+        Segment(pt14, pt33), style=STYLE_STITCH, is_outline=True, role="side"
+    )
     front.append(Segment(pt33, pt32), style=STYLE_HEM, is_outline=True)
     front.append(Segment(pt32, pt15), style=STYLE_STITCH, is_outline=True)
     front.append(
         CubicBezier(pt8, bz_control, pt15.translate(0.1 * CM, -2 * CM), pt15),
         style=STYLE_STITCH,
         is_outline=True,
+        role="inner",
     )
     front.append(
         CubicBezier(pt7, bz_control3, bz_control2, pt8),
         style=STYLE_STITCH,
         is_outline=True,
+        role="inner",
     )
     front.append(Segment(pt6, pt7), style=STYLE_STITCH, is_outline=True)
 
@@ -206,6 +214,15 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
         ]
     )
     front.add_seam_allowance(model.seam_allowance)
+    front.add_grid_notches(
+        grid,
+        role_map={
+            "side": ["Sitzhöhe"],
+            "inner": ["Vorderhosenbreite"],
+        },
+        tolerance=0.0,
+        corner_clearance=0.0,
+    )
 
     # -----------------------------------------------------------------------
     # RÜCKTEIL
@@ -248,11 +265,12 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
     pt31 = intersect(bg_mol, side_back)[0]  # grid reuse
 
     # Outline
-    back.append(Segment(pt17, pt19), style=STYLE_STITCH, is_outline=True)
+    back.append(Segment(pt17, pt19), style=STYLE_STITCH, is_outline=True, role="inner")
     back.append(
         CubicBezier(pt19, bz_contol4, bz_contol4, pt21),
         style=STYLE_STITCH,
         is_outline=True,
+        role="inner",
     )
     back_inner_seam = back.append(
         CubicBezier(pt21, bz_control5, pt25.translate(0.1 * CM, -2 * CM), pt25),
@@ -261,7 +279,9 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
     )
     back.append(Segment(pt25, pt30), style=STYLE_STITCH, is_outline=True)
     back.append(Segment(pt30, pt31), style=STYLE_HEM, is_outline=True)
-    back_side_seam = back.append(Segment(pt18, pt31), style=STYLE_STITCH, is_outline=True)
+    back_side_seam = back.append(
+        Segment(pt18, pt31), style=STYLE_STITCH, is_outline=True, role="side"
+    )
     back.append(Segment(pt17, pt18), style=STYLE_WAISTBAND, is_outline=True)
 
     grain_end_back = intersect(Segment(back_pt9, back_pt11), bg_mol)
@@ -274,6 +294,16 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
         ]
     )
     back.add_seam_allowance(model.seam_allowance)
+    back.add_grid_notches(
+        back_grid,
+        role_map={
+            "side": ["Sitzhöhe"],
+            "inner": ["Vorderhosenbreite"],
+        },
+        tolerance=0.0,
+        corner_clearance=0.0,
+        is_back=True,
+    )
 
     # -----------------------------------------------------------------------
     # Nahtlängen-Kontrolle
@@ -286,10 +316,6 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
         f"Rückteil: {back_side_len / CM:.1f} cm  |  "
         f"Δ = {diff_side / CM:+.1f} cm"
     )
-
-    # Automated grid notches (after manual ones so dedup sees them)
-    front.add_grid_notches(grid)
-    back.add_grid_notches(back_grid, is_back=True)
 
     # -----------------------------------------------------------------------
     # KONSTRUKTION (Hilfsgeometrie)
@@ -337,7 +363,7 @@ if __name__ == "__main__":
 
     parts = ["Vorderteil", "Rückteil"]
     if DEBUG:
-        parts += ["Konstruktionsgitter"]  # , "Konstruktion"
+        parts += ["Grid"]  # , "Konstruktion"
 
     # Without seam allowance
     export_pattern_svg_mm(

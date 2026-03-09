@@ -136,6 +136,18 @@ class TestAddConstructionLine(unittest.TestCase):
         elem = part.add_construction_line(Segment(Point(0, 0), Point(10, 0)))
         self.assertFalse(elem.is_outline)
 
+    def test_is_construction_on_grid_part(self):
+        """Elements added via add_construction_line are always is_construction=True."""
+        part = ConstructionGridPart()
+        elem = part.add_construction_line(Segment(Point(0, 0), Point(10, 0)))
+        self.assertTrue(elem.is_construction)
+
+    def test_is_construction_on_plain_part(self):
+        """is_construction=True even when the host part is a plain PatternPart."""
+        part = PatternPart(name="Block")
+        elem = part.add_construction_line(Segment(Point(0, 0), Point(10, 0)))
+        self.assertTrue(elem.is_construction)
+
 
 # ---------------------------------------------------------------------------
 # ConstructionGrid.build
@@ -173,7 +185,7 @@ class TestConstructionGridBuild(unittest.TestCase):
         self.assertEqual(grid.build().name, "MyGrid")
 
     def test_default_part_name(self):
-        self.assertEqual(ConstructionGrid(anchor=Point(0, 0)).build().name, "Konstruktionsgitter")
+        self.assertEqual(ConstructionGrid(anchor=Point(0, 0)).build().name, "Grid")
 
     def test_element_names_match_labels(self):
         grid = ConstructionGrid(
@@ -199,16 +211,28 @@ class TestConstructionGridBuild(unittest.TestCase):
 
 
 class TestAddGridNotches(unittest.TestCase):
-    def _square_with_grid(self):
-        """100×100 square with a horizontal grid line at y=50."""
+    """Role-based notch placement via PatternPart.add_grid_notches."""
+
+    # ------------------------------------------------------------------
+    # Shared helpers
+    # ------------------------------------------------------------------
+
+    def _square_with_grid(self) -> tuple:
+        """100×100 square (all edges role="side") + horizontal grid at y=50."""
         part = _square_part(side=100.0)
+        for e in part.elements:
+            e.role = "side"
         grid = ConstructionGridPart()
         grid.add_construction_line(Segment(Point(-200, 50), Point(200, 50), name="Mitte"))
         return part, grid
 
+    # ------------------------------------------------------------------
+    # Basic behaviour
+    # ------------------------------------------------------------------
+
     def test_returns_list_of_pattern_elements(self):
         part, grid = self._square_with_grid()
-        created = part.add_grid_notches(grid)
+        created = part.add_grid_notches(grid, role_map={"side": ["Mitte"]})
         self.assertIsInstance(created, list)
         for e in created:
             self.assertIsInstance(e, PatternElement)
@@ -216,188 +240,235 @@ class TestAddGridNotches(unittest.TestCase):
     def test_notches_created_at_intersections(self):
         part, grid = self._square_with_grid()
         before = len(part.elements)
-        part.add_grid_notches(grid)
+        part.add_grid_notches(grid, role_map={"side": ["Mitte"]})
         self.assertGreater(len(part.elements), before)
 
     def test_correct_intersection_count_for_simple_case(self):
-        """Horizontal at y=50 crosses left and right edges → 2 notches."""
+        """Horizontal at y=50 crosses left and right edges → 2 notch triangles."""
         part, grid = self._square_with_grid()
-        created = part.add_grid_notches(grid)
+        created = part.add_grid_notches(grid, role_map={"side": ["Mitte"]})
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 2)
 
     def test_deduplication_prevents_double_notch(self):
         part, grid = self._square_with_grid()
-        part.add_grid_notches(grid)
+        part.add_grid_notches(grid, role_map={"side": ["Mitte"]})
         count_first = sum(1 for e in part.elements if isinstance(e.geometry, Triangle))
-        part.add_grid_notches(grid)
+        part.add_grid_notches(grid, role_map={"side": ["Mitte"]})
         count_second = sum(1 for e in part.elements if isinstance(e.geometry, Triangle))
         self.assertEqual(count_first, count_second)
 
     def test_no_notches_when_grid_does_not_intersect(self):
         part = _square_part(side=100.0)
+        for e in part.elements:
+            e.role = "side"
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-200, 200), Point(200, 200)))
-        self.assertEqual(len(part.add_grid_notches(grid)), 0)
+        grid.add_construction_line(Segment(Point(-200, 200), Point(200, 200), name="Far"))
+        self.assertEqual(len(part.add_grid_notches(grid, role_map={"side": ["Far"]})), 0)
+
+    def test_no_notches_when_role_not_on_part(self):
+        """If no elements carry the mapped role, no notches are placed."""
+        part = _square_part(side=100.0)  # elements have no role
+        grid = ConstructionGridPart()
+        grid.add_construction_line(Segment(Point(-200, 50), Point(200, 50), name="Mitte"))
+        self.assertEqual(len(part.add_grid_notches(grid, role_map={"side": ["Mitte"]})), 0)
+
+    def test_empty_grid_name_list_places_no_notches(self):
+        """role_map with empty list for a role → role explicitly suppressed."""
+        part = _square_part(side=100.0)
+        for e in part.elements:
+            e.role = "side"
+        grid = ConstructionGridPart()
+        grid.add_construction_line(Segment(Point(-200, 50), Point(200, 50), name="Mitte"))
+        self.assertEqual(len(part.add_grid_notches(grid, role_map={"side": []})), 0)
 
     def test_vertical_grid_line_intersects_top_bottom(self):
         part = _square_part(side=100.0)
+        for e in part.elements:
+            e.role = "side"
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(50, -200), Point(50, 200)))
-        created = part.add_grid_notches(grid)
+        grid.add_construction_line(Segment(Point(50, -200), Point(50, 200), name="V"))
+        created = part.add_grid_notches(
+            grid, role_map={"side": ["V"]}, tolerance=0.0, corner_clearance=0.0
+        )
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 2)
 
     def test_multiple_grid_lines(self):
         part = _square_part(side=100.0)
+        for e in part.elements:
+            e.role = "side"
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-200, 25), Point(200, 25)))
-        grid.add_construction_line(Segment(Point(-200, 75), Point(200, 75)))
-        created = part.add_grid_notches(grid)
+        grid.add_construction_line(Segment(Point(-200, 25), Point(200, 25), name="L25"))
+        grid.add_construction_line(Segment(Point(-200, 75), Point(200, 75), name="L75"))
+        created = part.add_grid_notches(grid, role_map={"side": ["L25", "L75"]})
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 4)
 
     def test_notch_elements_are_not_outline(self):
         part, grid = self._square_with_grid()
-        for e in part.add_grid_notches(grid):
+        for e in part.add_grid_notches(grid, role_map={"side": ["Mitte"]}):
             self.assertFalse(e.is_outline)
 
     def test_notch_position_near_intersection(self):
         part = _square_part(side=100.0)
+        for e in part.elements:
+            e.role = "side"
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(50, -200), Point(50, 200)))
-        part.add_grid_notches(grid)
+        grid.add_construction_line(Segment(Point(50, -200), Point(50, 200), name="V"))
+        part.add_grid_notches(grid, role_map={"side": ["V"]}, tolerance=0.0, corner_clearance=0.0)
         triangles = [e for e in part.elements if isinstance(e.geometry, Triangle)]
         xs = [(t.geometry.p1.x + t.geometry.p2.x + t.geometry.p3.x) / 3 for t in triangles]
         for cx in xs:
             self.assertAlmostEqual(cx, 50.0, delta=2.0)
 
-    # --- corner / endpoint skipping ---
+    def test_unknown_grid_name_warns(self):
+        """Referencing a non-existent grid element name emits a UserWarning."""
+        part = _square_part(side=100.0)
+        for e in part.elements:
+            e.role = "side"
+        grid = ConstructionGridPart()
+        grid.add_construction_line(Segment(Point(-200, 50), Point(200, 50), name="Real"))
+        with self.assertWarns(UserWarning):
+            part.add_grid_notches(grid, role_map={"side": ["NoSuchLine"]})
+
+    # ------------------------------------------------------------------
+    # Corner / endpoint skipping
+    # ------------------------------------------------------------------
 
     def test_sharp_corner_skipped(self):
-        """90° corner between two segments → notch suppressed."""
+        """Intersection exactly at a boundary vertex (corner) is suppressed."""
         part = PatternPart(name="Corner")
-        part.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True)
+        part.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True, role="side")
         part.append(Segment(Point(50, 0), Point(50, 100)), is_outline=True)
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-50, 0), Point(150, 0)))
-        created = part.add_grid_notches(grid)
+        grid.add_construction_line(Segment(Point(-50, 0), Point(150, 0), name="H"))
+        # y=0 hits the corner (50,0) which is a boundary vertex (the second segment
+        # has no role, so the shared vertex is external).  With default tolerance
+        # it should be suppressed.
+        created = part.add_grid_notches(grid, role_map={"side": ["H"]})
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 0)
 
     def test_collinear_join_not_skipped(self):
-        """Near-collinear join (angle ≈ 0°) at interior of chain → notch kept."""
+        """Internal vertex between two same-role edges → notch kept."""
         part = PatternPart(name="Chain")
-        part.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True)
-        part.append(Segment(Point(50, 0), Point(100, 0)), is_outline=True)
+        part.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True, role="side")
+        part.append(Segment(Point(50, 0), Point(100, 0)), is_outline=True, role="side")
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(25, -50), Point(25, 50)))
-        created = part.add_grid_notches(grid, corner_clearance=0.0)
+        grid.add_construction_line(Segment(Point(25, -50), Point(25, 50), name="V"))
+        created = part.add_grid_notches(
+            grid, role_map={"side": ["V"]}, corner_clearance=0.0, tolerance=0.0
+        )
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 1)
 
     def test_free_endpoint_skipped(self):
-        """Free (dangling) endpoint → notch suppressed."""
+        """Free (dangling) endpoint of the only role edge → suppressed."""
         part = PatternPart(name="p")
-        part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
+        part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True, role="side")
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(0, -50), Point(0, 50)))
-        created = part.add_grid_notches(grid)
+        grid.add_construction_line(Segment(Point(0, -50), Point(0, 50), name="V"))
+        # x=0 hits the free start endpoint of the segment.
+        created = part.add_grid_notches(grid, role_map={"side": ["V"]})
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 0)
 
     def test_near_corner_within_tolerance_skipped(self):
-        """Intersection within tolerance of a sharp corner → suppressed."""
+        """Intersection within tolerance of a boundary vertex → suppressed."""
         part = PatternPart(name="Corner")
-        part.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True)
+        part.append(Segment(Point(0, 0), Point(50, 0)), is_outline=True, role="side")
         part.append(Segment(Point(50, 0), Point(50, 100)), is_outline=True)
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(49.5, -50), Point(49.5, 50)))
-        created = part.add_grid_notches(grid, tolerance=1.0)
+        grid.add_construction_line(Segment(Point(49.5, -50), Point(49.5, 50), name="V"))
+        created = part.add_grid_notches(grid, role_map={"side": ["V"]}, tolerance=1.0)
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 0)
 
-    # --- horizontal priority / min_spacing ---
-
-    def test_horizontal_on_element_suppresses_vertical_on_same_element(self):
-        """Once a horizontal notch is placed on an element, all verticals on
-        that same element are suppressed — regardless of distance."""
-        part = PatternPart(name="p")
-        part.append(Segment(Point(0, 0), Point(100, 100)), is_outline=True)
-        grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-200, 50), Point(200, 50), name="H"))
-        grid.add_construction_line(Segment(Point(80, -200), Point(80, 200), name="V"))
-        created = part.add_grid_notches(grid, min_spacing=8.0, corner_clearance=0.0)
-        triangles = [e for e in created if isinstance(e.geometry, Triangle)]
-        self.assertEqual(len(triangles), 1)
-
-    def test_vertical_kept_on_element_without_horizontal(self):
-        """Vertical notch is kept when no horizontal has been placed on the element."""
-        part = PatternPart(name="p")
-        part.append(Segment(Point(0, 0), Point(100, 100)), is_outline=True)
-        grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(50, -200), Point(50, 200), name="V"))
-        created = part.add_grid_notches(grid, min_spacing=8.0, corner_clearance=0.0)
-        triangles = [e for e in created if isinstance(e.geometry, Triangle)]
-        self.assertEqual(len(triangles), 1)
-
-    def test_nearby_horizontal_and_vertical_only_horizontal_placed(self):
-        """When a horizontal and vertical intersection are < min_spacing apart,
-        only the horizontal notch is placed."""
-        part = PatternPart(name="p")
-        part.append(Segment(Point(0, 50), Point(100, 50)), is_outline=True)
-        grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-200, 50.5), Point(200, 50.5), name="H"))
-        grid.add_construction_line(Segment(Point(50, -200), Point(50, 200), name="V"))
-        created = part.add_grid_notches(grid, min_spacing=8.0)
-        triangles = [e for e in created if isinstance(e.geometry, Triangle)]
-        self.assertEqual(len(triangles), 1)
+    # ------------------------------------------------------------------
+    # min_spacing deduplication
+    # ------------------------------------------------------------------
 
     def test_widely_spaced_intersections_both_kept(self):
-        """Two intersections farther than min_spacing apart are both kept."""
+        """Two intersections farther than min_spacing apart are both placed."""
         part = _square_part(side=100.0)
+        for e in part.elements:
+            e.role = "side"
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-200, 25), Point(200, 25)))
-        grid.add_construction_line(Segment(Point(-200, 75), Point(200, 75)))
-        created = part.add_grid_notches(grid, min_spacing=8.0)
+        grid.add_construction_line(Segment(Point(-200, 25), Point(200, 25), name="L25"))
+        grid.add_construction_line(Segment(Point(-200, 75), Point(200, 75), name="L75"))
+        created = part.add_grid_notches(grid, role_map={"side": ["L25", "L75"]}, min_spacing=8.0)
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 4)
 
-    # --- corner_clearance ---
+    # ------------------------------------------------------------------
+    # corner_clearance
+    # ------------------------------------------------------------------
 
     def test_corner_clearance_suppresses_nearby_vertex_notch(self):
-        """Intersection within corner_clearance of an outline vertex → suppressed."""
-        part = _square_part(side=100.0)
+        """Intersection within corner_clearance of an outline vertex → suppressed.
+
+        Only the vertical side edges carry role="side"; the horizontal top/bottom
+        edges are unroled.  This makes each corner a boundary vertex so that
+        clearance is applied correctly.
+        """
+        part = PatternPart(name="p")
+        o = Point(0, 0)
+        part.append(Segment(o, Point(100, 0)), is_outline=True)  # top — no role
+        part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True, role="side")  # right
+        part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)  # bottom — no role
+        part.append(Segment(Point(0, 100), o), is_outline=True, role="side")  # left
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-200, 15), Point(200, 15)))
-        created = part.add_grid_notches(grid, corner_clearance=20.0, min_spacing=1.0)
+        grid.add_construction_line(Segment(Point(-200, 15), Point(200, 15), name="L"))
+        created = part.add_grid_notches(
+            grid, role_map={"side": ["L"]}, corner_clearance=20.0, min_spacing=1.0
+        )
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 0)
 
     def test_corner_clearance_keeps_notch_beyond_clearance(self):
-        """Intersection beyond corner_clearance → kept."""
-        part = _square_part(side=100.0)
+        """Intersection beyond corner_clearance from all vertices → kept."""
+        part = PatternPart(name="p")
+        o = Point(0, 0)
+        part.append(Segment(o, Point(100, 0)), is_outline=True)
+        part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True, role="side")
+        part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
+        part.append(Segment(Point(0, 100), o), is_outline=True, role="side")
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-200, 50), Point(200, 50)))
-        created = part.add_grid_notches(grid, corner_clearance=20.0, min_spacing=1.0)
+        grid.add_construction_line(Segment(Point(-200, 50), Point(200, 50), name="Mid"))
+        created = part.add_grid_notches(
+            grid, role_map={"side": ["Mid"]}, corner_clearance=20.0, min_spacing=1.0
+        )
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 2)
 
     def test_corner_clearance_zero_disables_guard(self):
         """corner_clearance=0 disables the vertex-proximity guard."""
-        part = _square_part(side=100.0)
+        part = PatternPart(name="p")
+        o = Point(0, 0)
+        part.append(Segment(o, Point(100, 0)), is_outline=True)
+        part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True, role="side")
+        part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
+        part.append(Segment(Point(0, 100), o), is_outline=True, role="side")
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-200, 5), Point(200, 5)))
-        created = part.add_grid_notches(grid, corner_clearance=0.0, min_spacing=1.0)
+        grid.add_construction_line(Segment(Point(-200, 5), Point(200, 5), name="L"))
+        created = part.add_grid_notches(
+            grid, role_map={"side": ["L"]}, corner_clearance=0.0, min_spacing=1.0
+        )
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertGreater(len(triangles), 0)
 
     def test_default_corner_clearance_is_15mm(self):
         """Default corner_clearance=15 suppresses notch at y=10 (10mm from corner)."""
-        part = _square_part(side=100.0)
+        part = PatternPart(name="p")
+        o = Point(0, 0)
+        part.append(Segment(o, Point(100, 0)), is_outline=True)
+        part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True, role="side")
+        part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
+        part.append(Segment(Point(0, 100), o), is_outline=True, role="side")
         grid = ConstructionGridPart()
-        grid.add_construction_line(Segment(Point(-200, 10), Point(200, 10)))
-        created = part.add_grid_notches(grid, min_spacing=1.0)
+        grid.add_construction_line(Segment(Point(-200, 10), Point(200, 10), name="L"))
+        created = part.add_grid_notches(grid, role_map={"side": ["L"]}, min_spacing=1.0)
         triangles = [e for e in created if isinstance(e.geometry, Triangle)]
         self.assertEqual(len(triangles), 0)
 

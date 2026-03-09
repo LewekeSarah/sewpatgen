@@ -55,6 +55,7 @@ class StyleOptions:
         font_style: str = "normal",
         seam_allowance: float | None = None,
         corner_join: str | None = None,
+        no_notch: bool = False,
     ) -> None:
         """Initialize StyleOptions.
 
@@ -64,6 +65,9 @@ class StyleOptions:
                 ``0.0`` = explicitly no seam allowance on this edge (e.g. fold line).
             corner_join: Per-element corner-join override (``"miter"``,
                 ``"round"``, ``"bevel"``); ``None`` = use the part-wide default.
+            no_notch: When ``True``, :func:`~sewpat.pattern.add_grid_notches`
+                will never place a notch on this edge regardless of grid
+                intersections.  Set on hem, fold, and centre-line presets.
             stroke_color: SVG stroke colour string.
             stroke_width: Stroke width in mm.
             fill_color: SVG fill colour string.
@@ -93,6 +97,7 @@ class StyleOptions:
         self.font_style = font_style
         self.seam_allowance = seam_allowance
         self.corner_join: str | None = corner_join
+        self.no_notch: bool = no_notch
 
     def __eq__(self, other: object) -> bool:
         """Return ``True`` when all style attributes are equal."""
@@ -153,12 +158,14 @@ STYLE_GRAINLINE = StyleOptions(
 STYLE_FOLD = StyleOptions(
     stroke_color="grey",
     dash_array=[10.0, 2.0],
+    no_notch=True,
 )
 
 STYLE_HEM = StyleOptions(
     stroke_color="black",
     seam_allowance=25.0,  # 2.5 cm default hem allowance
     dash_array=[10.0, 2.0],
+    no_notch=True,
 )
 
 STYLE_WAISTBAND = StyleOptions(
@@ -198,6 +205,8 @@ STYLE_CENTER_LINE = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
     dash_array=[10.0, 2.0, 2.0, 2.0],
+    no_notch=True,
+    corner_join="bevel",
 )
 
 # Seam Allowance Line — thin solid outer line showing where to cut.
@@ -240,6 +249,7 @@ STYLE_DART_FOLD = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
     dash_array=[10.0, 2.0, 2.0, 2.0],
+    no_notch=True,
 )
 
 STYLE_PRECISION_POINT = StyleOptions(

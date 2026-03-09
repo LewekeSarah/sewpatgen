@@ -43,7 +43,6 @@ from .pattern import (
     Block,
     ConstructionGrid,
     ConstructionGridPart,
-    DartResult,
     GarmentPart,
     OverlayPart,
     Pattern,
@@ -116,8 +115,6 @@ __all__ = [
     "GeometryType",
     "PatternElement",
     "PrecisionPoint",
-    # Dart result
-    "DartResult",
     # Pattern
     "PatternPart",
     "Pattern",
