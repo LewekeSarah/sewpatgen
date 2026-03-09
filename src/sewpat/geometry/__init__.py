@@ -21,8 +21,6 @@ from ._algorithms import (
 )
 from ._bezier import (
     CubicBezier,
-    _bezier_shapely,  # noqa: F401 — imported by tests via sewpat.geometry
-    _true_offset_ls,  # noqa: F401 — imported by tests via sewpat.geometry
 )
 from ._bezier_offset import (
     bezier_offset,
