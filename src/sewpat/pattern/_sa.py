@@ -79,29 +79,36 @@ def _closest_sa_edge(
 ) -> Segment | CubicBezier | None:
     """Return the SA edge geometrically closest to *ref*, or ``None``.
 
-    Finds the SA edge where the closest point on the edge to *ref* has the
-    minimum distance. This ensures we select the correct SA edge even when
-    the start points are far from *ref*.
+    Finds the SA edge where the closest point **within the edge bounds** to
+    *ref* has the minimum distance.  For :class:`Segment` edges the projection
+    is clamped to ``[0, 1]`` so that extensions beyond the endpoints are not
+    considered — this prevents short edges (e.g. dart-roof SA segments) from
+    being incorrectly preferred over the geometrically correct parallel edge.
     """
     if not sa_geoms:
         return None
 
     def distance_to_edge(geom: Segment | CubicBezier) -> float:
-        """Calculate minimum distance from ref to any point on the edge."""
         if isinstance(geom, Segment):
-            # For segments, use the projection to find the closest point
-            projected = geom.project_point(ref)
-            return ref.distance_to(projected)
+            # Clamp projection parameter t to [0, 1] so only points within
+            # the segment (not its infinite-line extension) are considered.
+            seg_vec = geom.end - geom.start
+            seg_len_sq = float(seg_vec.coords @ seg_vec.coords)
+            if seg_len_sq < 1e-12:
+                return ref.distance_to(geom.start)
+            ref_vec = ref - geom.start
+            t = float(ref_vec.coords @ seg_vec.coords) / seg_len_sq
+            t = max(0.0, min(1.0, t))
+            closest = geom.start + seg_vec * t
+            return ref.distance_to(closest)
         else:
-            # For CubicBezier, sample points along the curve
-            # This is more expensive but accurate
+            # For CubicBezier sample points along the curve.
             min_dist = float("inf")
-            for i in range(21):  # Sample 21 points (0.0, 0.05, 0.1, ..., 1.0)
-                t = i / 20.0
-                pt = geom.point_at_t(t)
-                dist = ref.distance_to(pt)
-                if dist < min_dist:
-                    min_dist = dist
+            for i in range(21):
+                pt = geom.point_at_t(i / 20.0)
+                d = ref.distance_to(pt)
+                if d < min_dist:
+                    min_dist = d
             return min_dist
 
     return min(sa_geoms, key=distance_to_edge)
