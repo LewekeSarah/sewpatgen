@@ -534,8 +534,6 @@ class PatternPart(NamedAccessMixin):
         self,
         grid_part: PatternPart,
         role_map: dict[str, list[str]],
-        tolerance: float = 1.0,
-        corner_clearance: float = 15.0,
         min_spacing: float = 8.0,
         length: float = 0.8 * CM,
         width: float = 0.4 * CM,
@@ -545,9 +543,7 @@ class PatternPart(NamedAccessMixin):
 
         Only elements whose ``role`` attribute appears as a key in *role_map*
         are considered.  For each role the mapped grid-line names are resolved
-        from *grid_part* and intersected with the role's outline edges.  Corner
-        clearance is applied only at boundary vertices where a role's edges
-        meet edges of a different (or absent) role.
+        from *grid_part* and intersected with the role's outline edges.
 
         Delegates to :func:`sewpat.pattern._notches.add_grid_notches`.
         See that function for full parameter documentation.
@@ -558,8 +554,6 @@ class PatternPart(NamedAccessMixin):
             self,
             grid_part,
             role_map=role_map,
-            tolerance=tolerance,
-            corner_clearance=corner_clearance,
             min_spacing=min_spacing,
             length=length,
             width=width,

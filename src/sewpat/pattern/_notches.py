@@ -192,52 +192,10 @@ def _geoms_for_role(
     ]
 
 
-def _role_boundary_vertices(
-    role_geoms: list[Segment | CubicBezier],
-    all_outline_geoms: list[Segment | CubicBezier],
-) -> list[Point]:
-    """Return vertices at the boundary between *role_geoms* and other edges.
-
-    Vertices shared only among edges that all belong to *role_geoms* are
-    internal to the role (smooth seam transitions — no clearance needed).
-    Vertices where a role edge connects to a different role or un-roled edge
-    are true boundary corners that deserve clearance.
-    """
-    role_keys: set[tuple[float, float]] = set()
-    for g in role_geoms:
-        role_keys.add(_ep_key(g.start))
-        role_keys.add(_ep_key(g.end))
-
-    non_role_geoms = [g for g in all_outline_geoms if g not in role_geoms]
-    external_touch: dict[tuple[float, float], int] = {}
-    for g in non_role_geoms:
-        for ep in (g.start, g.end):
-            k = _ep_key(ep)
-            if k in role_keys:
-                external_touch[k] = external_touch.get(k, 0) + 1
-
-    role_ep_counts: dict[tuple[float, float], int] = {}
-    for g in role_geoms:
-        role_ep_counts[_ep_key(g.start)] = role_ep_counts.get(_ep_key(g.start), 0) + 1
-        role_ep_counts[_ep_key(g.end)] = role_ep_counts.get(_ep_key(g.end), 0) + 1
-
-    boundary: list[Point] = []
-    for g in role_geoms:
-        for ep in (g.start, g.end):
-            k = _ep_key(ep)
-            is_free = role_ep_counts.get(k, 0) <= 1
-            is_boundary = k in external_touch or is_free
-            if is_boundary:
-                boundary.append(ep)
-    return boundary
-
-
 def _collect_candidates_by_role(
     part: PatternPart,
     grid_part: PatternPart,
     role_map: RoleMap,
-    tolerance: float,
-    corner_clearance: float,
 ) -> list[tuple[Segment | CubicBezier, Point]]:
     """Return intersection candidates using explicit role → grid-line name mapping.
 
@@ -246,28 +204,18 @@ def _collect_candidates_by_role(
     * Collect all outline elements on *part* tagged with that role.
     * Resolve each grid-line name to a geometry via ``grid_part.get_element``.
     * Intersect each role edge with each mapped grid line.
-    * Apply corner clearance only at **boundary vertices** — where a role edge
-      meets an edge of a different role or no role.
+
+    The user's explicit role map defines which intersections should receive
+    notches — no automatic filtering is applied based on corner proximity.
 
     Args:
         part: The pattern part whose outline edges are intersected.
         grid_part: The construction grid part supplying named grid lines.
         role_map: ``{role: [grid_line_name, …]}`` mapping.
-        tolerance: Snap distance (mm) — points within this of a boundary vertex
-            are excluded.
-        corner_clearance: Broader exclusion zone (mm) around boundary vertices.
 
     Returns:
         List of ``(outline_edge, point)`` candidates in role-map iteration order.
     """
-    all_outline_geoms: list[Segment | CubicBezier] = [
-        e.geometry
-        for e in part.elements
-        if e.is_outline
-        and not (e.style and e.style.no_notch)
-        and isinstance(e.geometry, (Segment, CubicBezier))
-    ]
-
     candidates: list[tuple[Segment | CubicBezier, Point]] = []
 
     for role, grid_names in role_map.items():
@@ -295,8 +243,6 @@ def _collect_candidates_by_role(
         if not grid_geoms:
             continue
 
-        boundary_pts = _role_boundary_vertices(role_geoms, all_outline_geoms)
-
         for og in role_geoms:
             for gg in grid_geoms:
                 try:
@@ -309,10 +255,6 @@ def _collect_candidates_by_role(
                     )
                     continue
                 for pt in pts:
-                    if _too_close(pt, boundary_pts, tolerance):
-                        continue
-                    if _too_close(pt, boundary_pts, corner_clearance):
-                        continue
                     candidates.append((og, pt))
 
     return candidates
@@ -366,8 +308,6 @@ def add_grid_notches(
     part: PatternPart,
     grid_part: PatternPart,
     role_map: RoleMap,
-    tolerance: float = 1.0,
-    corner_clearance: float = 15.0,
     min_spacing: float = 8.0,
     length: float = 0.8 * CM,
     width: float = 0.4 * CM,
@@ -377,22 +317,14 @@ def add_grid_notches(
 
     Only elements whose ``role`` attribute appears as a key in *role_map* are
     considered.  For each role the mapped grid-line names are resolved by name
-    from *grid_part* and intersected with the role's edges.  Corner clearance
-    is applied only at the boundary vertices where a role's edges connect to
-    edges of a different (or absent) role.  Elements without a matching role
-    are silently skipped.
-
-    Notch positions are scored by orthogonality (``|sin θ|``) — the most
-    perpendicular intersection is preferred when deduplication is needed.
+    from *grid_part* and intersected with the role's edges.  Elements without
+    a matching role are silently skipped.
 
     Args:
         part: The pattern part to add notches to.
         grid_part: The construction grid part supplying named grid lines.
         role_map: ``{role: [grid_line_name, …]}`` mapping.  An empty list for a
             role means *no notches* for that role.
-        tolerance: Snap distance (mm) — candidates within this of a boundary
-            vertex are excluded as exact corner hits.
-        corner_clearance: Broader exclusion zone (mm) around boundary vertices.
         min_spacing: Minimum distance (mm) between any two placed notches.
         length: Tip-to-base distance of each notch triangle.
         width: Base span of each notch triangle.
@@ -411,5 +343,5 @@ def add_grid_notches(
         if isinstance(e.geometry, Triangle) and not e.is_seam_allowance
     ]
 
-    candidates = _collect_candidates_by_role(part, grid_part, role_map, tolerance, corner_clearance)
+    candidates = _collect_candidates_by_role(part, grid_part, role_map)
     return _place_grid_notches(part, candidates, seen, min_spacing, length, width, is_back)

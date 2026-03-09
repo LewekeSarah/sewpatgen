@@ -62,25 +62,19 @@ if TYPE_CHECKING:
 #: Each key is a :attr:`~sewpat.element.PatternElement.role` tag; each value
 #: is a list of construction-grid element names (from :class:`~sewpat.grids.TopGrid`)
 #: whose intersections with that role's outline edges produce notches.
-#: An empty list suppresses notches for that role entirely.
+#: Roles absent from this map receive no grid notches.
 TOP_BLOCK_BACK_ROLE_MAP: RoleMap = {
-    "side": ["Waist", "Hip"],
-    "center_back": ["Waist", "Hip"],
-    "armscye": [],
-    "shoulder": [],
-    "neckline": [],
+    "side": ["Hip"],
+    "center_back": ["Chest", "Waist", "Hip"],
 }
 
 #: Notch rules for the **front** pattern piece of a top/blouse block.
 #: Center-front elements carry ``STYLE_CENTER_LINE`` which has ``no_notch=True``,
-#: so the Waist/Hip grid lines listed here produce no notches in practice —
-#: the fold-line constraint is enforced automatically by the style flag.
+#: so even though Chest/Waist/Hip are listed here, no notches will appear — the
+#: fold-line style suppresses them automatically.
 TOP_BLOCK_FRONT_ROLE_MAP: RoleMap = {
-    "side": ["Waist", "Hip"],
-    "center_front": ["Waist", "Hip"],
-    "armscye": [],
-    "shoulder": [],
-    "neckline": [],
+    "side": ["Hip"],
+    "center_front": ["Chest", "Waist", "Hip"],
 }
 
 # ---------------------------------------------------------------------------
@@ -685,7 +679,7 @@ def _assemble_front_part(
     part.add_dart(darts.waist_dart_front)
     part.append(sides.side_waist_hip_front, is_outline=True, style=STYLE_STITCH, role="side")
     part.append(sides.side_hip_hem_front, style=STYLE_STITCH, is_outline=True, role="side")
-    part.append(sides.hem_side_to_center_front, style=STYLE_HEM, is_outline=True)
+    part.append(sides.hem_side_to_center_front, style=STYLE_HEM, is_outline=True, role="hem")
 
     if seam_allowance > 0:
         part.add_seam_allowance(seam_allowance)
