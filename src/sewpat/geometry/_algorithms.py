@@ -596,6 +596,54 @@ def seam_length(geoms: list[Segment | CubicBezier | Circle | Rect | Triangle]) -
     return sum(g.length for g in geoms)
 
 
+def _normalize_vector(v: np.ndarray) -> np.ndarray:
+    """Normalize a vector to unit length, or return a default if near-zero."""
+    norm = np.linalg.norm(v)
+    return v / norm if norm > 1e-12 else np.array([1.0, 0.0])
+
+
+def _normal_from_tangent(tangent: np.ndarray) -> np.ndarray:
+    """Compute unit normal by rotating tangent 90° counter-clockwise."""
+    return np.array([-tangent[1], tangent[0]])
+
+
+def _bezier_tangent_from_control_points(
+    bezier: CubicBezier,
+    near_start: bool,
+) -> np.ndarray:
+    """Compute tangent at Bezier endpoint using control point geometry.
+
+    Uses the direction from/to control points to avoid numerical artifacts
+    at curve endpoints where the derivative may be degenerate.
+    """
+    if near_start:
+        # Outgoing direction: p0 → p1 (or p0 → p2 if p0 ≈ p1)
+        if bezier.p0.distance_to(bezier.p1) < 0.1:
+            direction = bezier.p2.coords - bezier.p0.coords
+        else:
+            direction = bezier.p1.coords - bezier.p0.coords
+    else:
+        # Incoming direction: p2 → p3 (or p1 → p3 if p2 ≈ p3)
+        if bezier.p2.distance_to(bezier.p3) < 0.1:
+            direction = bezier.p3.coords - bezier.p1.coords
+        else:
+            direction = bezier.p3.coords - bezier.p2.coords
+
+    return _normalize_vector(direction)
+
+
+def _orient_normal_inward(
+    normal: np.ndarray,
+    notch_pt: Point,
+    inward_ref: Point,
+) -> np.ndarray:
+    """Flip normal if it points away from the inward reference point."""
+    to_inward = inward_ref.coords - notch_pt.coords
+    if float(np.dot(normal, to_inward)) < 0:
+        return -normal
+    return normal
+
+
 def project_onto_edge(
     edge: _LinearGeom | CubicBezier,
     ref: Point,
@@ -630,25 +678,33 @@ def project_onto_edge(
         ``shapely.ops.nearest_points``; the exact parameter *t* is then
         recovered with :func:`._bezier._bezier_closest_t`.
     """
+    # Handle linear geometry (Segment, Ray, Line)
     if isinstance(edge, _LinearGeom):
         notch_pt = edge.project_point(ref)
         along = edge.unit_direction
         normal = edge.unit_normal
+
+    # Handle CubicBezier
     else:
+        # Find closest point on the curve
         _, nearest = _so.nearest_points(_sg.Point(ref.x, ref.y), geom_to_shapely(edge))
         notch_pt = Point(nearest.x, nearest.y)
         t_c = _bezier_closest_t(edge._svg(), complex(nearest.x, nearest.y))
-        d = edge.tangent_at_t(t_c)
-        norm = np.linalg.norm(d)
-        if norm > 1e-12:
-            along = np.asarray(d / norm)
-        else:
-            along = np.zeros(2)
-        normal = edge.normal_at_t(t_c)
 
+        # Near endpoints: use control-point geometry to avoid numerical issues
+        if t_c > 0.95 or t_c < 0.05:
+            along = _bezier_tangent_from_control_points(edge, near_start=(t_c < 0.05))
+            normal = _normal_from_tangent(along)
+
+        # Interior: use mathematical derivatives
+        else:
+            tangent = edge.tangent_at_t(t_c)
+            along = _normalize_vector(tangent)
+            normal = edge.normal_at_t(t_c)
+
+    # Orient normal toward interior if requested
     if inward_ref is not None:
-        if float(np.dot(normal, inward_ref.coords - notch_pt.coords)) < 0:
-            normal = -normal
+        normal = _orient_normal_inward(normal, notch_pt, inward_ref)
 
     return notch_pt, along, normal
 
