@@ -12,10 +12,13 @@ import pytest
 from sewpat.geometry import (
     Circle,
     CubicBezier,
+    Dart,
     Point,
     Ray,
     Segment,
     intersect,
+    miter_corner,
+    round_corner,
 )
 
 # =============================================================================
@@ -211,32 +214,6 @@ def test_segment_point_along_from_out_of_range_raises():
     p = Point(8, 0)
     with pytest.raises(ValueError):
         seg.point_along_from(p, 5)  # would land at 13, beyond length 10
-
-
-# ------------------------------------------------------------------
-# CubicBezier
-# ------------------------------------------------------------------
-
-
-def test_bezier_point_along_from_forward():
-    """Moving forward along a straight Bezier (degenerate line) is accurate."""
-    # Straight Bezier from (0,0) to (100,0) — arc-length == chord length
-    bez = CubicBezier(Point(0, 0), Point(33, 0), Point(66, 0), Point(100, 0))
-    p = bez.point_at_t(0.3)  # ≈ 30 mm along
-    result = bez.point_along_from(p, 20)
-    # Should land near x=50; allow 0.5 mm tolerance for
-    # round-trip arc-length accumulation
-    assert result.x == pytest.approx(50.0, abs=1)
-    assert result.y == pytest.approx(0.0, abs=1e-3)
-
-
-def test_bezier_point_along_from_displacement_magnitude():
-    """Displacement along a curved Bezier equals the requested arc length."""
-    bez = CubicBezier(Point(0, 0), Point(10, 40), Point(30, 40), Point(40, 0))
-    p = bez.point_at_t(0.2)
-    result = bez.point_along_from(p, 5.0)
-    # The result should be strictly further along the curve
-    assert result.distance_to(p) > 0.0
 
 
 # ------------------------------------------------------------------
@@ -456,6 +433,184 @@ def test_segment_line_line_intersection():
     line5 = Segment(Point(0, 0), Point(5, 5))
     line6 = Segment(Point(6, 6), Point(10, 10))
     assert intersect(line5, line6) == []
+
+
+# =============================================================================
+# Segment Additional Methods Tests
+# =============================================================================
+
+
+@pytest.fixture
+def test_segment():
+    """Standard test segment for additional method tests."""
+    return Segment(Point(0, 0), Point(30, 40))  # length = 50
+
+
+# ── point_at_length ──────────────────────────────────────────────────────
+
+
+def test_segment_point_at_length_zero_is_p1(test_segment):
+    s = test_segment
+    pt = s.point_at_length(0)
+    assert pt.x == pytest.approx(0.0)
+    assert pt.y == pytest.approx(0.0)
+
+
+def test_segment_point_at_length_full_is_p2(test_segment):
+    s = test_segment
+    pt = s.point_at_length(50)
+    assert pt.x == pytest.approx(30.0)
+    assert pt.y == pytest.approx(40.0)
+
+
+def test_segment_point_at_length_midpoint(test_segment):
+    s = test_segment
+    pt = s.point_at_length(25)
+    assert pt.x == pytest.approx(15.0)
+    assert pt.y == pytest.approx(20.0)
+
+
+def test_segment_point_at_length_raises_negative(test_segment):
+    with pytest.raises(ValueError):
+        test_segment.point_at_length(-1)
+
+
+def test_segment_point_at_length_raises_overflow(test_segment):
+    with pytest.raises(ValueError):
+        test_segment.point_at_length(51)
+
+
+# ── bounding_box ─────────────────────────────────────────────────────────
+
+
+def test_segment_bounding_box_axis_aligned():
+    s = Segment(Point(5, 3), Point(20, 15))
+    mn, mx = s.bounding_box()
+    assert mn.x == pytest.approx(5)
+    assert mn.y == pytest.approx(3)
+    assert mx.x == pytest.approx(20)
+    assert mx.y == pytest.approx(15)
+
+
+def test_segment_bounding_box_reversed_coords():
+    """Works correctly when p2 has smaller coordinates than p1."""
+    s = Segment(Point(20, 15), Point(5, 3))
+    mn, mx = s.bounding_box()
+    assert mn.x == pytest.approx(5)
+    assert mn.y == pytest.approx(3)
+    assert mx.x == pytest.approx(20)
+    assert mx.y == pytest.approx(15)
+
+
+def test_segment_bounding_box_horizontal():
+    s = Segment(Point(0, 5), Point(10, 5))
+    mn, mx = s.bounding_box()
+    assert mn.y == pytest.approx(mx.y)  # zero height
+
+
+# ── split ────────────────────────────────────────────────────────────────
+
+
+def test_segment_split_returns_two_segments(test_segment):
+    left, right = test_segment.split(0.5)
+    assert isinstance(left, Segment)
+    assert isinstance(right, Segment)
+
+
+def test_segment_split_midpoint_at_half(test_segment):
+    left, right = test_segment.split(0.5)
+    # left ends / right starts at midpoint (15, 20)
+    assert left.p2.x == pytest.approx(15.0)
+    assert left.p2.y == pytest.approx(20.0)
+    assert right.p1.x == pytest.approx(15.0)
+    assert right.p1.y == pytest.approx(20.0)
+
+
+def test_segment_split_lengths_sum_to_original(test_segment):
+    s = test_segment
+    left, right = s.split(0.4)
+    assert left.length + right.length == pytest.approx(s.length, abs=1e-6)
+
+
+def test_segment_split_preserves_endpoints(test_segment):
+    s = test_segment
+    left, right = s.split(0.3)
+    assert left.p1.x == pytest.approx(s.p1.x)
+    assert right.p2.x == pytest.approx(s.p2.x)
+    assert right.p2.y == pytest.approx(s.p2.y)
+
+
+def test_segment_split_invalid_t_zero_raises(test_segment):
+    with pytest.raises(ValueError):
+        test_segment.split(0.0)
+
+
+def test_segment_split_invalid_t_one_raises(test_segment):
+    with pytest.raises(ValueError):
+        test_segment.split(1.0)
+
+
+# ── split_at_points ──────────────────────────────────────────────────────
+
+
+def test_segment_split_at_one_point_gives_two_segments(test_segment):
+    s = test_segment
+    mid = s.point_at_t(0.5)
+    subs = s.split_at_points([mid])
+    assert len(subs) == 2
+
+
+def test_segment_split_at_two_points_gives_three_segments(test_segment):
+    s = test_segment
+    pa = s.point_at_t(0.25)
+    pb = s.point_at_t(0.75)
+    subs = s.split_at_points([pa, pb])
+    assert len(subs) == 3
+
+
+def test_segment_split_at_points_lengths_sum_to_original(test_segment):
+    s = test_segment
+    pa = s.point_at_t(0.3)
+    pb = s.point_at_t(0.7)
+    subs = s.split_at_points([pa, pb])
+    total = sum(seg.length for seg in subs)
+    assert total == pytest.approx(s.length, abs=1e-6)
+
+
+def test_segment_split_at_points_chain_is_continuous(test_segment):
+    """End of each sub-segment must equal start of the next."""
+    s = test_segment
+    subs = s.split_at_points([s.point_at_t(0.2), s.point_at_t(0.6), s.point_at_t(0.9)])
+    for a, b in zip(subs, subs[1:], strict=False):
+        assert a.p2.x == pytest.approx(b.p1.x, abs=1e-6)
+        assert a.p2.y == pytest.approx(b.p1.y, abs=1e-6)
+
+
+def test_segment_split_at_points_unsorted_input_same_result(test_segment):
+    """Points given in reverse order must produce the same splits."""
+    s = test_segment
+    pa, pb = s.point_at_t(0.3), s.point_at_t(0.7)
+    forward = s.split_at_points([pa, pb])
+    backward = s.split_at_points([pb, pa])
+    assert len(forward) == len(backward)
+    for a, b in zip(forward, backward, strict=False):
+        assert a.length == pytest.approx(b.length, abs=1e-6)
+
+
+def test_segment_split_at_endpoint_produces_no_degenerate_stub(test_segment):
+    """A point coinciding with p1 or p2 must be silently dropped."""
+    s = test_segment
+    subs = s.split_at_points([s.p1, s.point_at_t(0.5)])
+    # p1 is within tolerance of endpoint → only one split point remains
+    assert len(subs) == 2
+
+
+def test_segment_split_at_points_all_near_endpoints_returns_original(test_segment):
+    """When all points collapse onto endpoints, return the original segment."""
+    s = test_segment
+    subs = s.split_at_points([s.p1, s.p2])
+    assert len(subs) == 1
+    assert subs[0].length == pytest.approx(s.length, abs=1e-6)
 
 
 # =============================================================================
@@ -778,431 +933,229 @@ def test_circle_circle_intersection():
 
 
 # =============================================================================
-# CubicBezier Bounding Box Tests
+# Miter Corner Tests (reflex-corner detection)
 # =============================================================================
 
 
-@pytest.fixture
-def bbox_test_curve():
-    """Curve where control points lie outside the actual curve extent."""
-    return CubicBezier(
-        p0=Point(10, 10),
-        p1=Point(20, 0),  # below the curve
-        p2=Point(30, 20),  # above the curve
-        p3=Point(40, 10),
-    )
+def test_miter_corner_convex_extends_outward():
+    """A convex 90° corner must produce a miter point outside the original seams."""
+    # Corner between top (→) and right (↓): expected miter at (110, -10)
+    ga = Segment(Point(0, -10), Point(100, -10))  # horizontal, going right
+    gb = Segment(Point(110, 0), Point(110, 100))  # vertical, going down
+    corner = miter_corner(ga, gb, 10.0)
+    # Miter should extend to (110, -10) — forward along ta
+    assert corner.x == pytest.approx(110.0, abs=1e-3)
+    assert corner.y == pytest.approx(-10.0, abs=1e-3)
 
 
-def test_bezier_bbox_x_bounds_match_endpoints(bbox_test_curve):
-    """x range is fully determined by the endpoints for this curve."""
-    bez = bbox_test_curve
-    mn, mx = bez.bounding_box()
-    assert mn.x == pytest.approx(10.0, abs=1e-6)
-    assert mx.x == pytest.approx(40.0, abs=1e-6)
+def test_miter_corner_reflex_returns_bevel_midpoint():
+    """A reflex (concave) corner must return the bevel midpoint, not a spike.
 
-
-def test_bezier_bbox_y_does_not_reach_control_points(bbox_test_curve):
-    """y min/max must stay within the actual curve, not at control points."""
-    bez = bbox_test_curve
-    mn, mx = bez.bounding_box()
-    # Control points are at y=0 and y=20 – the curve never reaches them
-    assert mn.y > 0.0, "y_min must be above the off-curve control point y=0"
-    assert mx.y < 20.0, "y_max must be below the off-curve control point y=20"
-
-
-def test_bezier_bbox_y_values_are_correct(bbox_test_curve):
-    """Exact y extrema match the analytic result (also verified by svgpathtools)."""
-    bez = bbox_test_curve
-    mn, mx = bez.bounding_box()
-    assert mn.y == pytest.approx(7.113249, abs=1e-4)
-    assert mx.y == pytest.approx(12.886751, abs=1e-4)
-
-
-def test_bezier_bbox_endpoints_always_inside(bbox_test_curve):
-    """Start and end points of the curve must lie within the bounding box."""
-    bez = bbox_test_curve
-    mn, mx = bez.bounding_box()
-    for pt in (bez.p0, bez.p3):
-        assert pt.x >= mn.x
-        assert pt.x <= mx.x
-        assert pt.y >= mn.y
-        assert pt.y <= mx.y
-
-
-def test_bezier_bbox_straight_line():
-    """A straight cubic Bezier has a bounding box equal to its endpoint range."""
-    bez = CubicBezier(
-        p0=Point(0, 0),
-        p1=Point(10, 10),  # control points along the diagonal
-        p2=Point(20, 20),
-        p3=Point(30, 30),
-    )
-    mn, mx = bez.bounding_box()
-    assert mn.x == pytest.approx(0.0, abs=1e-6)
-    assert mn.y == pytest.approx(0.0, abs=1e-6)
-    assert mx.x == pytest.approx(30.0, abs=1e-6)
-    assert mx.y == pytest.approx(30.0, abs=1e-6)
-
-
-# =============================================================================
-# CubicBezier Intersection Tests
-# =============================================================================
-
-
-@pytest.fixture
-def bezier_curves_A():
-    """First test curve for Bézier–Bézier intersection."""
-    return CubicBezier(
-        p0=Point(10, 10),
-        p1=Point(20, 0),
-        p2=Point(30, 20),
-        p3=Point(40, 10),
-    )
-
-
-@pytest.fixture
-def bezier_curves_B():
-    """Second test curve for Bézier–Bézier intersection."""
-    return CubicBezier(
-        p0=Point(10, 15),
-        p1=Point(20, 25),
-        p2=Point(30, 5),
-        p3=Point(40, 15),
-    )
-
-
-def test_bezier_intersect_two_crossings_found(bezier_curves_A, bezier_curves_B):
-    """The reference pair of curves has exactly two intersections."""
-    pts = intersect(bezier_curves_A, bezier_curves_B)
-    assert len(pts) == 2
-
-
-def test_bezier_intersect_points_lie_on_both_curves(bezier_curves_A, bezier_curves_B):
-    """Every returned point must lie on both curves (distance < 0.05 mm).
-
-    We verify membership by sampling each curve at 1000 points and checking
-    that the intersection point is within 0.05 mm of the closest sample.
-    The tolerance is deliberately loose to account for the finite sampling
-    resolution (~0.033 mm step for a ~33 mm long curve).
+    Simulate a U-shaped notch: two offset segments whose junction is concave.
     """
-    tol = 0.05  # mm – sampling grid resolution bound
-    pts = intersect(bezier_curves_A, bezier_curves_B)
-    for pt in pts:
-        min_d_a = min(pt.distance_to(bezier_curves_A.point_at_t(k / 1000)) for k in range(1001))
-        min_d_b = min(pt.distance_to(bezier_curves_B.point_at_t(k / 1000)) for k in range(1001))
-        assert min_d_a < tol, f"Point {pt} is not on curve A"
-        assert min_d_b < tol, f"Point {pt} is not on curve B"
+    # ga ends at (10,0) going right, gb starts at (10, 20) going right — not aligned
+    ga2 = Segment(Point(0, 0), Point(10, 0))  # → end=(10,0)
+    gb2 = Segment(Point(10, 20), Point(20, 20))  # → start=(10,20) — not aligned
+    # The intersection is behind end_a (dot < 0), so bevel midpoint expected
+    corner2 = miter_corner(ga2, gb2, 5.0)
+    bevel_x = 0.5 * (10.0 + 10.0)
+    bevel_y = 0.5 * (0.0 + 20.0)
+    assert corner2.x == pytest.approx(bevel_x, abs=1e-3)
+    assert corner2.y == pytest.approx(bevel_y, abs=1e-3)
 
 
-def test_bezier_intersect_first_intersection_coordinates(bezier_curves_A, bezier_curves_B):
-    """First intersection near (30.92, 12.50) as per svgpathtools reference."""
-    pts = sorted(intersect(bezier_curves_A, bezier_curves_B), key=lambda p: p.x)
-    assert pts[0].x == pytest.approx(30.924, abs=0.1)
-    assert pts[0].y == pytest.approx(12.5, abs=0.1)
+def test_miter_corner_reflex_180_degree_returns_bevel():
+    """Two anti-parallel segments (U-turn) produce bevel midpoint, not infinity."""
+    # ga: (0,0)→(10,0) ta=(+1,0)
+    # gb: (10,0)→(0,0)  tb=(-1,0)  — exact anti-parallel (180° turn)
+    ga = Segment(Point(0, 0), Point(10, 0))
+    gb = Segment(Point(10, 0), Point(0, 0))
+    corner = miter_corner(ga, gb, 5.0)
+    # Lines are parallel so _intersect_lines returns None → bevel midpoint
+    assert corner.x == pytest.approx(10.0, abs=1e-3)
+    assert corner.y == pytest.approx(0.0, abs=1e-3)
 
 
-def test_bezier_intersect_second_intersection_coordinates(bezier_curves_A, bezier_curves_B):
-    """Second intersection near (36.13, 12.50) as per svgpathtools reference."""
-    pts = sorted(intersect(bezier_curves_A, bezier_curves_B), key=lambda p: p.x)
-    assert pts[1].x == pytest.approx(36.133, abs=0.1)
-    assert pts[1].y == pytest.approx(12.5, abs=0.1)
-
-
-def test_bezier_intersect_symmetric_call_returns_same_count(bezier_curves_A, bezier_curves_B):
-    """intersect(A, B) and intersect(B, A) must return the same number of points."""
-    pts_ab = intersect(bezier_curves_A, bezier_curves_B)
-    pts_ba = intersect(bezier_curves_B, bezier_curves_A)
-    assert len(pts_ab) == len(pts_ba)
-
-
-def test_bezier_intersect_no_intersection_parallel_curves():
-    """Two curves that do not cross must return an empty list."""
-    top = CubicBezier(
-        p0=Point(0, 20),
-        p1=Point(10, 20),
-        p2=Point(20, 20),
-        p3=Point(30, 20),
-    )
-    bottom = CubicBezier(
-        p0=Point(0, 0),
-        p1=Point(10, 0),
-        p2=Point(20, 0),
-        p3=Point(30, 0),
-    )
-    pts = intersect(top, bottom)
-    assert pts == []
-
-
-def test_bezier_intersect_no_duplicates_returned(bezier_curves_A, bezier_curves_B):
-    """No two returned points may be closer than 0.01 mm to each other."""
-    pts = intersect(bezier_curves_A, bezier_curves_B)
-    for i, p1 in enumerate(pts):
-        for j, p2 in enumerate(pts):
-            if i != j:
-                assert p1.distance_to(p2) > 0.01
+def test_miter_corner_convex_not_clamped_to_bevel():
+    """A normal outward 90° corner must NOT be treated as reflex."""
+    # ga going right (+x), gb going down (+y) — standard outward CW corner
+    ga = Segment(Point(0, -10), Point(90, -10))  # → ta=(+1,0)
+    gb = Segment(Point(110, 0), Point(110, 90))  # ↓ tb=(0,+1)
+    corner = miter_corner(ga, gb, 10.0)
+    # Must NOT return bevel midpoint (50, 45) — must return miter (110,-10)
+    assert corner.x == pytest.approx(110.0, abs=1e-2)
+    assert corner.y == pytest.approx(-10.0, abs=1e-2)
 
 
 # =============================================================================
-# CubicBezier New Methods Tests
+# Round Corner Tests (cubic Bézier arc approximation)
 # =============================================================================
 
 
-@pytest.fixture
-def bezier_test_curve():
-    """Standard test curve for CubicBezier methods."""
-    return CubicBezier(
-        p0=Point(10, 10),
-        p1=Point(20, 0),
-        p2=Point(30, 20),
-        p3=Point(40, 10),
-    )
+def test_round_corner_convex_90deg_returns_cubic_bezier():
+    """A convex 90° corner returns a CubicBezier, not a Point."""
+    ga = Segment(Point(0, -10), Point(100, -10))  # → ta=(+1,0)
+    gb = Segment(Point(110, 0), Point(110, 100))  # ↓ tb=(0,+1)
+    result = round_corner(ga, gb)
+    assert isinstance(result, CubicBezier)
 
 
-# ── start / end aliases ──────────────────────────────────────────────────
+def test_round_corner_arc_starts_at_end_of_ga():
+    """The arc must start exactly at geom_end(ga)."""
+    ga = Segment(Point(0, -10), Point(100, -10))
+    gb = Segment(Point(110, 0), Point(110, 100))
+    arc = round_corner(ga, gb)
+    assert isinstance(arc, CubicBezier)
+    assert arc.p0.x == pytest.approx(100.0, abs=1e-6)
+    assert arc.p0.y == pytest.approx(-10.0, abs=1e-6)
 
 
-def test_bezier_start_is_p0(bezier_test_curve):
-    """start property must equal p0."""
-    b = bezier_test_curve
-    assert b.start == b.p0
+def test_round_corner_arc_ends_at_start_of_gb():
+    """The arc must end exactly at geom_start(gb)."""
+    ga = Segment(Point(0, -10), Point(100, -10))
+    gb = Segment(Point(110, 0), Point(110, 100))
+    arc = round_corner(ga, gb)
+    assert isinstance(arc, CubicBezier)
+    assert arc.p3.x == pytest.approx(110.0, abs=1e-6)
+    assert arc.p3.y == pytest.approx(0.0, abs=1e-6)
 
 
-def test_bezier_end_is_p3(bezier_test_curve):
-    """end property must equal p3."""
-    b = bezier_test_curve
-    assert b.end == b.p3
+def test_round_corner_arc_stays_close_to_true_circle():
+    """All points on the Bézier arc must lie within 0.03 % of the true radius.
+
+    Setup: ga ends at (100, -10), gb starts at (110, 0).  Tangents (+1,0)
+    and (0,+1).  The arc centre is at (100, 0): the perpendicular to
+    ta=(+1,0) through end_a=(100,-10) gives x=100; the perpendicular to
+    tb=(0,+1) through start_b=(110,0) gives y=0.  r = 10 mm.
+    Max theoretical error for k=4/3·tan(θ/4) at 90° is 0.027 % of r.
+    """
+    import math as _m
+
+    ga = Segment(Point(0, -10), Point(100, -10))
+    gb = Segment(Point(110, 0), Point(110, 100))
+    arc = round_corner(ga, gb)
+    assert isinstance(arc, CubicBezier)
+    cx, cy, r = 100.0, 0.0, 10.0  # correct arc centre
+    tolerance = r * 0.0003  # 0.03 % of radius = 0.003 mm
+    for k in range(21):
+        pt = arc.point_at_t(k / 20)
+        radial_err = abs(_m.hypot(pt.x - cx, pt.y - cy) - r)
+        assert radial_err < tolerance, (
+            f"t={k / 20:.2f}: radial error {radial_err:.5f} mm > {tolerance:.5f} mm"
+        )
 
 
-# ── length as property ───────────────────────────────────────────────────
+def test_round_corner_reflex_returns_point():
+    """A reflex corner returns a Point (bevel midpoint), not a CubicBezier."""
+    # ga going right, end at (10,0); gb going left, start at (10,0) — hairpin
+    ga = Segment(Point(0, 0), Point(10, 0))
+    gb = Segment(Point(10, 0), Point(0, 0))
+    result = round_corner(ga, gb)
+    assert isinstance(result, Point)
 
 
-def test_bezier_length_is_property(bezier_test_curve):
-    """length must be accessible as a property (no call parentheses)."""
-    b = bezier_test_curve
-    curve_len = b.length  # must not raise TypeError
-    assert curve_len > 0.0
+def test_round_corner_parallel_tangents_returns_point():
+    """Parallel tangents (straight continuation) return a Point."""
+    ga = Segment(Point(0, 0), Point(10, 0))
+    gb = Segment(Point(10, 0), Point(20, 0))
+    result = round_corner(ga, gb)
+    # Angle ≈ 0 → falls back to bevel midpoint (a Point)
+    assert isinstance(result, Point)
 
 
-# ── normal_at_t ─────────────────────────────────────────────────────────
+def test_round_corner_180_degree_returns_point():
+    """Anti-parallel segments (U-turn) return a Point fallback."""
+    ga = Segment(Point(0, 5), Point(10, 5))  # →
+    gb = Segment(Point(10, 5), Point(0, 5))  # ← (anti-parallel)
+    result = round_corner(ga, gb)
+    assert isinstance(result, Point)
 
 
-def test_bezier_normal_is_unit_length(bezier_test_curve):
-    """normal_at_t() must return a vector of length 1."""
-    b = bezier_test_curve
-    for t in [0.0, 0.25, 0.5, 0.75, 1.0]:
-        n = b.normal_at_t(t)
-        assert float(np.linalg.norm(n)) == pytest.approx(1.0, abs=1e-10)
-
-
-def test_bezier_normal_perpendicular_to_tangent(bezier_test_curve):
-    """Normal and tangent must be perpendicular (dot product = 0)."""
-    b = bezier_test_curve
-    for t in [0.1, 0.3, 0.5, 0.7, 0.9]:
-        tan = b.tangent_at_t(t)
-        nor = b.normal_at_t(t)
-        tan_unit = tan / np.linalg.norm(tan)
-        assert float(np.dot(tan_unit, nor)) == pytest.approx(0.0, abs=1e-10)
-
-
-def test_bezier_normal_offset_point_at_correct_distance(bezier_test_curve):
-    """A point offset by d mm along the normal is d mm from the curve."""
-    b = bezier_test_curve
-    d = 10.0  # mm seam allowance
-    t = 0.5
-    pt = b.point_at_t(t)
-    nor = b.normal_at_t(t)
-    offset = Point(pt.x + d * nor[0], pt.y + d * nor[1])
-    assert pt.distance_to(offset) == pytest.approx(d, abs=1e-10)
-
-
-# ── point_at_length ──────────────────────────────────────────────────────
-
-
-def test_bezier_point_at_length_zero_is_start(bezier_test_curve):
-    """point_at_length(0) must return p0."""
-    b = bezier_test_curve
-    pt = b.point_at_length(0.0)
-    assert pt.x == pytest.approx(b.p0.x, abs=1e-4)
-    assert pt.y == pytest.approx(b.p0.y, abs=1e-4)
-
-
-def test_bezier_point_at_length_full_is_end(bezier_test_curve):
-    """point_at_length(total_length) must return p3."""
-    b = bezier_test_curve
-    pt = b.point_at_length(b.length)
-    assert pt.x == pytest.approx(b.p3.x, abs=1e-4)
-    assert pt.y == pytest.approx(b.p3.y, abs=1e-4)
-
-
-def test_bezier_point_at_length_midpoint_is_on_curve(bezier_test_curve):
-    """point_at_length(L/2) must lie on the curve."""
-    b = bezier_test_curve
-    half = b.length / 2
-    pt = b.point_at_length(half)
-    # Verify by sampling: closest sample on curve should be < 0.05 mm away
-    min_d = min(pt.distance_to(b.point_at_t(k / 2000)) for k in range(2001))
-    assert min_d < 0.05
-
-
-def test_bezier_point_at_length_arc_distance_is_correct(bezier_test_curve):
-    """The arc length from p0 to point_at_length(s) must equal s."""
-    b = bezier_test_curve
-    s = b.length * 0.3
-    # Find t for pt and integrate back – use svgpathtools ilength round-trip
-    from svgpathtools import CubicBezier as SvgBez
-
-    svg = SvgBez(
-        complex(b.p0.x, b.p0.y),
-        complex(b.p1.x, b.p1.y),
-        complex(b.p2.x, b.p2.y),
-        complex(b.p3.x, b.p3.y),
-    )
-    t = svg.ilength(s)
-    recovered = svg.length(t1=t)  # length from 0 to t
-    assert recovered == pytest.approx(s, abs=1e-4)
-
-
-def test_bezier_point_at_length_raises_on_negative(bezier_test_curve):
-    """point_at_length() must raise ValueError for negative arc length."""
-    b = bezier_test_curve
-    with pytest.raises(ValueError):
-        b.point_at_length(-1.0)
-
-
-def test_bezier_point_at_length_raises_on_overflow(bezier_test_curve):
-    """point_at_length() must raise ValueError if arc length > curve length."""
-    b = bezier_test_curve
-    with pytest.raises(ValueError):
-        b.point_at_length(b.length + 1.0)
-
-
-# ── split ────────────────────────────────────────────────────────────────
-
-
-def test_bezier_split_left_starts_at_p0(bezier_test_curve):
-    """Left piece must start at the original p0."""
-    b = bezier_test_curve
-    left, _ = b.split(0.5)
-    assert left.p0.x == pytest.approx(b.p0.x, abs=1e-10)
-    assert left.p0.y == pytest.approx(b.p0.y, abs=1e-10)
-
-
-def test_bezier_split_right_ends_at_p3(bezier_test_curve):
-    """Right piece must end at the original p3."""
-    b = bezier_test_curve
-    _, right = b.split(0.5)
-    assert right.p3.x == pytest.approx(b.p3.x, abs=1e-10)
-    assert right.p3.y == pytest.approx(b.p3.y, abs=1e-10)
-
-
-def test_bezier_split_join_point_matches(bezier_test_curve):
-    """Left end and right start must be the same point (the split point)."""
-    b = bezier_test_curve
-    left, right = b.split(0.5)
-    assert left.p3.x == pytest.approx(right.p0.x, abs=1e-10)
-    assert left.p3.y == pytest.approx(right.p0.y, abs=1e-10)
-
-
-def test_bezier_split_join_point_lies_on_original(bezier_test_curve):
-    """The split point must lie on the original curve at t."""
-    b = bezier_test_curve
-    t = 0.4
-    left, right = b.split(t)
-    expected = b.point_at_t(t)
-    assert left.p3.x == pytest.approx(expected.x, abs=1e-8)
-    assert left.p3.y == pytest.approx(expected.y, abs=1e-8)
-
-
-def test_bezier_split_lengths_sum_to_original(bezier_test_curve):
-    """Left length + right length must equal the original curve length."""
-    b = bezier_test_curve
-    left, right = b.split(0.5)
-    assert left.length + right.length == pytest.approx(b.length, abs=1e-6)
-
-
-def test_bezier_split_returns_cubicbezier_instances(bezier_test_curve):
-    """split() must return two CubicBezier objects."""
-    b = bezier_test_curve
-    left, right = b.split(0.5)
-    assert isinstance(left, CubicBezier)
-    assert isinstance(right, CubicBezier)
+def test_round_corner_control_points_on_tangent_lines():
+    """Both control points must lie on the respective tangent lines of the arc."""
+    ga = Segment(Point(0, -10), Point(100, -10))  # → ta=(+1,0)
+    gb = Segment(Point(110, 0), Point(110, 100))  # ↓ tb=(0,+1)
+    arc = round_corner(ga, gb)
+    assert isinstance(arc, CubicBezier)
+    # cp1 must be east of p0 (same y), cp2 must be north of p3 (same x)
+    assert arc.p1.y == pytest.approx(arc.p0.y, abs=1e-6)  # tangent along +x
+    assert arc.p2.x == pytest.approx(arc.p3.x, abs=1e-6)  # tangent along -y
 
 
 # =============================================================================
-# CubicBezier Split At Points Tests
+# Dart Roof Tests (Abnäherdach)
 # =============================================================================
 
 
 @pytest.fixture
-def split_test_curve():
-    """Standard test curve for split_at_points tests."""
-    return CubicBezier(
-        p0=Point(10, 10),
-        p1=Point(20, 0),
-        p2=Point(30, 20),
-        p3=Point(40, 10),
+def symmetric_dart():
+    """Helper: symmetric dart centered at origin on the x-axis."""
+    width, depth = 40.0, 80.0
+    center = Point(0.0, 0.0)
+    leg_a = Point(-width / 2, 0.0)
+    leg_b = Point(+width / 2, 0.0)
+    tip = Point(0.0, -depth)  # tip below the seam line
+    return Dart(leg_a=leg_a, leg_b=leg_b, center=center, tip=tip)
+
+
+def test_dart_roof_returns_point_instance(symmetric_dart):
+    dart = symmetric_dart
+    roof = dart.roof
+    assert isinstance(roof, Point)
+
+
+def test_dart_roof_points_above_original_legs(symmetric_dart):
+    """Roof points must protrude *away* from the tip (outward past the seam).
+
+    For a dart where the tip is below the seam (y < 0), the Abnäherdach
+    crown protrudes above the seam (y > 0) so that after sewing the edge
+    lies flush.
+    """
+    dart = symmetric_dart
+    roof = dart.roof
+    # tip is at y=-80; seam is at y=0; roof points should be at y > 0
+    assert roof.y > dart.center.y
+
+
+def test_dart_roof_height_formula(symmetric_dart):
+    """Verify the right-triangle formula: h = half_width * cos(α) / sin(α)."""
+    import math
+
+    dart = symmetric_dart
+    roof_height = np.linalg.norm(dart.roof.coords - dart.center.coords)
+
+    assert float(math.tan(dart.intake_angle) * (dart.width / 2)) == pytest.approx(
+        roof_height, abs=1e-5
     )
 
 
-def test_bezier_split_at_one_point_gives_two_curves(split_test_curve):
-    b = split_test_curve
-    subs = b.split_at_points([b.point_at_t(0.5)])
-    assert len(subs) == 2
-    for s in subs:
-        assert isinstance(s, CubicBezier)
+def test_dart_roof_zero_width_no_displacement():
+    """A dart with zero-length seam has no roof displacement."""
+    tip = Point(0.0, -50.0)
+    center = Point(0.0, 0.0)
+    dart = Dart(leg_a=center, leg_b=center, center=center, tip=tip)
+    roof = dart.roof
+    assert roof.x == pytest.approx(dart.center.x, abs=1e-6)
+    assert roof.y == pytest.approx(dart.center.y, abs=1e-6)
 
 
-def test_bezier_split_at_two_points_gives_three_curves(split_test_curve):
-    b = split_test_curve
-    subs = b.split_at_points([b.point_at_t(0.25), b.point_at_t(0.75)])
-    assert len(subs) == 3
+def test_dart_roof_rise_increases_with_wider_dart():
+    """A wider dart (larger intake angle) should produce a larger roof rise."""
+    # Narrow dart
+    width_narrow, depth = 20.0, 80.0
+    center = Point(0.0, 0.0)
+    leg_a_narrow = Point(-width_narrow / 2, 0.0)
+    leg_b_narrow = Point(+width_narrow / 2, 0.0)
+    tip = Point(0.0, -depth)
+    dart_narrow = Dart(leg_a=leg_a_narrow, leg_b=leg_b_narrow, center=center, tip=tip)
 
+    # Wide dart
+    width_wide = 60.0
+    leg_a_wide = Point(-width_wide / 2, 0.0)
+    leg_b_wide = Point(+width_wide / 2, 0.0)
+    dart_wide = Dart(leg_a=leg_a_wide, leg_b=leg_b_wide, center=center, tip=tip)
 
-def test_bezier_split_at_points_lengths_sum_to_original(split_test_curve):
-    b = split_test_curve
-    subs = b.split_at_points([b.point_at_t(0.3), b.point_at_t(0.7)])
-    total = sum(s.length for s in subs)
-    assert total == pytest.approx(b.length, abs=1e-4)
-
-
-def test_bezier_split_at_points_chain_is_continuous(split_test_curve):
-    """End of each sub-curve must equal the start of the next."""
-    b = split_test_curve
-    subs = b.split_at_points([b.point_at_t(0.2), b.point_at_t(0.6), b.point_at_t(0.9)])
-    for a, c in zip(subs, subs[1:], strict=False):
-        assert a.p3.x == pytest.approx(c.p0.x, abs=1e-6)
-        assert a.p3.y == pytest.approx(c.p0.y, abs=1e-6)
-
-
-def test_bezier_split_at_points_unsorted_input_same_result(split_test_curve):
-    """Points in reverse order must produce the same sub-lengths."""
-    b = split_test_curve
-    pa, pb = b.point_at_t(0.3), b.point_at_t(0.7)
-    forward = b.split_at_points([pa, pb])
-    backward = b.split_at_points([pb, pa])
-    assert len(forward) == len(backward)
-    for a, c in zip(forward, backward, strict=False):
-        assert a.length == pytest.approx(c.length, abs=1e-4)
-
-
-def test_bezier_split_at_endpoint_produces_no_degenerate_stub(split_test_curve):
-    """A point coinciding with p0 must be dropped (only one real split left)."""
-    b = split_test_curve
-    subs = b.split_at_points([b.p0, b.point_at_t(0.5)])
-    assert len(subs) == 2
-
-
-def test_bezier_split_at_points_all_near_endpoints_returns_original(split_test_curve):
-    """When all points are at endpoints, return the original curve."""
-    b = split_test_curve
-    subs = b.split_at_points([b.p0, b.p3])
-    assert len(subs) == 1
-    assert subs[0].length == pytest.approx(b.length, abs=1e-4)
-
-
-def test_bezier_split_preserves_start_and_end(split_test_curve):
-    """First sub-curve starts at p0; last ends at p3."""
-    b = split_test_curve
-    subs = b.split_at_points([b.point_at_t(0.4)])
-    assert subs[0].p0.x == pytest.approx(b.p0.x, abs=1e-8)
-    assert subs[-1].p3.x == pytest.approx(b.p3.x, abs=1e-8)
+    # For this setup tip is at y=-80, seam at y=0; roof is at y > 0
+    rise_narrow = np.linalg.norm(dart_narrow.roof.coords - dart_narrow.center.coords)
+    rise_wide = np.linalg.norm(dart_wide.roof.coords - dart_wide.center.coords)
+    assert rise_wide > rise_narrow
