@@ -162,12 +162,6 @@ class TestPersonAnalyser(unittest.TestCase):
         bp = analyser.get_balanced_person()
         self.assertIsInstance(bp, BalancedPerson)
 
-    def test_get_optimal_balance(self):
-        """Optimal balance is 3.5 cm for 80–89 cm bustline."""
-        p = _make_person()
-        analyser = PersonAnalyser(p)
-        self.assertAlmostEqual(analyser.get_optimal_balance(), 3.5 * CM)
-
     def test_get_optimal_balance_outside_range(self):
         """NotImplementedError for bust outside supported range."""
         p = _make_person()
@@ -190,14 +184,6 @@ class TestPersonAnalyser(unittest.TestCase):
         with self.assertRaises(ValueError):
             PersonAnalyser(p)
 
-    def test_get_balanced_person_raises_if_none(self):
-        """RuntimeError when person_balanced was not set (simulate failure)."""
-        p = _make_person()
-        analyser = PersonAnalyser(p)
-        analyser.person_balanced = None  # force the error state
-        with self.assertRaises(RuntimeError):
-            analyser.get_balanced_person()
-
     def test_armscye_depth_not_implemented_outside_range(self):
         """NotImplementedError for bust outside the 80–89 cm range for armscye_depth."""
         p = _make_person()
@@ -214,6 +200,30 @@ class TestPersonAnalyser(unittest.TestCase):
         p.armscye_width = None
         with self.assertRaises(NotImplementedError):
             PersonAnalyser(p)
+
+    def test_does_not_mutate_original_person(self):
+        """PersonAnalyser works on a copy and does not mutate the original."""
+        p = _make_person()
+        # Remove derived measurements from original to force derivation
+        p.armscye_depth = None
+        p.armscye_width = None
+        p.chest_width = None
+        p.back_width = None
+
+        # Run analyser
+        analyser = PersonAnalyser(p)
+
+        # Original person should still have None values
+        self.assertIsNone(p.armscye_depth)
+        self.assertIsNone(p.armscye_width)
+        self.assertIsNone(p.chest_width)
+        self.assertIsNone(p.back_width)
+
+        # Analyser's copy should have derived values
+        self.assertIsNotNone(analyser.person.armscye_depth)
+        self.assertIsNotNone(analyser.person.armscye_width)
+        self.assertIsNotNone(analyser.person.chest_width)
+        self.assertIsNotNone(analyser.person.back_width)
 
 
 # ---------------------------------------------------------------------------

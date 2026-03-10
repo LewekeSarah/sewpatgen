@@ -215,12 +215,173 @@ class BalancedPerson:
         return f"BalancedPerson({self._person!r})"
 
 
-class PersonAnalyser:
-    """Calculates and balances body measurements for pattern construction.
+class MeasurementDeriver:
+    """Derives missing body measurements from bust circumference.
 
-    Derives missing measurements from the bust circumference using standard
-    formulas, then validates that the person is properly balanced
-    (front length vs. back length within the optimal range).
+    Single responsibility: Calculate derived measurements using standard formulas
+    for a given bust range (currently 80–89 cm).
+    """
+
+    def __init__(self, bust: float | None) -> None:
+        """Initialize with a bust circumference.
+
+        Args:
+            bust: Bust circumference in mm, or None.
+
+        Raises:
+            NotImplementedError: If bust is None or outside the supported range.
+        """
+        self._assert_bust_range(bust)
+        self.bust: float = bust  # type: ignore[assignment]  # bust is guaranteed non-None after assertion
+
+    def _assert_bust_range(self, bust: float | None) -> None:
+        """Assert that bust is within the supported range [80, 89] cm.
+
+        Raises:
+            NotImplementedError: If bust is None or outside the supported range.
+        """
+        if bust is None or bust <= 80 * CM or bust > 89 * CM:
+            raise NotImplementedError("Matching formula for given bustline is not yet implemented.")
+
+    def derive_armscye_depth(self) -> float:
+        """Calculate armscye depth from bust circumference."""
+        return self.bust / 10 + 11 * CM
+
+    def derive_armscye_width(self) -> float:
+        """Calculate armscye width from bust circumference."""
+        return self.bust / 8 - 1.5 * CM
+
+    def derive_chest_width(self) -> float:
+        """Calculate chest width from bust circumference."""
+        return self.bust / 4 - 4.0 * CM
+
+    def derive_back_width(self) -> float:
+        """Calculate back width from bust circumference."""
+        return self.bust / 8 + 5.5 * CM
+
+    def apply_to_person(self, person: Person) -> Person:
+        """Create a copy of *person* with missing measurements derived.
+
+        Only measurements that are currently ``None`` are filled in.
+
+        Args:
+            person: Raw body measurements.
+
+        Returns:
+            A copy of *person* with derived measurements filled in.
+        """
+        person_copy = copy.copy(person)
+        if person_copy.armscye_depth is None:
+            person_copy.armscye_depth = self.derive_armscye_depth()
+        if person_copy.armscye_width is None:
+            person_copy.armscye_width = self.derive_armscye_width()
+        if person_copy.chest_width is None:
+            person_copy.chest_width = self.derive_chest_width()
+        if person_copy.back_width is None:
+            person_copy.back_width = self.derive_back_width()
+        return person_copy
+
+
+class BalanceAdjuster:
+    """Applies balance adjustments to body measurements.
+
+    Single responsibility: Apply front_length and back_length corrections.
+    """
+
+    def __init__(self, adjustments: BalanceAdjustments) -> None:
+        """Initialize with balance adjustments.
+
+        Args:
+            adjustments: Front/back length corrections.
+        """
+        self.adjustments = adjustments
+
+    def apply_to_person(self, person: Person) -> Person:
+        """Create a copy of *person* with balance adjustments applied.
+
+        Args:
+            person: Body measurements.
+
+        Returns:
+            A copy of *person* with adjustments applied.
+        """
+        person_copy = copy.deepcopy(person)
+        for key, val in self.adjustments.__dict__.items():
+            current = getattr(person_copy, key)
+            if current is not None:
+                setattr(person_copy, key, current + val)
+        return person_copy
+
+
+class BalanceValidator:
+    """Validates front/back length balance for pattern construction.
+
+    Single responsibility: Check that front_length and back_length are
+    properly balanced according to bust-specific optimal ranges.
+    """
+
+    def __init__(self, bust: float | None) -> None:
+        """Initialize with a bust circumference to determine optimal balance.
+
+        Args:
+            bust: Bust circumference in mm.
+
+        Raises:
+            NotImplementedError: If bust is outside the supported range.
+        """
+        self.optimal_balance = self._get_optimal_balance(bust)
+
+    def _get_optimal_balance(self, bust: float | None) -> float:
+        """Determine the optimal front/back balance for the given bustline.
+
+        Raises:
+            NotImplementedError: If bustline is outside the supported range.
+        """
+        if bust is not None and (bust > 80 * CM) and (bust <= 89 * CM):
+            return 3.5 * CM
+        else:
+            raise NotImplementedError("Matching balance for given bustline is not yet implemented.")
+
+    def validate(self, person: Person) -> BalancedPerson:
+        """Validate that *person* is properly balanced and wrap in BalancedPerson.
+
+        Args:
+            person: Body measurements to validate.
+
+        Returns:
+            A BalancedPerson wrapper indicating validation passed.
+
+        Raises:
+            ValueError: If front_length and back_length are not both set, or if
+                the difference exceeds the optimal balance.
+        """
+        if person.gender != Gender.female:
+            # Only female patterns currently require balance validation
+            return BalancedPerson(person)
+
+        fl = person.front_length
+        bl = person.back_length
+        if fl is None or bl is None:
+            raise ValueError("front_length and back_length must both be set to balance the person.")
+        if (fl - bl) > self.optimal_balance:
+            diff_cm = (fl - bl) / CM
+            optimal_cm = self.optimal_balance / CM
+            raise ValueError(
+                f"front_length and back_length are not properly balanced: "
+                f"difference {diff_cm:.2f} cm exceeds optimal {optimal_cm:.2f} cm"
+            )
+        return BalancedPerson(person)
+
+
+class PersonAnalyser:
+    """Orchestrates measurement derivation, balance adjustment, and validation.
+
+    This is a facade that coordinates the three single-responsibility classes:
+    - :class:`MeasurementDeriver` — derives missing measurements from bust
+    - :class:`BalanceAdjuster` — applies balance corrections
+    - :class:`BalanceValidator` — validates front/back length balance
+
+    The result is a :class:`BalancedPerson` ready for pattern construction.
 
     Args:
         person: Raw body measurements.
@@ -230,114 +391,30 @@ class PersonAnalyser:
     def __init__(
         self, person: Person, balance_adjustments: BalanceAdjustments | None = None
     ) -> None:
-        """Initialise, derive missing measurements, and balance *person* immediately."""
-        self.person = person
-        self.person_balanced: BalancedPerson | None = None
-        self.balance = balance_adjustments
-        self.optimal_balance = self.get_optimal_balance()
-        self.calculate_measurements()
-        self.balance_person()
+        """Initialize and process *person* through derivation, adjustment, and validation."""
+        self._original_person = person
+        self.balance_adjustments = balance_adjustments
 
-    def _set_armscye_depth(self) -> None:
-        """Derive armscye depth from bust circumference if not already set."""
-        bust = self.person.bust
-        if bust is not None and (bust > 80 * CM) and (bust <= 89 * CM):
-            self.person.armscye_depth = (
-                bust / 10 + 11 * CM
-                if self.person.armscye_depth is None
-                else self.person.armscye_depth
-            )
-        if self.person.armscye_depth is None:
-            raise NotImplementedError(
-                "Matching armscye_depth formula for given bustline is not yet implemented."
-            )
+        # Step 1: Derive missing measurements
+        if person.bust is not None:
+            deriver = MeasurementDeriver(person.bust)
+            self.person = deriver.apply_to_person(person)
+        else:
+            self.person = copy.copy(person)
 
-    def _set_armscye_width(self) -> None:
-        """Derive armscye width from bust circumference if not already set."""
-        bust = self.person.bust
-        if bust is not None and (bust > 80 * CM) and (bust <= 89 * CM):
-            self.person.armscye_width = (
-                bust / 8 - 1.5 * CM
-                if self.person.armscye_width is None
-                else self.person.armscye_width
-            )
-        if self.person.armscye_width is None:
-            raise NotImplementedError(
-                "Matching armscye_width formula for given bustline is not yet implemented."
-            )
+        # Step 2: Apply balance adjustments if provided
+        if balance_adjustments is not None:
+            adjuster = BalanceAdjuster(balance_adjustments)
+            self.person = adjuster.apply_to_person(self.person)
 
-    def _set_chest_width(self) -> None:
-        """Derive chest width from bust circumference if not already set."""
-        bust = self.person.bust
-        if bust is not None and (bust > 80 * CM) and (bust <= 89 * CM):
-            self.person.chest_width = (
-                bust / 4 - 4.0 * CM if self.person.chest_width is None else self.person.chest_width
-            )
-        if self.person.chest_width is None:
-            raise NotImplementedError(
-                "Matching chest_width formula for given bustline is not yet implemented."
-            )
-
-    def _set_back_width(self) -> None:
-        """Derive back width from bust circumference if not already set."""
-        bust = self.person.bust
-        if bust is not None and (bust > 80 * CM) and (bust <= 89 * CM):
-            self.person.back_width = (
-                bust / 8 + 5.5 * CM if self.person.back_width is None else self.person.back_width
-            )
-        if self.person.back_width is None:
-            raise NotImplementedError("Matching formula for given bustline is not yet implemented.")
-
-    def calculate_measurements(self) -> None:
-        """Derive all missing measurements from bust circumference."""
-        if self.person.bust is not None:
-            self._set_armscye_depth()
-            self._set_armscye_width()
-            self._set_chest_width()
-            self._set_back_width()
-
-    def balance_person(self) -> None:
-        """Apply balance adjustments and validate front/back length balance."""
-        person_balanced = copy.deepcopy(self.person)
-        if self.balance is not None:
-            for key, val in self.balance.__dict__.items():
-                person_balanced.__setattr__(key, person_balanced.__getattribute__(key) + val)
-        if person_balanced.gender == Gender.female:
-            fl = person_balanced.front_length
-            bl = person_balanced.back_length
-            if fl is None or bl is None:
-                raise ValueError(
-                    "front_length and back_length must both be set to balance the person."
-                )
-            if (fl - bl) > self.optimal_balance:
-                raise ValueError("front_length and back_length are not properly balanced")
-            else:
-                self.person_balanced = BalancedPerson(person_balanced)
+        # Step 3: Validate balance and create BalancedPerson
+        validator = BalanceValidator(self.person.bust)
+        self.person_balanced = validator.validate(self.person)
 
     def get_balanced_person(self) -> BalancedPerson:
         """Get the validated and balanced person.
 
-        Raises:
-            RuntimeError: If the person has not been balanced.
+        Returns:
+            A BalancedPerson ready for pattern construction.
         """
-        if self.person_balanced is None:
-            raise RuntimeError(
-                "balance_person() did not produce a BalancedPerson. "
-                "Check that front_length and back_length are properly balanced."
-            )
         return self.person_balanced
-
-    def get_optimal_balance(self) -> float:
-        """Determine the optimal front/back balance for the given bustline.
-
-        Raises:
-            NotImplementedError: If the bustline is outside the supported range.
-        """
-        if (
-            self.person.bust is not None
-            and (self.person.bust > 80 * CM)
-            and (self.person.bust <= 89 * CM)
-        ):
-            return 3.5 * CM
-        else:
-            raise NotImplementedError("Matching balance for given bustline is not yet implemented.")
