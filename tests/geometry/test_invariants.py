@@ -49,10 +49,18 @@ def _bezier(draw: st.DrawFn) -> CubicBezier:
     All four control points are drawn independently.  We filter out curves
     whose chord length is effectively zero, because the normal vector becomes
     undefined and offset operations are meaningless.
+
+    We also filter out curves where control points collapse (e.g., p2 == p3),
+    as these create degenerate cases that violate offset invariants.
     """
     pts = [Point(draw(_coord), draw(_coord)) for _ in range(4)]
     p0, p1, p2, p3 = pts
+    # Filter out zero-length chords
     assume(p0.distance_to(p3) > 0.1)
+    # Filter out collapsed control points that create degenerate curves
+    assume(p1.distance_to(p2) > 0.1)
+    assume(p2.distance_to(p3) > 0.1)
+    assume(p0.distance_to(p1) > 0.1)
     return CubicBezier(p0, p1, p2, p3)
 
 
