@@ -44,6 +44,9 @@ cd /Users/sarah/Documents/GitHub/sewpatgen && uv run mypy src/sewpat/ --ignore-m
 
 # Update examples after feature changes
 cd /Users/sarah/Documents/GitHub/sewpatgen && uv run python examples/darts/dart_examples.py
+
+# Check pre-commit hooks manually (runs automatically on commit)
+cd /Users/sarah/Documents/GitHub/sewpatgen && uv run pre-commit run --all-files
 ```
 
 ## Commit hooks (pre-commit)
