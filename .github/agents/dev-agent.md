@@ -21,14 +21,15 @@ You are an expert Python developer working on the `sewpat` sewing pattern genera
 | numpy | ≥ 2.2.0 | Numeric arrays |
 | ruff | 0.15.4 | Lint + format (line length 100, Google docstrings) |
 | mypy | latest | Static type checking |
-| pytest | latest | Test suite |
+| pytest | latest | **Test suite (pytest-only, no unittest)** |
 
 ## File structure
 - `src/sewpat/` – Library source; keep modules single-responsibility
 - `src/sewpat/geometry/` – Pure geometry primitives and algorithms only
 - `src/sewpat/pattern/` – Pattern assembly (parts, SA, notches, darts)
 - `examples/` – Runnable real-world examples
-- `tests/` – pytest unit + integration tests
+- `tests/` – **pytest unit + integration tests (no unittest.TestCase)**
+- `tests/conftest.py` – Shared fixtures (standard_person, standard_blouse_measurements, standard_fitclass)
 
 ## Commands
 ```bash
@@ -72,6 +73,35 @@ Run manually: `uv run pre-commit run --all-files`
 - All public functions and methods must have **type annotations**
 - Use `_private` prefix for internal helpers not part of the public API
 
+## Testing practices (pytest-only)
+- **pytest-only:** All new tests must use pytest (no `unittest.TestCase`)
+- **Use fixtures from `tests/conftest.py`:**
+  - `standard_person` for Person instances
+  - `standard_blouse_measurements` for BlouseMeasurements
+  - `standard_fitclass` for FitClass(pk=4)
+- **Fixture dependency injection:** Use type-hinted parameters, not manual factory calls
+- **Native assertions:** Use `assert` with `pytest.approx()`, not `self.assert*`
+- **Parametrize data-driven tests:** Use `@pytest.mark.parametrize` for multiple inputs
+- **Test function naming:** `test_<module>_<what_it_does>` (e.g., `test_person_defaults_are_none`)
+- **No test classes needed:** Flat structure with comment sections for organization
+- **Docstrings:** One-line summary explaining what the test verifies
+
+### Example test structure
+```python
+import pytest
+from sewpat.person import Person
+
+def test_person_defaults_are_none():
+    """All measurement fields default to None."""
+    p = Person()
+    assert p.bust is None
+    assert p.waist is None
+
+def test_person_with_measurements(standard_person: Person):
+    """Fixture injection example."""
+    assert standard_person.bust == pytest.approx(86 * 10)  # 86 cm in mm
+```
+
 ## Documentation practices
 - Google-style docstrings, concise and value-dense
 - One-line summary, then `Args:` / `Returns:` / `Raises:` only when non-obvious
@@ -79,5 +109,6 @@ Run manually: `uv run pre-commit run --all-files`
 
 ## Boundaries
 - ✅ **Always do:** Run pytest, run ruff, run mypy, update examples when relevant
+- ✅ **New tests:** Use pytest-only (fixtures, parametrize, native assert)
 - ⚠️ **Ask first:** Before major structural changes to existing `src/` modules
-- 🚫 **Never do:** Commit secrets, skip the pre-commit checks, add god-classes
+- 🚫 **Never do:** Commit secrets, skip pre-commit checks, add god-classes, **use unittest.TestCase for new tests**

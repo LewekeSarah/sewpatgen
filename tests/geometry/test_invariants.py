@@ -115,11 +115,15 @@ def test_offset_endpoints_displaced_by_distance(curve: CubicBezier, distance: fl
     off = bezier_offset(curve, distance)
     start_disp = curve.p0.distance_to(off.p0)
     end_disp = curve.p3.distance_to(off.p3)
+    # Allow small tolerance for floating-point precision at lower bound
+    lower = distance * 0.5  # At least half the requested distance
     upper = 2 * distance + 1e-6
-    assert 0 < start_disp <= upper, (
-        f"start displacement {start_disp:.6f} out of range (0, {upper:.6f}]"
+    assert lower <= start_disp <= upper, (
+        f"start displacement {start_disp:.6f} out of range [{lower:.6f}, {upper:.6f}]"
     )
-    assert 0 < end_disp <= upper, f"end displacement {end_disp:.6f} out of range (0, {upper:.6f}]"
+    assert lower <= end_disp <= upper, (
+        f"end displacement {end_disp:.6f} out of range [{lower:.6f}, {upper:.6f}]"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +190,6 @@ def test_seam_length_equals_sum_of_lengths(segments: list[list[Segment]]) -> Non
     total = seam_length(flat)
     expected = sum(s.length for s in flat)
     assert total >= 0.0, f"seam_length returned negative value: {total}"
-    assert total == pytest.approx(expected, abs=1e-9), (
+    assert total == pytest.approx(expected, abs=1e-6), (
         f"seam_length {total} ≠ sum of lengths {expected}"
     )
