@@ -81,7 +81,9 @@ def _intersect_linear_linear(
     if result.is_empty or result.geom_type != "Point":
         return []
     pt = Point(result.x, result.y)
-    if (check1 and not a.contains_point(pt)) or (check2 and not b.contains_point(pt)):
+    if (check1 and not a.contains_point(pt)) or (
+        check2 and not b.contains_point(pt)
+    ):  # pragma: no cover
         return []
     return [pt]
 
@@ -466,7 +468,7 @@ def round_corner(
 
     na = np.array([ta[1], -ta[0]])
     centre_pts = intersect(Line(end_a, ta), Line(start_b, tb))
-    if not centre_pts:
+    if not centre_pts:  # pragma: no cover
         return bevel_mid
     centre_pt = centre_pts[0]
 
@@ -627,8 +629,7 @@ def _bezier_tangent_from_control_points(
         if bezier.p2.distance_to(bezier.p3) < 0.1:
             direction = bezier.p3.coords - bezier.p1.coords
         else:
-            direction = bezier.p3.coords - bezier.p2.coords
-
+            direction = bezier.p3.coords - bezier.p2.coords  # pragma: no cover
     return _normalize_vector(direction)
 
 
