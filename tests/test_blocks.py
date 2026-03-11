@@ -234,3 +234,16 @@ def test_top_block_custom_layout(
         meas=standard_blouse_measurements, config=config, fit_class=standard_fitclass, layout=layout
     )
     assert isinstance(block, TopBlock)
+
+
+def test_top_block_without_fit_class_defaults_to_pk4(
+    standard_blouse_measurements: BlouseMeasurements,
+):
+    """from_measurements with fit_class=None auto-creates FitClass(pk=4) (lines 845-847)."""
+    config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
+    block = TopBlock.from_measurements(
+        meas=standard_blouse_measurements,
+        config=config,
+        fit_class=None,  # triggers lazy import + default construction
+    )
+    assert isinstance(block, TopBlock)

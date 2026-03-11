@@ -228,8 +228,22 @@ def bezier_offset_adaptive(
         return [approx]
 
     left, right = curve.split(0.5)
-    return bezier_offset_adaptive(
+    left_segs = bezier_offset_adaptive(
         left, d, center=None, eps=eps, _depth=_depth + 1, _max_depth=_max_depth
-    ) + bezier_offset_adaptive(
+    )
+    right_segs = bezier_offset_adaptive(
         right, d, center=None, eps=eps, _depth=_depth + 1, _max_depth=_max_depth
     )
+    # Snap the join point: the end of the left chain and the start of the right
+    # chain must coincide.  At inflection points the hodograph normal flips sign,
+    # so the two half-offsets may land at different positions.  We resolve the
+    # gap by moving both endpoints to their midpoint.
+    join = left_segs[-1].p3
+    start = right_segs[0].p0
+    if join.distance_to(start) > 1e-9:
+        mid = Point((join.x + start.x) * 0.5, (join.y + start.y) * 0.5)
+        last = left_segs[-1]
+        left_segs[-1] = CubicBezier(last.p0, last.p1, last.p2, mid, name=last.name)
+        first = right_segs[0]
+        right_segs[0] = CubicBezier(mid, first.p1, first.p2, first.p3, name=first.name)
+    return left_segs + right_segs

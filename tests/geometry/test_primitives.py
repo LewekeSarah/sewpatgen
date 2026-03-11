@@ -1159,3 +1159,61 @@ def test_dart_roof_rise_increases_with_wider_dart():
     rise_narrow = np.linalg.norm(dart_narrow.roof.coords - dart_narrow.center.coords)
     rise_wide = np.linalg.norm(dart_wide.roof.coords - dart_wide.center.coords)
     assert rise_wide > rise_narrow
+
+
+# =============================================================================
+# Additional coverage: Point, Segment, _LinearGeom gaps
+# =============================================================================
+
+
+def test_point_str_with_name_contains_name():
+    """Point.__str__ with a name set includes that name (Point is a frozen dataclass)."""
+    p = Point(1.0, 2.0)
+    object.__setattr__(p, "name", "side_seam")
+    assert "side_seam" in str(p)
+
+
+def test_point_eq_non_point_returns_not_implemented():
+    """Point.__eq__ with a non-Point returns NotImplemented."""
+    result = Point(0, 0).__eq__("not a point")
+    assert result is NotImplemented
+
+
+def test_point_hash_equal_points_match():
+    """Two identical Points have the same hash."""
+    p1 = Point(3.0, 7.0)
+    p2 = Point(3.0, 7.0)
+    assert hash(p1) == hash(p2)
+
+
+def test_point_distance_to_numpy_array():
+    """Point.distance_to also accepts a numpy array (non-Point branch)."""
+    p = Point(3.0, 4.0)
+    assert p.distance_to(p.coords) == pytest.approx(0.0)
+
+
+def test_segment_from_direction_zero_vector_raises():
+    """Segment.from_direction raises ValueError when start == through."""
+    p = Point(0, 0)
+    with pytest.raises(ValueError):
+        from sewpat.geometry import Segment as S
+
+        S.from_direction(p, p, 10.0)
+
+
+def test_segment_split_at_points_boundary_point_returns_one():
+    """split_at_points with a point at the endpoint returns a single segment."""
+    seg = Segment(Point(0, 0), Point(100, 0))
+    # Point exactly at p1 is filtered out by the eps guard
+    result = seg.split_at_points([Point(0, 0)])
+    assert len(result) == 1
+
+
+def test_linear_geom_point_perpendicular_via_segment():
+    """_LinearGeom.point_perpendicular returns correctly offset point."""
+    from sewpat.geometry._primitives import Segment as Seg
+
+    seg = Seg(Point(0, 0), Point(100, 0))
+    pt = seg.point_perpendicular(distance=20, arc_length=50)
+    assert pt.x == pytest.approx(50)
+    assert pt.y == pytest.approx(20)

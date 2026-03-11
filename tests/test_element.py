@@ -91,6 +91,18 @@ def test_split_at_dart_cubic_bezier_splits():
     assert len(children) >= 1
 
 
+def test_split_at_dart_named_geometry_propagates_name():
+    """Children inherit the geometry name when the parent geometry has one (line 137)."""
+    seg = Segment(Point(0, 0), Point(10 * CM, 0))
+    seg = seg.set_name("side_seam")
+    dart = _make_dart(seg)
+    elem = PatternElement(seg, is_outline=True)
+    children = elem.split_at_dart(dart)
+    # At least one child's geometry should carry the parent name
+    names = [getattr(c.geometry, "name", None) for c in children]
+    assert any(n == "side_seam" for n in names)
+
+
 # ---------------------------------------------------------------------------
 # PrecisionPoint
 # ---------------------------------------------------------------------------

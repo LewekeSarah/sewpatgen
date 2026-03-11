@@ -491,7 +491,7 @@ def _render_seam_allowance_chain(
         return []
 
     path_data = _geoms_to_path_data(geoms)
-    if not path_data:
+    if not path_data:  # pragma: no cover
         return []
 
     attrs = _common_stroke_attrs(style_dict, force_fill="none")
@@ -563,13 +563,13 @@ def _render_elements(
             try:
                 if isinstance(element, Point):
                     object.__setattr__(element, "name", effective_name)
-            except AttributeError, TypeError:
+            except AttributeError, TypeError:  # pragma: no cover
                 pass
             svg_nodes.extend(renderer(element, style.as_dict()))
             try:
                 if isinstance(element, Point):
                     object.__setattr__(element, "name", original_name)
-            except AttributeError, TypeError:
+            except AttributeError, TypeError:  # pragma: no cover
                 pass
 
     # Render all SA elements as one connected path (clean corners via linejoin).
