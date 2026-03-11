@@ -624,12 +624,13 @@ def _bezier_tangent_from_control_points(
             direction = bezier.p2.coords - bezier.p0.coords
         else:
             direction = bezier.p1.coords - bezier.p0.coords
+        return _normalize_vector(direction)
+    # near_start=False: incoming direction at p3
+    if bezier.p2.distance_to(bezier.p3) < 0.1:
+        direction = bezier.p3.coords - bezier.p1.coords
     else:
-        # Incoming direction: p2 → p3 (or p1 → p3 if p2 ≈ p3)
-        if bezier.p2.distance_to(bezier.p3) < 0.1:
-            direction = bezier.p3.coords - bezier.p1.coords
-        else:
-            direction = bezier.p3.coords - bezier.p2.coords  # pragma: no cover
+        direction = bezier.p3.coords - bezier.p2.coords
+
     return _normalize_vector(direction)
 
 
