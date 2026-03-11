@@ -16,7 +16,6 @@ from sewpat.person import (
     BalanceAdjustments,
     Gender,
     Person,
-    PersonAnalyser,
 )
 from sewpat.units import CM
 
@@ -222,64 +221,38 @@ def test_make_measurements_trouser_with_balance_adjustments(boy_person: Person, 
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def balanced_person_for_top():
-    """Balanced person for top measurements tests."""
-    bust = 86 * CM
-    p = Person(
-        bust=bust,
-        waist=70 * CM,
-        hip=96 * CM,
-        hip_depth=20 * CM,
-        bust_depth=26 * CM,
-        neck_size=7 * CM,
-        bust_span=9 * CM,
-        shoulder_width=13 * CM,
-        back_length=41 * CM,
-        front_length=43 * CM,
-        back_width=bust / 8 + 5.5 * CM,
-        armscye_depth=bust / 10 + 11 * CM,
-        armscye_width=bust / 8 - 1.5 * CM,
-        chest_width=bust / 4 - 4.0 * CM,
-    )
-    analyser = PersonAnalyser(p)
-    return analyser.get_balanced_person()
-
-
 def test_make_top_measurements_returns_blouse_measurements(
-    balanced_person_for_top, standard_fitclass: FitClass
+    balanced_person, standard_fitclass: FitClass
 ):
     """Returns a BlouseMeasurements instance."""
-    meas = make_top_measurements(balanced_person_for_top, standard_fitclass)
+    meas = make_top_measurements(balanced_person, standard_fitclass)
     assert isinstance(meas, BlouseMeasurements)
 
 
 def test_make_top_measurements_bust_width_ease_applied(
-    balanced_person_for_top, standard_fitclass: FitClass
+    balanced_person, standard_fitclass: FitClass
 ):
     """bust_width is augmented by bust_width_ease."""
-    meas = make_top_measurements(balanced_person_for_top, standard_fitclass)
-    expected_bust_width = balanced_person_for_top.person.bust + standard_fitclass.bust_width_ease
+    meas = make_top_measurements(balanced_person, standard_fitclass)
+    expected_bust_width = balanced_person.person.bust + standard_fitclass.bust_width_ease
     assert meas.bust_width == pytest.approx(expected_bust_width, abs=1e-4)
 
 
 def test_make_top_measurements_waist_width_ease_applied(
-    balanced_person_for_top, standard_fitclass: FitClass
+    balanced_person, standard_fitclass: FitClass
 ):
     """waist_width = waist + waist_ease."""
-    meas = make_top_measurements(balanced_person_for_top, standard_fitclass)
+    meas = make_top_measurements(balanced_person, standard_fitclass)
     assert meas.waist_width == pytest.approx(
-        balanced_person_for_top.person.waist + standard_fitclass.waist_ease,
+        balanced_person.person.waist + standard_fitclass.waist_ease,
         abs=1e-4,
     )
 
 
-def test_make_top_measurements_hip_width_ease_applied(
-    balanced_person_for_top, standard_fitclass: FitClass
-):
+def test_make_top_measurements_hip_width_ease_applied(balanced_person, standard_fitclass: FitClass):
     """hip_width = hip + hip_ease."""
-    meas = make_top_measurements(balanced_person_for_top, standard_fitclass)
+    meas = make_top_measurements(balanced_person, standard_fitclass)
     assert meas.hip_width == pytest.approx(
-        balanced_person_for_top.person.hip + standard_fitclass.hip_ease,
+        balanced_person.person.hip + standard_fitclass.hip_ease,
         abs=1e-4,
     )

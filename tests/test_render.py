@@ -56,25 +56,6 @@ def _part_with(*geometries_and_styles) -> PatternPart:
     return part
 
 
-def _simple_part() -> PatternPart:
-    """A minimal PatternPart with one Segment."""
-    part = PatternPart(name="body")
-    part.append(Segment(Point(0, 0), Point(10, 0)))
-    return part
-
-
-def _simple_pattern(name: str = "My Pattern") -> Pattern:
-    """A Pattern with two parts."""
-    pat = Pattern(name=name)
-    p1 = PatternPart(name="front")
-    p1.append(Segment(Point(0, 0), Point(10, 0)))
-    pat.add_part(p1)
-    p2 = PatternPart(name="back")
-    p2.append(Rect(Point(20, 0), width=5, height=8))
-    pat.add_part(p2)
-    return pat
-
-
 # ---------------------------------------------------------------------------
 # _resolve_styles
 # ---------------------------------------------------------------------------
@@ -210,10 +191,9 @@ def test_build_svg_empty_element_groups_produces_valid_svg():
     assert svg.strip().endswith("</svg>")
 
 
-def test_build_svg_element_group_content_rendered():
+def test_build_svg_element_group_content_rendered(simple_part):
     """Element group content is rendered."""
-    part = _simple_part()
-    svg = _build_svg(**_default_build_svg_kwargs(element_groups=[part.elements]))
+    svg = _build_svg(**_default_build_svg_kwargs(element_groups=[simple_part.elements]))
     assert "<line " in svg
 
 
@@ -612,22 +592,20 @@ def test_render_bezier_name_rendered():
 # ---------------------------------------------------------------------------
 
 
-def test_export_pattern_part_creates_file():
+def test_export_pattern_part_creates_file(simple_part):
     """export_pattern_part_svg_mm creates a file."""
-    part = _simple_part()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_part_svg_mm(part, fname)
+    export_pattern_part_svg_mm(simple_part, fname)
     assert Path(fname).exists()
     assert Path(fname).stat().st_size > 0
 
 
-def test_export_pattern_part_contains_valid_svg():
+def test_export_pattern_part_contains_valid_svg(simple_part):
     """export_pattern_part_svg_mm produces valid SVG."""
-    part = _simple_part()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_part_svg_mm(part, fname)
+    export_pattern_part_svg_mm(simple_part, fname)
     content = Path(fname).read_text()
     assert "<svg " in content
     assert "</svg>" in content
@@ -644,12 +622,11 @@ def test_export_pattern_part_name_in_output():
     assert "Sleeve" in content
 
 
-def test_export_pattern_part_custom_canvas_size():
+def test_export_pattern_part_custom_canvas_size(simple_part):
     """Custom canvas size is respected."""
-    part = _simple_part()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_part_svg_mm(part, fname, width_mm=420, height_mm=594)
+    export_pattern_part_svg_mm(simple_part, fname, width_mm=420, height_mm=594)
     content = Path(fname).read_text()
     assert 'width="420mm"' in content
     assert 'height="594mm"' in content
@@ -709,13 +686,12 @@ def test_export_pattern_part_style_map_known_key_does_not_raise():
     )
 
 
-def test_export_pattern_part_style_map_unknown_key_raises():
+def test_export_pattern_part_style_map_unknown_key_raises(simple_part):
     """An unknown style_map key raises ValueError."""
-    part = _simple_part()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
     with pytest.raises(ValueError):
-        export_pattern_part_svg_mm(part, fname, style_map={"no_such_key": StyleOptions()})
+        export_pattern_part_svg_mm(simple_part, fname, style_map={"no_such_key": StyleOptions()})
 
 
 # ---------------------------------------------------------------------------
@@ -723,21 +699,19 @@ def test_export_pattern_part_style_map_unknown_key_raises():
 # ---------------------------------------------------------------------------
 
 
-def test_export_pattern_creates_file():
+def test_export_pattern_creates_file(simple_pattern):
     """export_pattern_svg_mm creates a file."""
-    pat = _simple_pattern()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_svg_mm(pat, fname)
+    export_pattern_svg_mm(simple_pattern, fname)
     assert Path(fname).exists()
 
 
-def test_export_pattern_contains_valid_svg():
+def test_export_pattern_contains_valid_svg(simple_pattern):
     """export_pattern_svg_mm produces valid SVG."""
-    pat = _simple_pattern()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_svg_mm(pat, fname)
+    export_pattern_svg_mm(simple_pattern, fname)
     content = Path(fname).read_text()
     assert "<svg " in content
     assert "</svg>" in content
@@ -745,7 +719,10 @@ def test_export_pattern_contains_valid_svg():
 
 def test_export_pattern_name_in_output():
     """Pattern name appears in output."""
-    pat = _simple_pattern(name="Holiday Tote")
+    pat = Pattern(name="Holiday Tote")
+    p = PatternPart(name="front")
+    p.append(Segment(Point(0, 0), Point(10, 0)))
+    pat.add_part(p)
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
     export_pattern_svg_mm(pat, fname)
@@ -753,74 +730,65 @@ def test_export_pattern_name_in_output():
     assert "Holiday Tote" in content
 
 
-def test_export_pattern_all_parts_rendered_by_default():
+def test_export_pattern_all_parts_rendered_by_default(simple_pattern):
     """All parts are rendered by default."""
-    pat = _simple_pattern()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_svg_mm(pat, fname)
+    export_pattern_svg_mm(simple_pattern, fname)
     content = Path(fname).read_text()
     # front has a <line>, back has a <rect>
     assert "<line " in content
     assert "<rect " in content
 
 
-def test_export_pattern_parts_filter_includes_only_named():
+def test_export_pattern_parts_filter_includes_only_named(simple_pattern):
     """parts filter includes only named parts."""
-    pat = _simple_pattern()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_svg_mm(pat, fname, parts=["front"])
+    export_pattern_svg_mm(simple_pattern, fname, parts=["front"])
     content = Path(fname).read_text()
     assert "<line " in content  # front has a segment
     assert "<rect " not in content  # back (rect) excluded
 
 
-def test_export_pattern_parts_filter_empty_list_renders_nothing():
+def test_export_pattern_parts_filter_empty_list_renders_nothing(simple_pattern):
     """Empty parts list renders nothing from parts."""
-    pat = _simple_pattern()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_svg_mm(pat, fname, parts=[])
+    export_pattern_svg_mm(simple_pattern, fname, parts=[])
     content = Path(fname).read_text()
     assert "<line " not in content
     assert "<rect " not in content
 
 
-def test_export_pattern_parts_filter_nonexistent_name_renders_nothing():
+def test_export_pattern_parts_filter_nonexistent_name_renders_nothing(simple_pattern):
     """Nonexistent part name renders nothing."""
-    pat = _simple_pattern()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_svg_mm(pat, fname, parts=["nonexistent"])
+    export_pattern_svg_mm(simple_pattern, fname, parts=["nonexistent"])
     content = Path(fname).read_text()
     assert "<line " not in content
 
 
-def test_export_pattern_reference_square_always_rendered():
+def test_export_pattern_reference_square_always_rendered(simple_pattern):
     """Reference square is always rendered even with parts filter."""
-    pat = _simple_pattern()
-    pat.add_reference_square(origin=Point(5, 5), edge_length=3 * CM)
+    simple_pattern.add_reference_square(origin=Point(5, 5), edge_length=3 * CM)
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    # Even with only one part selected the reference square must appear
-    export_pattern_svg_mm(pat, fname, parts=["front"])
+    export_pattern_svg_mm(simple_pattern, fname, parts=["front"])
     content = Path(fname).read_text()
-    rect_count = content.count("<rect ")
-    assert rect_count >= 1  # at least the reference square
+    assert content.count("<rect ") >= 1  # at least the reference square
 
 
-def test_export_pattern_reference_square_with_all_parts():
+def test_export_pattern_reference_square_with_all_parts(simple_pattern):
     """Reference square is rendered when all parts are selected."""
-    pat = _simple_pattern()
-    pat.add_reference_square(origin=Point(5, 5), edge_length=3 * CM)
+    simple_pattern.add_reference_square(origin=Point(5, 5), edge_length=3 * CM)
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_svg_mm(pat, fname)
+    export_pattern_svg_mm(simple_pattern, fname)
     content = Path(fname).read_text()
     # back part has 1 rect, reference square adds 1 more → at least 2
-    rect_count = content.count("<rect ")
-    assert rect_count >= 2
+    assert content.count("<rect ") >= 2
 
 
 def test_export_pattern_no_reference_square_when_not_set():
@@ -836,12 +804,11 @@ def test_export_pattern_no_reference_square_when_not_set():
     assert "<rect " not in content
 
 
-def test_export_pattern_custom_canvas_size():
+def test_export_pattern_custom_canvas_size(simple_pattern):
     """Custom canvas size is respected."""
-    pat = _simple_pattern()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_svg_mm(pat, fname, width_mm=150, height_mm=200)
+    export_pattern_svg_mm(simple_pattern, fname, width_mm=150, height_mm=200)
     content = Path(fname).read_text()
     assert 'width="150mm"' in content
     assert 'height="200mm"' in content
@@ -862,13 +829,12 @@ def test_export_pattern_style_map_known_key_does_not_raise():
     )
 
 
-def test_export_pattern_style_map_unknown_key_raises():
+def test_export_pattern_style_map_unknown_key_raises(simple_pattern):
     """An unknown style_map key raises ValueError."""
-    pat = _simple_pattern()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
     with pytest.raises(ValueError):
-        export_pattern_svg_mm(pat, fname, style_map={"bogus": StyleOptions()})
+        export_pattern_svg_mm(simple_pattern, fname, style_map={"bogus": StyleOptions()})
 
 
 def test_export_pattern_empty_pattern_produces_valid_svg():
@@ -882,12 +848,11 @@ def test_export_pattern_empty_pattern_produces_valid_svg():
     assert "</svg>" in content
 
 
-def test_export_pattern_arrow_defs_always_present():
+def test_export_pattern_arrow_defs_always_present(simple_pattern):
     """Arrow defs are always present."""
-    pat = _simple_pattern()
     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
         fname = f.name
-    export_pattern_svg_mm(pat, fname)
+    export_pattern_svg_mm(simple_pattern, fname)
     content = Path(fname).read_text()
     assert 'id="arrow"' in content
 
@@ -911,40 +876,22 @@ def test_export_pattern_show_construction_false_hides_construction():
 # ---------------------------------------------------------------------------
 
 
-def _svg_for_geometry(geometry) -> str:
-    """Render a single element and return the SVG string."""
-    part = PatternPart(name="p")
-    part.append(geometry)
-    return _build_svg(
-        title="t",
-        element_groups=[part.elements],
-        width_mm=200,
-        height_mm=200,
-        margin_mm=5,
-        show_construction=True,
-        show_bezier_control_points=False,
-    )
-
-
-def test_element_geometry_name_appears():
+def test_element_geometry_name_appears(svg_for_geometry):
     """The geometry name is used as the element label in the SVG."""
     seg = Segment(Point(0, 0), Point(10, 0), name="geo_name")
-    svg = _svg_for_geometry(seg)
-    assert "geo_name" in svg
+    assert "geo_name" in svg_for_geometry(seg)
 
 
-def test_element_set_name_updates_label():
+def test_element_set_name_updates_label(svg_for_geometry):
     """Calling set_name() before rendering changes the label in the SVG."""
     seg = Segment(Point(0, 0), Point(10, 0), name="original")
     seg.set_name("updated")
-    svg = _svg_for_geometry(seg)
+    svg = svg_for_geometry(seg)
     assert "updated" in svg
     assert "original" not in svg
 
 
-def test_element_no_name_renders_without_label():
+def test_element_no_name_renders_without_label(svg_for_geometry):
     """A geometry with no name produces no spurious label in the SVG."""
     seg = Segment(Point(0, 0), Point(10, 0))
-    svg = _svg_for_geometry(seg)
-    # Just verify it renders without error — no name label expected.
-    assert "<svg" in svg
+    assert "<svg" in svg_for_geometry(seg)

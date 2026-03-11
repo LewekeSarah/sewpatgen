@@ -50,38 +50,34 @@ def test_fitclass_range_unknown_field_raises(standard_fitclass: FitClass):
 # ---------------------------------------------------------------------------
 
 
-def test_fitclass_override_within_range_accepted():
+def test_fitclass_override_within_range_accepted(standard_fitclass: FitClass):
     """Override within [lo, hi] is accepted and returned."""
-    fc = FitClass(pk=4)
-    r = fc.range("back_width_ease")
+    r = standard_fitclass.range("back_width_ease")
     mid = (r.lo + r.hi) / 2
     fc2 = FitClass(pk=4, back_width_ease=mid)
     assert fc2.back_width_ease == pytest.approx(mid)
 
 
-def test_fitclass_override_below_range_raises():
+def test_fitclass_override_below_range_raises(standard_fitclass: FitClass):
     """Override below lo raises ValueError."""
-    fc = FitClass(pk=4)
-    r = fc.range("back_width_ease")
+    r = standard_fitclass.range("back_width_ease")
     with pytest.raises(ValueError):
         FitClass(pk=4, back_width_ease=r.lo - 1.0 * CM)
 
 
-def test_fitclass_override_above_range_raises():
+def test_fitclass_override_above_range_raises(standard_fitclass: FitClass):
     """Override above hi raises ValueError."""
-    fc = FitClass(pk=4)
-    r = fc.range("back_width_ease")
+    r = standard_fitclass.range("back_width_ease")
     with pytest.raises(ValueError):
         FitClass(pk=4, back_width_ease=r.hi + 1.0 * CM)
 
 
-def test_fitclass_all_fields_can_be_overridden():
+def test_fitclass_all_fields_can_be_overridden(standard_fitclass: FitClass):
     """Every EASE_FIELD can be set to its hi value without error."""
-    fc_ref = FitClass(pk=4)
-    kwargs = {ef: fc_ref.range(ef).hi for ef in EASE_FIELDS}
+    kwargs = {ef: standard_fitclass.range(ef).hi for ef in EASE_FIELDS}
     fc2 = FitClass(pk=4, **kwargs)
     for ef in EASE_FIELDS:
-        assert getattr(fc2, ef) == pytest.approx(fc_ref.range(ef).hi)
+        assert getattr(fc2, ef) == pytest.approx(standard_fitclass.range(ef).hi)
 
 
 # ---------------------------------------------------------------------------
@@ -102,24 +98,21 @@ def test_fitclass_unpopulated_pk_raises():
         FitClass(pk=0)
 
 
-def test_fitclass_resolve_uses_table_hi_when_no_override():
+def test_fitclass_resolve_uses_table_hi_when_no_override(standard_fitclass: FitClass):
     """Without override the resolved value equals table hi."""
-    fc = FitClass(pk=4)
-    r = fc.range("waist_ease")
-    assert fc.waist_ease == pytest.approx(r.hi)
+    r = standard_fitclass.range("waist_ease")
+    assert standard_fitclass.waist_ease == pytest.approx(r.hi)
 
 
-def test_fitclass_override_at_boundary_lo():
+def test_fitclass_override_at_boundary_lo(standard_fitclass: FitClass):
     """Override exactly at lo is accepted."""
-    fc = FitClass(pk=4)
-    r = fc.range("hip_ease")
+    r = standard_fitclass.range("hip_ease")
     fc2 = FitClass(pk=4, hip_ease=r.lo)
     assert fc2.hip_ease == pytest.approx(r.lo)
 
 
-def test_fitclass_override_at_boundary_hi():
+def test_fitclass_override_at_boundary_hi(standard_fitclass: FitClass):
     """Override exactly at hi is accepted."""
-    fc = FitClass(pk=4)
-    r = fc.range("hip_ease")
+    r = standard_fitclass.range("hip_ease")
     fc2 = FitClass(pk=4, hip_ease=r.hi)
     assert fc2.hip_ease == pytest.approx(r.hi)
