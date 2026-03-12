@@ -8,6 +8,7 @@ coverage.xml
 *$py.class
 *.so
 *.svg
+!examples/darts/*.svg
 .Python
 build/
 develop-eggs/
