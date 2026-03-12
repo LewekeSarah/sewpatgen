@@ -62,14 +62,7 @@ class PatternElement:
         self.is_seam_allowance = is_seam_allowance
         self.is_seam_notch: bool = False
         self.is_construction: bool = is_construction
-        # Internal: outward-direction reference for SA offset computation.
-        # None → use the part centroid (default for all elements).
-        # Set to dart.tip by add_dart() for roof segments so the offset always
-        # goes away from the tip, which is the physically correct direction
-        # regardless of where the centroid is relative to the roof geometry.
         self._sa_center: object | None = None
-        # Internal: set by add_dart() on dart-center/leg notch elements so that
-        # _project_dart_notches_to_sa() can access the parent Dart and leg point.
         self._dart_ref: Dart | None = None
         self._leg_pt: Point | None = None
 
@@ -127,8 +120,6 @@ class PatternElement:
 
         all_subs = geom.split_at_points([dart.leg_a, dart.leg_b])
 
-        # With two split points the dart mouth is the middle sub-segment (index 1).
-        # When a leg coincides with an endpoint fewer pieces are returned — keep all.
         outer_subs = all_subs[:1] + all_subs[2:] if len(all_subs) >= 3 else all_subs
 
         result: list[PatternElement] = []
@@ -159,8 +150,8 @@ class PrecisionPoint:
 
     Args:
         center: The point at which to place the precision mark.
-        outer_radius: Radius of the outer circle in mm. Defaults to 2 mm.
-        inner_radius: Radius of the inner circle in mm. Defaults to 0.2 mm.
+        outer_radius: Radius of the outer circle in mm. Defaults to 5 mm.
+        inner_radius: Radius of the inner circle in mm. Defaults to 0.5 mm.
         style: Visual style for both circles. Defaults to
             :data:`~sewpat.style.STYLE_PRECISION_POINT`.
     """
@@ -168,8 +159,8 @@ class PrecisionPoint:
     def __init__(
         self,
         center: Point,
-        outer_radius: float = 2.0 * MM,
-        inner_radius: float = 0.2 * MM,
+        outer_radius: float = 5.0 * MM,
+        inner_radius: float = 0.5 * MM,
         style: StyleOptions | None = None,
     ) -> None:
         """Initialise with *center*, radii, and optional style override."""

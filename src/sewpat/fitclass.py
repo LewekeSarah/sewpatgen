@@ -35,10 +35,6 @@ import pandas as pd
 
 from .units import CM
 
-# ---------------------------------------------------------------------------
-# CSV loader — executed once at import time
-# ---------------------------------------------------------------------------
-
 _CSV_PATH = Path(__file__).parent / "data" / "fitclass.csv"
 
 #: Ease fields exposed on FitClass (matches CSV column level-0 names).
@@ -76,10 +72,6 @@ def _load_table() -> dict[int, dict[str, _Range]]:
 
 
 _TABLE: dict[int, dict[str, _Range]] = _load_table()
-
-# ---------------------------------------------------------------------------
-# FitClass
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -172,10 +164,6 @@ class FitClass:
         if override is not None:
             return float(override)
         return float(_TABLE[self.pk][field_name].hi)
-
-    # ------------------------------------------------------------------
-    # Public properties — no prefix needed, always return resolved value
-    # ------------------------------------------------------------------
 
     @property
     def back_width_ease(self) -> float:

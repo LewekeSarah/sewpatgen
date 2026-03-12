@@ -1,6 +1,10 @@
 # Python
 __pycache__/
 *.py[cod]
+.coverage
+coverage.json
+.hypothesis
+coverage.xml
 *$py.class
 *.so
 *.svg
@@ -21,6 +25,9 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+# MkDocs build output
+site/
 
 # Virtual environments
 .env

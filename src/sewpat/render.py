@@ -16,8 +16,6 @@ from sewpat.geometry import (
     Rect,
     Segment,
     Triangle,
-    geom_end,
-    geom_start,
 )
 from sewpat.markers import ARROW_DEFS, SCISSOR_BLADE_OVERHANG
 from sewpat.pattern import (
@@ -40,21 +38,12 @@ __all__ = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Default style registry
-# ---------------------------------------------------------------------------
-
 _DEFAULT_STYLES: dict[str, StyleOptions] = {
     "segment": StyleOptions(),
     "point": StyleOptions(fill_color="black", stroke_width=0.1),
     "circle": StyleOptions(),
     "cubicbezier": StyleOptions(),
 }
-
-
-# ---------------------------------------------------------------------------
-# Private per-element rendering helpers
-# ---------------------------------------------------------------------------
 
 
 def _xml_escape(text: str) -> str:
@@ -178,8 +167,6 @@ def _render_segment(
     font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
     attrs = _common_stroke_attrs(style_dict, force_fill="none")
 
-    # marker-start: arrows use a dedicated reversed marker id; distance uses its
-    # own start variant; others use the enum value directly.
     ms = style_dict.get("marker-start")
     if ms == "arrow":
         attrs += ' marker-start="url(#arrow)"'
@@ -188,8 +175,6 @@ def _render_segment(
     elif ms:
         attrs += f' marker-start="url(#{ms})"'
 
-    # marker-end: arrows use a dedicated "arrow-end" marker id; distance uses its
-    # own end variant; others use the enum value directly.
     me = style_dict.get("marker-end")
     if me == "arrow":
         attrs += ' marker-end="url(#arrow-end)"'
@@ -198,9 +183,7 @@ def _render_segment(
     elif me:
         attrs += f' marker-end="url(#{me})"'
 
-    # For the scissor marker the refX is at the blade crossing, but the blade
-    # tips reach back _SCISSOR_BLADE_OVERHANG mm into the line. Shorten p2 so
-    # the visible line terminates exactly at the blade tips.
+    # Shorten p2 so the visible line ends at the blade tips, not the refX crossing.
     x2, y2 = element.p2.x, element.p2.y
     if me == "scissor":
         dx = element.p2.x - element.p1.x
@@ -283,7 +266,6 @@ def _render_circle(element: Circle, style_dict: dict[str, Any]) -> list[str]:
     """
     attrs = _common_stroke_attrs(style_dict)
     cx, cy, r = element.center.x, element.center.y, element.radius
-    # Unique clip id derived from the circle's geometry.
     clip_id = f"cc_{int(round(cx * 100))}_{int(round(cy * 100))}_{int(round(r * 100))}"
     return [
         f'<clipPath id="{clip_id}"><circle cx="{cx}" cy="{cy}" r="{r}" /></clipPath>',
@@ -304,7 +286,6 @@ def _render_triangle(element: Triangle, style_dict: dict[str, Any]) -> list[str]
     stroke = style_dict.get("stroke", "black") or "black"
     stroke_width = style_dict.get("stroke-width", 0.3)
     fill = style_dict.get("fill", "none")
-    # Triangles used as notches should be filled by default
     if fill == "none":
         fill = "black"
     opacity = style_dict.get("opacity", 1.0)
@@ -332,18 +313,15 @@ def _render_info_box(element: InfoBox, style_dict: dict[str, Any]) -> list[str]:
     font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
     line_height = font_size_mm * 1.6
     x = element.position.x
-    # Start y so the block is vertically centred on position
     total_lines = 1 + len(element.notes)
     y_start = element.position.y - (total_lines - 1) * line_height / 2
 
-    # Header — slightly larger and bold via font-weight
     nodes.append(
         f'<text x="{x}" y="{y_start}" '
         f'font-size="{font_size_mm * 1.2}" font-weight="bold" fill="black" '
         f'text-anchor="middle" dominant-baseline="middle">'
         f"{_xml_escape(element.header)}</text>"
     )
-    # Notes
     for i, note in enumerate(element.notes):
         y = y_start + (i + 1) * line_height
         nodes.append(
@@ -359,13 +337,8 @@ def _render_rect(element: Rect, style_dict: dict[str, Any]) -> list[str]:
     """Return SVG elements for a Rect.
 
     SVG has no native ``stroke-alignment: inside``, but the same result is
-    achieved by clipping the element to its own bounding box: the stroke is
-    painted centred on the boundary as usual, but everything outside the
-    declared rectangle is cut away, so the *outer* edge of the visible stroke
-    coincides exactly with the declared width/height.
-
-    A unique ``clipPath`` id is derived from the element's pixel-exact origin
-    so that multiple rects on the same canvas don't collide.
+    achieved by clipping the element to its own bounding box so the outer edge
+    of the visible stroke coincides exactly with the declared width/height.
 
     Args:
         element: The rectangle geometry to render.
@@ -381,7 +354,6 @@ def _render_rect(element: Rect, style_dict: dict[str, Any]) -> list[str]:
     x, y = element.origin.x, element.origin.y
     w, h = element.width, element.height
 
-    # Unique clip id — use integer representation of coords to avoid dots in ids
     clip_id = (
         f"rc_{int(round(x * 100))}_{int(round(y * 100))}"
         f"_{int(round(w * 100))}_{int(round(h * 100))}"
@@ -460,12 +432,12 @@ def _make_renderers(
 
 
 def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
-    """Serialize a sorted chain of Segment/CubicBezier objects into an SVG path string."""
+    """Serialise a connected chain of Segment/CubicBezier objects into an SVG path string."""
     if not geoms:
         return ""
 
     parts: list[str] = []
-    first_pt = geom_start(geoms[0])
+    first_pt = geoms[0].start
     parts.append(f"M {first_pt.x},{first_pt.y}")
 
     for g in geoms:
@@ -474,7 +446,7 @@ def _geoms_to_path_data(geoms: list[Segment | CubicBezier]) -> str:
         else:  # CubicBezier
             parts.append(f"C {g.p1.x},{g.p1.y} {g.p2.x},{g.p2.y} {g.p3.x},{g.p3.y}")
 
-    last_pt = geom_end(geoms[-1])
+    last_pt = geoms[-1].end
     if float(np.linalg.norm(last_pt.coords - first_pt.coords)) < 0.01:
         parts.append("Z")
 
@@ -493,7 +465,7 @@ def _render_seam_allowance_chain(
         return []
 
     path_data = _geoms_to_path_data(geoms)
-    if not path_data:
+    if not path_data:  # pragma: no cover
         return []
 
     attrs = _common_stroke_attrs(style_dict, force_fill="none")
@@ -510,10 +482,8 @@ def _render_elements(
     """Render PatternElements into *svg_nodes* in-place.
 
     SA elements are collected and flushed as a single connected ``<path>`` at
-    the end so ``stroke-linejoin`` applies at every corner.
-
-    Elements with ``is_construction=True`` are skipped when *show_construction*
-    is ``False``.
+    the end so ``stroke-linejoin`` applies at every corner.  Elements with
+    ``is_construction=True`` are skipped when *show_construction* is ``False``.
 
     Args:
         elements: PatternElements to render.
@@ -539,7 +509,6 @@ def _render_elements(
     for pat_elem in elements:
         element = pat_elem.geometry
 
-        # Collect SA geometry for grouped rendering — skip individual rendering.
         if pat_elem.is_seam_allowance and isinstance(element, (Segment, CubicBezier)):
             sa_elements.append(pat_elem)
             if sa_style_dict is None:
@@ -549,9 +518,6 @@ def _render_elements(
         if not show_construction and pat_elem.is_construction:
             continue
 
-        # Resolve effective style: use the per-element style unless it is still
-        # the plain default, in which case fall back to the type-level override
-        # from the resolved styles dict.
         style = pat_elem.style
         if styles is not None:
             type_key = _TYPE_KEY.get(type(element))
@@ -565,23 +531,17 @@ def _render_elements(
             try:
                 if isinstance(element, Point):
                     object.__setattr__(element, "name", effective_name)
-            except AttributeError, TypeError:
+            except AttributeError, TypeError:  # pragma: no cover
                 pass
             svg_nodes.extend(renderer(element, style.as_dict()))
             try:
                 if isinstance(element, Point):
                     object.__setattr__(element, "name", original_name)
-            except AttributeError, TypeError:
+            except AttributeError, TypeError:  # pragma: no cover
                 pass
 
-    # Render all SA elements as one connected path (clean corners via linejoin).
     if sa_elements and sa_style_dict is not None:
         svg_nodes.extend(_render_seam_allowance_chain(sa_elements, sa_style_dict))
-
-
-# ---------------------------------------------------------------------------
-# Public export functions
-# ---------------------------------------------------------------------------
 
 
 def _resolve_styles(

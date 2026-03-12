@@ -15,10 +15,15 @@ from .geometry import (
     Rect,
     Segment,
     Triangle,
+    dart_from_edge_at_legs,
+    dart_from_edge_at_point,
+    dart_from_edge_at_t,
+    dart_from_edge_free_tip,
+    dart_from_tip_and_legs,
+    dart_from_tip_center_width,
     edge_tangent,
     intersect,
     seam_length,
-    segment_to_intersection,
 )
 from .measurements import (
     BlouseMeasurements,
@@ -38,7 +43,6 @@ from .pattern import (
     Block,
     ConstructionGrid,
     ConstructionGridPart,
-    DartResult,
     GarmentPart,
     OverlayPart,
     Pattern,
@@ -88,10 +92,16 @@ __all__ = [
     "Dart",
     "DartType",
     "InfoBox",
+    # Dart factory free functions
+    "dart_from_tip_center_width",
+    "dart_from_edge_at_legs",
+    "dart_from_tip_and_legs",
+    "dart_from_edge_at_t",
+    "dart_from_edge_at_point",
+    "dart_from_edge_free_tip",
     # Geometry helpers
     "edge_tangent",
     "intersect",
-    "segment_to_intersection",
     "seam_length",
     # Units
     "MM",
@@ -105,8 +115,6 @@ __all__ = [
     "GeometryType",
     "PatternElement",
     "PrecisionPoint",
-    # Dart result
-    "DartResult",
     # Pattern
     "PatternPart",
     "Pattern",

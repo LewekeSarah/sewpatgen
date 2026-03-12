@@ -90,7 +90,7 @@ if __name__ == "__main__":
     pattern = create_block(person_balanced, fit_class, adjustments, config)
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
-    grid_parts = []  # [Part.GRID]
+    grid_parts = [Part.GRID]
 
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(

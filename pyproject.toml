@@ -119,6 +119,10 @@ venv = ".venv"
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.151.9",
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.29",
     "mypy>=1.19.1",
     "pre-commit>=4.5.1",
     "pytest>=8.4.1",

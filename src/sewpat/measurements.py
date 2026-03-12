@@ -10,16 +10,12 @@ produce construction-ready measurements.
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from sewpat.geometry import Point
 from sewpat.person import BalanceAdjustments, BalancedPerson, Gender, Person
 from sewpat.units import CM
 
 if TYPE_CHECKING:
     from sewpat.fitclass import FitClass
-    from sewpat.geometry import Point
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:
@@ -27,11 +23,9 @@ def _clamp(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
 
 
-# Fractions used by calculate_waist_distribution().
-_SN_FRACTION: float = 0.25  # fraction of hip_shortfall → each side seam
-_FRONT_FRACTION: float = 0.40  # fraction of residual → front waist dart
+_SN_FRACTION: float = 0.25
+_FRONT_FRACTION: float = 0.40
 
-# Map from FitClass resolved property names → body measurement field names.
 _BODY_EASE_MAP: dict[str, str] = {
     "back_width_ease": "back_width",
     "armscye_width_ease": "armscye_width",
@@ -303,10 +297,8 @@ def calculate_hip_distribution(
     Returns:
         :class:`HipDistribution` with all computed values.
     """
-    from sewpat.geometry import Segment  # noqa: PLC0415
-
-    front_hip_width = Segment(pt_hip_cf, pt_hip_sf).length
-    back_hip_width = Segment(pt_hip_sb, pt_hip_cb).length
+    front_hip_width = pt_hip_cf.distance_to(pt_hip_sf)
+    back_hip_width = pt_hip_sb.distance_to(pt_hip_cb)
     total_hip_width = front_hip_width + back_hip_width
     hip_shortfall = total_hip_width - meas.hip_width / 2
 
@@ -341,10 +333,8 @@ def calculate_waist_distribution(
     Returns:
         :class:`WaistDistribution` with all computed values.
     """
-    from sewpat.geometry import Segment  # noqa: PLC0415
-
-    front_waist_width = Segment(pt_waist_cf, pt_waist_sf).length
-    back_waist_width = Segment(pt_waist_sb, pt_waist_cb).length
+    front_waist_width = pt_waist_cf.distance_to(pt_waist_sf)
+    back_waist_width = pt_waist_sb.distance_to(pt_waist_cb)
     total_waist_width = front_waist_width + back_waist_width
     hip_shortfall = total_waist_width - meas.waist_width / 2
 

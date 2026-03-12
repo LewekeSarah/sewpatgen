@@ -14,9 +14,9 @@ def _nameless_dart() -> Dart:
 
 def test_add_dart_no_name_tip_elements():
     part = PatternPart("test")
-    result = part.add_dart(_nameless_dart(), notches=False, precision_tip=True)
+    part.add_dart(_nameless_dart(), notches=False, precision_tip=True)
     # Only two circles — no InfoBox when name is None
-    tip_elems = [e for e in result.elements if e.role == "dart_tip"]
+    tip_elems = [e for e in part.elements if e.role == "dart_tip"]
     assert len(tip_elems) == 2
 
 
