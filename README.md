@@ -1,5 +1,8 @@
 # SewPatGen
 
+[![CI & Docs](https://github.com/sleweke/sewpatgen/actions/workflows/ci.yml/badge.svg)](https://github.com/sleweke/sewpatgen/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://sleweke.github.io/sewpatgen/)
+
 A Python library for automatically generating sewing patterns based on 2D CAD primitives.
 Patterns are exported as SVG vector files, ready for customisation in Inkscape or any
 vector editor.

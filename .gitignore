@@ -26,6 +26,9 @@ wheels/
 *.egg
 MANIFEST
 
+# MkDocs build output
+site/
+
 # Virtual environments
 .env
 .venv
