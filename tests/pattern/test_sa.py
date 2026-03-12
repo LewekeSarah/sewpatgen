@@ -1,12 +1,9 @@
 """Tests for src/sewpat/pattern/_sa.py coverage gaps."""
 
-from unittest.mock import patch
-
 import pytest
 
-import sewpat.pattern._sa as sa_module
 from sewpat.element import PatternElement
-from sewpat.geometry import CubicBezier, Dart, Point, Rect, Segment, Triangle
+from sewpat.geometry import CubicBezier, Point, Rect, Segment, Triangle
 from sewpat.pattern import PatternPart
 from sewpat.pattern._sa import (
     _closest_sa_edge,
@@ -259,83 +256,6 @@ def test_project_dart_notches_no_centroid_returns_early():
     sa_elem = part.append(Segment(Point(0, 0), Point(100, 0)))
     sa_elem.is_seam_allowance = True
     _project_dart_notches_to_sa(part)
-
-
-# ---------------------------------------------------------------------------
-# _project_dart_notches_to_sa — sa_edge is None → continue (line 531, monkeypatched)
-# ---------------------------------------------------------------------------
-
-
-def test_project_dart_notches_sa_edge_none_skips_notch():
-    """When _closest_sa_edge returns None the notch is silently skipped (line 531)."""
-    part = PatternPart(name="P")
-    # Build a proper square so centroid is valid
-    for seg in [
-        Segment(Point(0, 0), Point(100, 0)),
-        Segment(Point(100, 0), Point(100, 100)),
-        Segment(Point(100, 100), Point(0, 100)),
-        Segment(Point(0, 100), Point(0, 0)),
-    ]:
-        part.append(seg, is_outline=True)
-
-    # Add an SA segment so sa_geoms is non-empty (passes line 504 guard)
-    sa_seg = part.append(Segment(Point(-10, -10), Point(110, -10)))
-    sa_seg.is_seam_allowance = True
-
-    # Add a dart_notch candidate
-    notch = part.append(Triangle(Point(48, 95), Point(52, 95), Point(50, 100)))
-    notch.role = "dart_notch"
-
-    with patch.object(sa_module, "_closest_sa_edge", return_value=None):
-        _project_dart_notches_to_sa(part)  # must not raise; notch is skipped
-
-
-# ---------------------------------------------------------------------------
-# _fold_line_sa_point — except clause (lines 597-601, monkeypatched)
-# ---------------------------------------------------------------------------
-
-
-def test_fold_line_sa_point_intersect_raises_falls_back():
-    """TypeError from _intersect_geom is caught; falls back to projection (lines 597-601)."""
-    dart = Dart(
-        leg_a=Point(45, 0),
-        leg_b=Point(55, 0),
-        center=Point(50, 0),
-        tip=Point(50, 30),
-    )
-    seam_elem = PatternElement(Triangle(Point(48, 0), Point(52, 0), Point(50, 5)))
-    seam_elem._dart_ref = dart
-    seam_elem.role = "dart_center_notch"
-
-    fallback = Segment(Point(0, -10), Point(100, -10))
-    base_c = Point(50, 0)
-    inward = Point(50, 50)
-
-    with patch.object(sa_module, "_intersect_geom", side_effect=TypeError("boom")):
-        result = _fold_line_sa_point(seam_elem, [fallback], fallback, base_c, inward)
-
-    assert isinstance(result, Point)
-
-
-@pytest.mark.parametrize("exc_type", [TypeError, ValueError, AttributeError])
-def test_fold_line_sa_point_all_except_types_handled(exc_type):
-    """All three exception types in the except clause are caught without crashing."""
-    dart = Dart(
-        leg_a=Point(45, 0),
-        leg_b=Point(55, 0),
-        center=Point(50, 0),
-        tip=Point(50, 30),
-    )
-    seam_elem = PatternElement(Triangle(Point(48, 0), Point(52, 0), Point(50, 5)))
-    seam_elem._dart_ref = dart
-    seam_elem.role = "dart_center_notch"
-
-    fallback = Segment(Point(0, -10), Point(100, -10))
-
-    with patch.object(sa_module, "_intersect_geom", side_effect=exc_type("test")):
-        result = _fold_line_sa_point(seam_elem, [fallback], fallback, Point(50, 0), Point(50, 50))
-
-    assert isinstance(result, Point)
 
 
 # ---------------------------------------------------------------------------

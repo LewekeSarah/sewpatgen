@@ -11,6 +11,7 @@ sewpat.geometry._bezier, including tests for:
 - split_at_points() - multi-point subdivision
 - point_perpendicular() - offset point calculation
 - contains_point() - point membership testing
+- translate() - rigid translation of all control points
 """
 
 import numpy as np
@@ -570,3 +571,62 @@ def test_bezier_contains_point_outside_tolerance(bezier_consistency_curve):
     nor = b.normal_at_t(0.3)
     far = Point(pt.x + 1.0 * nor[0], pt.y + 1.0 * nor[1])
     assert not b.contains_point(far, tolerance=0.01)
+
+
+# =============================================================================
+# Translate Tests (line 137)
+# =============================================================================
+
+
+def test_cubic_bezier_translate_moves_all_control_points() -> None:
+    """translate() shifts every control point and preserves the name."""
+    b = CubicBezier(
+        Point(0, 0),
+        Point(10, 20),
+        Point(30, 20),
+        Point(40, 0),
+        name="test_curve",
+    )
+    shifted = b.translate(5, -3)
+
+    assert shifted.p0 == Point(5, -3)
+    assert shifted.p1 == Point(15, 17)
+    assert shifted.p2 == Point(35, 17)
+    assert shifted.p3 == Point(45, -3)
+    assert shifted.name == "test_curve"
+
+
+def test_cubic_bezier_translate_returns_new_object() -> None:
+    """translate() returns a *new* CubicBezier, leaving the original unchanged."""
+    b = CubicBezier(Point(0, 0), Point(10, 0), Point(20, 0), Point(30, 0))
+    shifted = b.translate(100, 100)
+
+    assert b.p0 == Point(0, 0)
+    assert shifted.p0 == Point(100, 100)
+
+
+def test_cubic_bezier_translate_zero_is_identity() -> None:
+    """translate(0, 0) returns a curve with identical control points."""
+    b = CubicBezier(Point(1, 2), Point(3, 4), Point(5, 6), Point(7, 8))
+    shifted = b.translate(0, 0)
+
+    assert shifted.p0 == b.p0
+    assert shifted.p3 == b.p3
+
+
+# =============================================================================
+# split_at_points — zero-length early return (line 320)
+# =============================================================================
+
+
+def test_bezier_split_at_points_zero_length_returns_single_copy() -> None:
+    """A zero-length Bézier (all control points equal) returns a single-element
+    list — the early-return on line 320."""
+    p = Point(5, 5)
+    b = CubicBezier(p, p, p, p, name="zero")
+    result = b.split_at_points([p, p])
+
+    assert len(result) == 1
+    assert isinstance(result[0], CubicBezier)
+    assert result[0].p0 == p
+    assert result[0].name == "zero"

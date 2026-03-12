@@ -3,10 +3,17 @@
 import math
 import warnings
 
+import numpy as np
 import pytest
 
 from sewpat import CubicBezier, Dart, DartType, Point, Segment
 from sewpat.element import PatternElement
+from sewpat.geometry import Line, Ray
+from sewpat.geometry._dart import (
+    _resolve_edge_center_normal,
+    dart_from_edge_free_tip,
+    dart_from_tip_center_width,
+)
 from sewpat.pattern import PatternPart
 from sewpat.style import STYLE_DART_FOLD, STYLE_DART_STITCH, StyleOptions
 
@@ -768,3 +775,145 @@ class TestAddDartRhombusPrecisionTip:
         part.add_dart(d, notches=False, precision_tip=True)
         tip_elems = [e for e in part.elements if e.role == "dart_tip"]
         assert len(tip_elems) >= 2
+
+
+# ---------------------------------------------------------------------------
+# _resolve_edge_center_normal — Ray/Line branch (lines 100-101)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveEdgeCenterNormal:
+    def test_with_ray(self) -> None:
+        """Ray edge uses point_at_distance — t is treated as arc-length (line 100)."""
+        ray = Ray(Point(0, 0), np.array([1.0, 0.0]))
+        center, normal = _resolve_edge_center_normal(ray, 50.0)
+
+        assert center.x == pytest.approx(50.0)
+        assert center.y == pytest.approx(0.0)
+        assert abs(normal[0]) < 1e-9
+        assert abs(abs(normal[1]) - 1.0) < 1e-9
+
+    def test_with_line(self) -> None:
+        """Line edge uses point_at_distance — t is treated as arc-length (line 100)."""
+        ln = Line(Point(0, 0), np.array([0.0, 1.0]))
+        center, normal = _resolve_edge_center_normal(ln, 30.0)
+
+        assert center.x == pytest.approx(0.0)
+        assert center.y == pytest.approx(30.0)
+        assert abs(abs(normal[0]) - 1.0) < 1e-9
+        assert abs(normal[1]) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# dart_from_tip_center_width — coincident tip + center → ValueError (line 130)
+# ---------------------------------------------------------------------------
+
+
+class TestDartFromTipCenterWidthCoincident:
+    def test_function_raises(self) -> None:
+        """dart_from_tip_center_width raises ValueError when tip == center."""
+        p = Point(50.0, 50.0)
+        with pytest.raises(ValueError, match="tip and center must be distinct"):
+            dart_from_tip_center_width(tip=p, center=p, width=20.0)
+
+    def test_class_method_raises(self) -> None:
+        """Dart.from_tip_center_width propagates the ValueError."""
+        p = Point(10.0, 10.0)
+        with pytest.raises(ValueError, match="tip and center must be distinct"):
+            Dart.from_tip_center_width(tip=p, center=p, width=15.0)
+
+
+# ---------------------------------------------------------------------------
+# dart_from_edge_free_tip — unsupported edge type → TypeError (line 245)
+# ---------------------------------------------------------------------------
+
+
+class TestDartFromEdgeFreeTipTypeError:
+    def test_ray_edge_raises(self) -> None:
+        """dart_from_edge_free_tip raises TypeError for a Ray edge (line 245)."""
+        ray = Ray(Point(0, 0), np.array([1.0, 0.0]))
+        with pytest.raises(TypeError, match="Segment or CubicBezier"):
+            dart_from_edge_free_tip(edge=ray, t=0.5, width=20.0, reference_point=Point(50.0, 50.0))
+
+    def test_line_edge_raises(self) -> None:
+        """dart_from_edge_free_tip raises TypeError for a Line edge (line 245)."""
+        ln = Line(Point(0, 0), np.array([1.0, 0.0]))
+        with pytest.raises(TypeError, match="Segment or CubicBezier"):
+            dart_from_edge_free_tip(edge=ln, t=0.5, width=20.0, reference_point=Point(50.0, 50.0))
+
+
+# ---------------------------------------------------------------------------
+# Dart._transform_curve — CubicBezier branch (line 554)
+# ---------------------------------------------------------------------------
+
+
+class TestDartTransformCurveBezier:
+    def _dart_with_bezier_stitches(self) -> Dart:
+        tip = Point(50.0, 80.0)
+        leg_a = Point(40.0, 0.0)
+        leg_b = Point(60.0, 0.0)
+        return Dart(
+            leg_a=leg_a,
+            leg_b=leg_b,
+            center=Point(50.0, 0.0),
+            tip=tip,
+            stitch_curve_a=CubicBezier(tip, Point(48, 40), Point(43, 20), leg_a),
+            stitch_curve_b=CubicBezier(tip, Point(52, 40), Point(57, 20), leg_b),
+        )
+
+    def test_translate_transforms_bezier_stitch_curves(self) -> None:
+        """translate() shifts all four control points of CubicBezier stitch curves."""
+        d = self._dart_with_bezier_stitches()
+        translated = d.translate(10.0, 5.0)
+
+        assert isinstance(translated.stitch_curve_a, CubicBezier)
+        assert isinstance(translated.stitch_curve_b, CubicBezier)
+        assert translated.stitch_curve_a.p0 == Point(60.0, 85.0)
+        assert translated.stitch_curve_a.p3 == Point(50.0, 5.0)
+        assert translated.stitch_curve_b.p3 == Point(70.0, 5.0)
+
+    def test_rotate_transforms_bezier_stitch_curves(self) -> None:
+        """rotate() applies the rotation to CubicBezier stitch control points."""
+        d = self._dart_with_bezier_stitches()
+        rotated = d.rotate(pivot=d.tip, angle_rad=math.pi / 2)
+
+        assert isinstance(rotated.stitch_curve_a, CubicBezier)
+        assert isinstance(rotated.stitch_curve_b, CubicBezier)
+        # tip rotated around itself stays at tip
+        assert rotated.stitch_curve_a.p0.x == pytest.approx(d.tip.x, abs=1e-9)
+        assert rotated.stitch_curve_a.p0.y == pytest.approx(d.tip.y, abs=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# Dart.__repr__ (line 642)
+# ---------------------------------------------------------------------------
+
+
+class TestDartRepr:
+    def test_repr_contains_key_fields(self) -> None:
+        """__repr__ includes name, leg_a, leg_b, tip."""
+        d = Dart(
+            leg_a=Point(40.0, 0.0),
+            leg_b=Point(60.0, 0.0),
+            center=Point(50.0, 0.0),
+            tip=Point(50.0, 80.0),
+            name="Bustnaht",
+        )
+        r = repr(d)
+        assert "Dart(" in r
+        assert "Bustnaht" in r
+        assert "leg_a" in r
+        assert "leg_b" in r
+        assert "tip" in r
+
+    def test_repr_unnamed_shows_none(self) -> None:
+        """__repr__ for an unnamed dart contains 'None'."""
+        d = Dart(
+            leg_a=Point(0.0, 0.0),
+            leg_b=Point(20.0, 0.0),
+            center=Point(10.0, 0.0),
+            tip=Point(10.0, 50.0),
+        )
+        r = repr(d)
+        assert "Dart(" in r
+        assert "None" in r

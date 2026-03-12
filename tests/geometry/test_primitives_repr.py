@@ -3,6 +3,7 @@ methods in geometry primitives (Rect, Triangle, InfoBox, Circle, Ray, Line,
 Point, Segment).
 """
 
+import numpy as np
 import pytest
 
 from sewpat.geometry import Circle, Line, Point, Ray, Segment
@@ -279,3 +280,80 @@ def test_point_hash_is_stable() -> None:
     p1 = Point(5 * CM, 3 * CM)
     p2 = Point(5 * CM, 3 * CM)
     assert hash(p1) == hash(p2)
+
+
+# ---------------------------------------------------------------------------
+# _LinearGeom.point_perpendicular — shared implementation (line 300)
+# ---------------------------------------------------------------------------
+
+
+def test_linear_geom_point_perpendicular_via_ray() -> None:
+    """_LinearGeom.point_perpendicular is exercised via Ray (line 300).
+
+    Ray is a concrete _LinearGeom subclass so calling point_perpendicular
+    on it runs the shared base-class implementation at line 300.
+    """
+    ray = Ray(Point(0, 0), (1.0, 0.0))  # horizontal rightward ray
+    # arc_length=50 → base point is (50, 0); normal offsets perpendicularly
+    result = ray.point_perpendicular(distance=10.0, arc_length=50.0)
+
+    assert result.x == pytest.approx(50.0)
+    assert abs(result.y) == pytest.approx(10.0)
+
+
+def test_linear_geom_point_perpendicular_via_line() -> None:
+    """_LinearGeom.point_perpendicular via Line (line 300)."""
+    ln = Line(Point(0, 0), (0.0, 1.0))  # vertical upward line
+    result = ln.point_perpendicular(distance=5.0, arc_length=20.0)
+
+    assert result.y == pytest.approx(20.0)
+    assert abs(result.x) == pytest.approx(5.0)
+
+
+# ---------------------------------------------------------------------------
+# Segment.split_at_points — zero-length early return (line 473)
+# ---------------------------------------------------------------------------
+
+
+def test_segment_split_at_points_zero_length_returns_copy() -> None:
+    """A zero-length Segment passed to split_at_points returns a single copy (line 473)."""
+    p = Point(10.0, 20.0)
+    seg = Segment(p, p, name="zero_seg")
+    result = seg.split_at_points([p])
+
+    assert len(result) == 1
+    assert isinstance(result[0], Segment)
+    assert result[0].p1 == p
+    assert result[0].p2 == p
+
+
+def test_segment_split_at_points_zero_length_multiple_points_returns_copy() -> None:
+    """Even with several points, a zero-length Segment returns exactly one copy (line 473)."""
+    p = Point(5.0, 5.0)
+    seg = Segment(p, p)
+    result = seg.split_at_points([p, p, p])
+
+    assert len(result) == 1
+
+
+# ---------------------------------------------------------------------------
+# Line.__init__ — zero direction → ValueError (line 615)
+# ---------------------------------------------------------------------------
+
+
+def test_line_zero_direction_numpy_raises() -> None:
+    """Line with a zero numpy direction raises ValueError (line 615)."""
+    with pytest.raises(ValueError, match="Direction vector cannot be zero"):
+        Line(Point(0, 0), np.array([0.0, 0.0]))
+
+
+def test_line_zero_direction_list_raises() -> None:
+    """Line with a zero direction as list raises ValueError (line 615)."""
+    with pytest.raises(ValueError, match="Direction vector cannot be zero"):
+        Line(Point(5, 5), [0.0, 0.0])
+
+
+def test_line_zero_direction_tuple_raises() -> None:
+    """Line with a zero direction as tuple raises ValueError (line 615)."""
+    with pytest.raises(ValueError, match="Direction vector cannot be zero"):
+        Line(Point(1, 1), (0.0, 0.0))

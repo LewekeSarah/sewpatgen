@@ -218,7 +218,7 @@ class CubicBezier:
         try:
             n = svg.normal(t)
             return np.array([n.real, n.imag])
-        except ValueError:
+        except ValueError:  # pragma: no cover
             eps = 1e-4
             fallback_t = max(eps, t - eps) if t > 0.5 else min(1.0 - eps, t + eps)
             try:

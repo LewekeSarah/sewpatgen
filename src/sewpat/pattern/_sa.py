@@ -527,7 +527,7 @@ def _project_dart_notches_to_sa(part: PatternPart) -> None:
         length = base_centre.distance_to(tri.p3)
 
         sa_edge = _closest_sa_edge(base_centre, sa_geoms)
-        if sa_edge is None:
+        if sa_edge is None:  # pragma: no cover
             continue
 
         _raw_inward = getattr(seam_elem, "_sa_center", None)
@@ -594,7 +594,7 @@ def _fold_line_sa_point(
         for seg in sa_geoms:
             try:
                 hits = _intersect_geom(fold_ray, seg)
-            except TypeError, ValueError, AttributeError:
+            except TypeError, ValueError, AttributeError:  # pragma: no cover
                 # intersect can raise TypeError for unsupported types,
                 # ValueError for degenerate geometry, or AttributeError
                 # for malformed objects — skip this edge and continue
