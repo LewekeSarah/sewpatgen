@@ -24,7 +24,7 @@ from sewpat.render import _build_svg
 from sewpat.units import CM
 
 # ---------------------------------------------------------------------------
-# Factory functions (importable by unittest tests)
+# Factory functions
 # ---------------------------------------------------------------------------
 
 

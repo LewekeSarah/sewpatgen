@@ -62,7 +62,7 @@ def test_trouser_measurements_knee_height_derived_for_boy():
         waist_width=62 * CM,
         hip_width=82 * CM,
         inseam=60 * CM,
-        gender=Gender.boy,
+        gender=Gender.BOY,
     )
     assert meas.knee_height == pytest.approx(0.5 * 60 * CM)
 
@@ -76,7 +76,7 @@ def test_trouser_measurements_knee_height_derived_for_girl():
         waist_width=62 * CM,
         hip_width=82 * CM,
         inseam=60 * CM,
-        gender=Gender.girl,
+        gender=Gender.GIRL,
     )
     assert meas.knee_height == pytest.approx(0.5 * 60 * CM)
 
@@ -106,7 +106,7 @@ def test_trouser_measurements_missing_inseam_for_boy_raises():
             body_rise=22 * CM,
             waist_width=62 * CM,
             hip_width=82 * CM,
-            gender=Gender.boy,
+            gender=Gender.BOY,
             # inseam intentionally omitted
         )
 
@@ -221,7 +221,7 @@ def boy_person():
         body_rise=22 * CM,
         inseam=60 * CM,
         height=130 * CM,
-        gender=Gender.boy,
+        gender=Gender.BOY,
     )
 
 
