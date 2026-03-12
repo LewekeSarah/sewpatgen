@@ -630,3 +630,22 @@ def test_bezier_split_at_points_zero_length_returns_single_copy() -> None:
     assert isinstance(result[0], CubicBezier)
     assert result[0].p0 == p
     assert result[0].name == "zero"
+
+
+# =============================================================================
+# __str__ and __repr__ (lines 114, 120)
+# =============================================================================
+
+
+def test_cubic_bezier_str_contains_control_points() -> None:
+    """str() includes all four control-point coordinates and the name."""
+    b = CubicBezier(Point(0, 0), Point(10, 20), Point(30, 20), Point(40, 0), name="arc")
+    s = str(b)
+    assert "arc" in s
+    assert "40" in s
+
+
+def test_cubic_bezier_repr_equals_str() -> None:
+    """repr() returns the same string as str() for CubicBezier."""
+    b = CubicBezier(Point(1, 2), Point(3, 4), Point(5, 6), Point(7, 8), name="test")
+    assert repr(b) == str(b)

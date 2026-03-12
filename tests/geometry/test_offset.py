@@ -266,3 +266,59 @@ def test_module_offset_adaptive_bezier_delegates():
     result = _module_offset_adaptive(_tight(), 10.0, eps=0.1)
     assert isinstance(result, list)
     assert all(isinstance(s, CubicBezier) for s in result)
+
+
+# ── adaptive snap-block (lines 244-248) ──────────────────────────────────────
+
+
+def test_offset_adaptive_snap_block_fires_when_join_has_gap(monkeypatch):
+    """The join-snap block (lines 244-248) fires when the two halves' offset
+    endpoints do not coincide.
+
+    ``_hodograph_offset`` is patched so that the left-half offset ends at a
+    point shifted by +5 mm in y, while the right-half offset starts at a point
+    shifted by -5 mm in y.  This creates a 10 mm gap that is larger than the
+    1e-9 threshold, forcing the snap to midpoint both endpoints.
+
+    After the snap the joined endpoints must coincide (gap < 1e-9 mm) and the
+    midpoint must be at (5, 0) — the mean of (5, +5) and (5, -5).
+    """
+    import sewpat.geometry._bezier_offset as _offset_mod
+
+    original_hodograph = _offset_mod._hodograph_offset
+    call_count = [0]
+
+    def _patched_hodograph(curve: CubicBezier, d: float) -> CubicBezier:
+        result = original_hodograph(curve, d)
+        call_count[0] += 1
+        if call_count[0] == 2:  # left sub-curve at depth 1
+            # Shift p3 up by 5 mm to create a gap
+            return CubicBezier(
+                result.p0,
+                result.p1,
+                result.p2,
+                Point(result.p3.x, result.p3.y + 5.0),
+                name=result.name,
+            )
+        if call_count[0] == 3:  # right sub-curve at depth 1
+            # Shift p0 down by 5 mm to create a gap
+            return CubicBezier(
+                Point(result.p0.x, result.p0.y - 5.0),
+                result.p1,
+                result.p2,
+                result.p3,
+                name=result.name,
+            )
+        return result
+
+    monkeypatch.setattr(_offset_mod, "_hodograph_offset", _patched_hodograph)
+
+    from sewpat.geometry._bezier_offset import bezier_offset_adaptive
+
+    curve = CubicBezier(Point(0, 0), Point(10, 20), Point(30, 20), Point(40, 0))
+    segs = bezier_offset_adaptive(curve, 5.0, eps=0.0, _max_depth=1)
+
+    assert len(segs) >= 2
+    # After the snap both endpoints must coincide
+    gap = segs[0].p3.distance_to(segs[1].p0)
+    assert gap < 1e-9, f"join gap after snap: {gap:.2e} mm"
