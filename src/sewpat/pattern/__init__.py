@@ -17,11 +17,9 @@ from .part import (
 )
 
 __all__ = [
-    # Re-exported from element for backward-compat
     "GeometryType",
     "PatternElement",
     "PrecisionPoint",
-    # Core pattern types
     "PatternConfig",
     "GarmentPart",
     "DartResult",

@@ -95,7 +95,6 @@ class NamedAccessMixin:
 
     def __getattr__(self, snake: str) -> PatternElement:
         """Look up a PatternElement by snake_case name (e.g. ``part.center_back``)."""
-        # Avoid infinite recursion for dunder / private attributes.
         if snake.startswith("_"):
             raise AttributeError(snake)
         key = snake.replace("_", " ").title()
@@ -314,7 +313,6 @@ class PatternPart(NamedAccessMixin):
             if isinstance(item, PatternElement):
                 if isinstance(item.geometry, _measurable):
                     resolved.append(item.geometry)
-                # else: silently skip unmeasurable geometry (Point, InfoBox, …)
             elif isinstance(item, str):
                 matches = [
                     e.geometry
@@ -436,8 +434,6 @@ class PatternPart(NamedAccessMixin):
         for center in centers:
             pp = PrecisionPoint(center, style=style)
             self.extend(pp.build_elements())
-
-    # ── Delegating wrappers ────────────────────────────────────────────────
 
     def add_notches(
         self,
@@ -727,12 +723,10 @@ class OverlayPart(PatternPart):
                 is_construction=elem.is_construction,
             )
             new_elem.is_seam_notch = elem.is_seam_notch
-            # Internal SA / dart references: translate point-valued refs,
-            # clear geometry-valued refs (they point into the parent's elements).
             new_elem._sa_center = (
                 elem._sa_center.translate(dx, dy) if isinstance(elem._sa_center, Point) else None
             )
-            new_elem._dart_ref = None  # parent-space Dart; not valid in exploded coords
+            new_elem._dart_ref = None
             new_elem._leg_pt = (
                 elem._leg_pt.translate(dx, dy) if isinstance(elem._leg_pt, Point) else None
             )

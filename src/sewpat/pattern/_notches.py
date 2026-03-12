@@ -32,10 +32,6 @@ from ._sa import _closest_sa_edge
 if TYPE_CHECKING:
     from .part import PatternPart
 
-# ---------------------------------------------------------------------------
-# Public type alias
-# ---------------------------------------------------------------------------
-
 #: Maps a semantic role name (e.g. ``"side"``, ``"neckline"``) to a list of
 #: construction-grid element names that should produce notches on that role.
 #: An empty list means *no grid notches* for that role (the role is explicitly
@@ -50,11 +46,6 @@ if TYPE_CHECKING:
 #:         "neckline": [],
 #:     }
 RoleMap = dict[str, list[str]]
-
-
-# ---------------------------------------------------------------------------
-# Low-level helpers
-# ---------------------------------------------------------------------------
 
 
 def _too_close(pt: Point, candidates: list[Point], spacing: float) -> bool:
@@ -169,11 +160,6 @@ def add_notches(
                     e.is_seam_notch = True
 
 
-# ---------------------------------------------------------------------------
-# Role-based helpers
-# ---------------------------------------------------------------------------
-
-
 def _geoms_for_role(
     part: PatternPart,
     role: str,
@@ -260,11 +246,6 @@ def _collect_candidates_by_role(
     return candidates
 
 
-# ---------------------------------------------------------------------------
-# _place_grid_notches
-# ---------------------------------------------------------------------------
-
-
 def _place_grid_notches(
     part: PatternPart,
     candidates: list[tuple[Segment | CubicBezier, Point]],
@@ -299,11 +280,6 @@ def _place_grid_notches(
     return created
 
 
-# ---------------------------------------------------------------------------
-# add_grid_notches
-# ---------------------------------------------------------------------------
-
-
 def add_grid_notches(
     part: PatternPart,
     grid_part: PatternPart,
@@ -333,10 +309,6 @@ def add_grid_notches(
     Returns:
         All newly created :class:`~sewpat.element.PatternElement` objects.
     """
-    # Pre-populate seen positions with existing *seam* notch base midpoints
-    # (dart notches, manually placed notches) so that grid notches respect
-    # min_spacing against them.  SA-duplicate triangles (is_seam_allowance=True)
-    # are excluded — they are placed automatically alongside every seam notch.
     seen: list[Point] = [
         e.geometry.base_midpoint
         for e in part.elements

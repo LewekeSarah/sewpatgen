@@ -26,10 +26,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-# ---------------------------------------------------------------------------
-# Point
-# ---------------------------------------------------------------------------
-
 
 @dataclass(frozen=True)
 class Point:
@@ -175,11 +171,6 @@ class Point:
         cos_a, sin_a = math.cos(angle_rad), math.sin(angle_rad)
         rot = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
         return Point(*(rot @ (self.coords - center.coords) + center.coords))
-
-
-# ---------------------------------------------------------------------------
-# Shared base for linear geometries (Segment, Ray, Line)
-# ---------------------------------------------------------------------------
 
 
 class _LinearGeom(ABC):
@@ -333,11 +324,6 @@ class _LinearGeom(ABC):
         return point.distance_to(foot) <= tolerance
 
 
-# ---------------------------------------------------------------------------
-# Shared split helper
-# ---------------------------------------------------------------------------
-
-
 def _split_at_ts[T](obj: T, breakpoints: list[float]) -> list[T]:
     """Split *obj* at each *t* in *breakpoints* using ``obj.split(t)``.
 
@@ -357,11 +343,6 @@ def _split_at_ts[T](obj: T, breakpoints: list[float]) -> list[T]:
         consumed = t
     pieces.append(tail)
     return pieces
-
-
-# ---------------------------------------------------------------------------
-# Segment
-# ---------------------------------------------------------------------------
 
 
 class Segment(_LinearGeom):
@@ -540,11 +521,6 @@ class Segment(_LinearGeom):
         return Segment(new_p1, new_p2, name=self.name)
 
 
-# ---------------------------------------------------------------------------
-# Ray
-# ---------------------------------------------------------------------------
-
-
 class Ray(_LinearGeom):
     """A ray starting from a point and going in a specific direction."""
 
@@ -592,11 +568,6 @@ class Ray(_LinearGeom):
         return Ray(self.origin.translate(dx, dy), self.direction, name=self.name)
 
 
-# ---------------------------------------------------------------------------
-# Line
-# ---------------------------------------------------------------------------
-
-
 class Line(_LinearGeom):
     """An infinite line going in a specific direction."""
 
@@ -637,11 +608,6 @@ class Line(_LinearGeom):
     def translate(self, dx: float, dy: float) -> Line:
         """Return a copy translated by (dx, dy)."""
         return Line(self.point.translate(dx, dy), self.direction, name=self.name)
-
-
-# ---------------------------------------------------------------------------
-# Rect
-# ---------------------------------------------------------------------------
 
 
 class Rect:
@@ -686,11 +652,6 @@ class Rect:
     def length(self) -> float:
         """Perimeter of the rectangle: ``2 * (width + height)``."""
         return 2 * (self.width + self.height)
-
-
-# ---------------------------------------------------------------------------
-# Triangle
-# ---------------------------------------------------------------------------
 
 
 class Triangle:
@@ -742,11 +703,6 @@ class Triangle:
         )
 
 
-# ---------------------------------------------------------------------------
-# InfoBox
-# ---------------------------------------------------------------------------
-
-
 class InfoBox:
     """A text info box displayed at a given position."""
 
@@ -775,11 +731,6 @@ class InfoBox:
         moved = InfoBox(self.position.translate(dx, dy), self.header, list(self.notes))
         moved.name = self.name
         return moved
-
-
-# ---------------------------------------------------------------------------
-# Circle
-# ---------------------------------------------------------------------------
 
 
 class Circle:

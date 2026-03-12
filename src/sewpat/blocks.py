@@ -54,9 +54,6 @@ from .units import CM
 if TYPE_CHECKING:
     from .fitclass import FitClass
 
-# ---------------------------------------------------------------------------
-# Role → grid-line maps for TopBlock notch placement
-# ---------------------------------------------------------------------------
 
 #: Notch rules for the **back** pattern piece of a top/blouse block.
 #: Each key is a :attr:`~sewpat.element.PatternElement.role` tag; each value
@@ -77,10 +74,6 @@ TOP_BLOCK_FRONT_ROLE_MAP: RoleMap = {
     "center_front": ["Chest", "Waist", "Hip"],
 }
 
-# ---------------------------------------------------------------------------
-# Construction constants
-# These are pattern-drafting constants that encode standard ease/lift values.
-# ---------------------------------------------------------------------------
 
 #: Ease added to / subtracted from the shoulder (front / back) seam as
 #: parallel offset, always constant.
@@ -114,11 +107,6 @@ _ARMSCYE_BACK_OFFSET: float = 1 * CM
 #: Back armscye Bézier control-point offsets (cp1_x, cp2_x, cp_y).
 _ARMSCYE_BACK_CP_X: float = 1 * CM
 _ARMSCYE_BACK_CP_Y: float = 1 * CM
-
-
-# ---------------------------------------------------------------------------
-# Internal geometry containers
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -209,11 +197,6 @@ class _Darts:
     waist_dart_back: Dart
     waist_dart_front: Dart
     shoulder_dart_front: Dart
-
-
-# ---------------------------------------------------------------------------
-# Private geometry builders
-# ---------------------------------------------------------------------------
 
 
 def _build_back_geometry(
@@ -685,11 +668,6 @@ def _assemble_front_part(
         part.add_seam_allowance(seam_allowance)
     part.add_notches(front.armscye_control, seam_edge=front.armscye_front_lower)
     part.add_grid_notches(grid.part, role_map=TOP_BLOCK_FRONT_ROLE_MAP)
-
-
-# ---------------------------------------------------------------------------
-# Public dataclasses
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)

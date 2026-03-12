@@ -11,7 +11,6 @@ from sewpat.units import CM
 
 _PERSONS_CSV = Path(__file__).parent / "data" / "persons.csv"
 
-# Float measurement columns — all values stored in cm, converted to mm on load.
 _FLOAT_COLS = (
     "height",
     "bust",
@@ -356,7 +355,6 @@ class BalanceValidator:
                 the difference exceeds the optimal balance.
         """
         if person.gender != Gender.female:
-            # Only female patterns currently require balance validation
             return BalancedPerson(person)
 
         fl = person.front_length
@@ -391,30 +389,23 @@ class PersonAnalyser:
     def __init__(
         self, person: Person, balance_adjustments: BalanceAdjustments | None = None
     ) -> None:
-        """Initialize and process *person* through derivation, adjustment, and validation."""
+        """Initialise and process *person* through derivation, adjustment, and validation."""
         self._original_person = person
         self.balance_adjustments = balance_adjustments
 
-        # Step 1: Derive missing measurements
         if person.bust is not None:
             deriver = MeasurementDeriver(person.bust)
             self.person = deriver.apply_to_person(person)
         else:
             self.person = copy.copy(person)
 
-        # Step 2: Apply balance adjustments if provided
         if balance_adjustments is not None:
             adjuster = BalanceAdjuster(balance_adjustments)
             self.person = adjuster.apply_to_person(self.person)
 
-        # Step 3: Validate balance and create BalancedPerson
         validator = BalanceValidator(self.person.bust)
         self.person_balanced = validator.validate(self.person)
 
     def get_balanced_person(self) -> BalancedPerson:
-        """Get the validated and balanced person.
-
-        Returns:
-            A BalancedPerson ready for pattern construction.
-        """
+        """Return the validated and balanced person, ready for pattern construction."""
         return self.person_balanced

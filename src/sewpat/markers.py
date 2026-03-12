@@ -1,26 +1,16 @@
-"""SVG marker definitions for sewing pattern rendering.
+"""SVG marker definitions used by the pattern renderer.
 
-Each marker is defined in ``markerUnits="userSpaceOnUse"`` so sizes stay in
-the same mm-based coordinate space as the rest of the drawing (Inkscape-safe).
+All markers use ``markerUnits="userSpaceOnUse"`` so dimensions stay in the
+mm-based coordinate space of the drawing (Inkscape-compatible).
 
-Public names
-------------
-ARROW_DEFS              -- the complete ``<defs>`` SVG block to embed once per file.
-SCISSOR_BLADE_OVERHANG  -- mm to shorten a segment endpoint when using the
-                           scissor marker so the line terminates at the blade tips.
+Public names:
+    ARROW_DEFS: Complete ``<defs>`` SVG block to embed once per output file.
+    SCISSOR_BLADE_OVERHANG: mm to shorten a segment endpoint when the scissor
+        marker is active so the line terminates at the blade tips.
 """
 
-# ---------------------------------------------------------------------------
-# Arrow / grainline markers
-# ---------------------------------------------------------------------------
-
-# Colour used for the arrowhead fill (e.g. on grainlines).
 _ARROW_FILL_COLOR = "grey"
 
-# Right-pointing triangle: tip at (8,3), base at (0,0)-(0,6).
-# refX=8 places the tip on the line endpoint.
-# orient="auto-start-reverse" flips the marker 180° at marker-start so the
-# tip still points outward (away from the line start).
 _MARKER_ARROW_START = (
     '<marker id="arrow" markerWidth="8" markerHeight="6" '
     'refX="8" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse">'
@@ -35,30 +25,7 @@ _MARKER_ARROW_END = (
     "</marker>"
 )
 
-# ---------------------------------------------------------------------------
-# Scissor marker
-# ---------------------------------------------------------------------------
-
-# Inkscape "Scissors" stock path (U+2702 ✂), scaled and flipped.
-#
-# Transform pipeline (applied right-to-left by SVG):
-#   1. scale(-1,1)  — flips horizontally so blade tips point left (into the line)
-#                     and pivot rings face right (away from the line end).
-#   2. translate(13,7) — shifts everything into the positive viewport.
-#
-# Key points in marker space after the transform (x_marker = 13 − x_path):
-#   Blade tips   x_path ≈  9.09  →  x_marker ≈  3.91
-#   Blade cross  x_path ≈  0.00  →  x_marker = 13.00
-#   Pivot rings  x_path ≈ −12.61 →  x_marker ≈ 25.61
-#
-# refX=13, refY=7 places the blade crossing exactly on the segment endpoint.
-# The segment is then shortened by SCISSOR_BLADE_OVERHANG (≈9.09 mm) so the
-# visible line terminates at the blade tips rather than the crossing.
-# With refX=13 the blade crossing sits at the segment endpoint.
-# The blade tips are at x_marker ≈ 3.91, which is 9.09 mm back along the line.
-# _render_segment shortens the segment by this amount so the visible line
-# terminates at the blade tips rather than the crossing.
-_BLADE_TIP_X: float = round(13.0 - 9.0898857, 4)  # marker-space x of the blade tips ≈ 3.91
+_BLADE_TIP_X: float = round(13.0 - 9.0898857, 4)  # marker-space x ≈ 3.91
 SCISSOR_BLADE_OVERHANG: float = round(13.0 - _BLADE_TIP_X, 4)  # ≈ 9.09 mm
 
 _SCISSOR_PATH = (
@@ -96,13 +63,6 @@ _MARKER_SCISSOR = (
     "</marker>"
 )
 
-# ---------------------------------------------------------------------------
-# Distance / dimension markers
-# ---------------------------------------------------------------------------
-
-# Arrowhead with a perpendicular stop-bar at the tip, as used in technical
-# drawing for dimension/measurement annotations.
-# auto-start-reverse on the start variant makes it point outward at p1.
 _MARKER_DISTANCE_START = (
     '<marker id="distance-start" markerWidth="15" markerHeight="10" '
     'refX="0" refY="5" orient="auto-start-reverse" markerUnits="userSpaceOnUse">'
@@ -119,11 +79,6 @@ _MARKER_DISTANCE_END = (
     "</marker>"
 )
 
-# ---------------------------------------------------------------------------
-# Dot marker
-# ---------------------------------------------------------------------------
-
-# Small filled circle — useful for button positions or match points.
 _MARKER_DOT = (
     '<marker id="dot" markerWidth="6" markerHeight="6" '
     'refX="3" refY="3" orient="auto" markerUnits="userSpaceOnUse">'
@@ -131,21 +86,12 @@ _MARKER_DOT = (
     "</marker>"
 )
 
-# ---------------------------------------------------------------------------
-# Stop marker
-# ---------------------------------------------------------------------------
-
-# Short perpendicular bar — useful for hem lines or dart ends.
 _MARKER_STOP = (
     '<marker id="stop" markerWidth="4" markerHeight="12" '
     'refX="2" refY="6" orient="auto" markerUnits="userSpaceOnUse">'
     '<path d="M 2,0 L 2,12" fill="none" stroke="black" stroke-width="1.5" />'
     "</marker>"
 )
-
-# ---------------------------------------------------------------------------
-# Combined <defs> block
-# ---------------------------------------------------------------------------
 
 ARROW_DEFS: str = (
     "<defs>"

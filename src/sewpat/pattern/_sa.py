@@ -37,9 +37,6 @@ from ..style import STYLE_SEAM_ALLOWANCE, StyleOptions
 if TYPE_CHECKING:
     from .part import PatternPart
 
-# ---------------------------------------------------------------------------
-# Module-level constants and helpers
-# ---------------------------------------------------------------------------
 
 #: Shapely join-style codes for each corner-join name.
 _CJ: dict[str, int] = {"miter": 2, "round": 1, "bevel": 3}
@@ -90,8 +87,6 @@ def _closest_sa_edge(
 
     def distance_to_edge(geom: Segment | CubicBezier) -> float:
         if isinstance(geom, Segment):
-            # Clamp projection parameter t to [0, 1] so only points within
-            # the segment (not its infinite-line extension) are considered.
             seg_vec = geom.end - geom.start
             seg_len_sq = float(seg_vec.coords @ seg_vec.coords)
             if seg_len_sq < 1e-12:
@@ -102,7 +97,6 @@ def _closest_sa_edge(
             closest = geom.start + seg_vec * t
             return ref.distance_to(closest)
         else:
-            # For CubicBezier sample points along the curve.
             min_dist = float("inf")
             for i in range(21):
                 pt = geom.point_at_t(i / 20.0)
@@ -112,11 +106,6 @@ def _closest_sa_edge(
             return min_dist
 
     return min(sa_geoms, key=distance_to_edge)
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _orient_dart_roof_pairs(
@@ -140,7 +129,6 @@ def _orient_dart_roof_pairs(
     """
     result = list(elems)
 
-    # Map each rounded endpoint → list of element indices for roof elements.
     roof_endpoint_idx: dict[tuple[float, float], list[int]] = {}
     for idx, e in enumerate(result):
         if e.role != "dart_roof" or not isinstance(e.geometry, (Segment, CubicBezier)):
@@ -149,7 +137,6 @@ def _orient_dart_roof_pairs(
             key = (round(pt.x, 4), round(pt.y, 4))
             roof_endpoint_idx.setdefault(key, []).append(idx)
 
-    # A shared peak has exactly two roof indices at the same key.
     visited: set[int] = set()
     for key, indices in roof_endpoint_idx.items():
         if len(indices) != 2:
@@ -164,15 +151,13 @@ def _orient_dart_roof_pairs(
         g0 = result[i0].geometry
         g1 = result[i1].geometry
         if not isinstance(g0, (Segment, CubicBezier)) or not isinstance(g1, (Segment, CubicBezier)):
-            continue  # unexpected geometry type — leave unchanged
+            continue  # pragma: no cover
 
-        # Orient g0: must END at peak (leg → roof).
         if g0.start.distance_to(peak) < g0.end.distance_to(peak):
             new_e0 = copy.deepcopy(result[i0])
             new_e0.geometry = _reverse_geom(g0)
             result[i0] = new_e0
 
-        # Orient g1: must START at peak (roof → leg).
         if g1.end.distance_to(peak) < g1.start.distance_to(peak):
             new_e1 = copy.deepcopy(result[i1])
             new_e1.geometry = _reverse_geom(g1)
@@ -263,8 +248,6 @@ def _stitch_corners(
         )
         gap = ga.end.distance_to(gb.start)
 
-        # Apply corner join when there is a gap, OR when bevel is explicitly
-        # requested (covers zero-gap corners where offsets diverge).
         if gap <= 0.01 and effective_cj != "bevel":
             continue
 
@@ -286,9 +269,6 @@ def _stitch_corners(
             offset_groups[i][-1] = with_endpoints(ga, ga.start, corner)
             offset_groups[j][0] = with_endpoints(gb, corner, gb.end)
 
-    # Build flat list, inserting round-corner arcs at the correct positions.
-    # Collect group-end positions first, then insert arcs back-to-front so
-    # earlier indices remain valid.
     flat: list[Segment | CubicBezier] = []
     group_end: list[int] = []
     for group in offset_groups:
@@ -333,11 +313,6 @@ def _is_double_notch(seam_elem: PatternElement, all_elems: list[PatternElement])
         < _NOTCH_PAIRING_TOLERANCE
         for e in all_elems
     )
-
-
-# ---------------------------------------------------------------------------
-# SA code paths
-# ---------------------------------------------------------------------------
 
 
 def _add_sa_rect(
@@ -414,11 +389,6 @@ def _add_sa_mixed(
     return added
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-
 def add_seam_allowance(
     part: PatternPart,
     distance: float,
@@ -463,21 +433,16 @@ def add_seam_allowance(
     if not outline_elements:
         return []
 
-    # Rect fast-path: first Rect element triggers uniform expansion.
     for elem in outline_elements:
         if isinstance(elem.geometry, Rect):
             return _add_sa_rect(part, elem, distance, sa_style)
 
-    # Collect Segment/CubicBezier outline elements; orient dart roof pairs so
-    # build_chain can traverse them as a clean through-path.
     seam_elems: list[PatternElement] = [
         copy.deepcopy(e) for e in outline_elements if isinstance(e.geometry, (Segment, CubicBezier))
     ]
     seam_elems = _orient_dart_roof_pairs(seam_elems)
     geoms = cast(list[Segment | CubicBezier], [e.geometry for e in seam_elems])
 
-    # Pure-segment path: Shapely buffer — only when no Béziers and no
-    # per-element SA or corner-join overrides are present.
     has_bezier = any(isinstance(g, CubicBezier) for g in geoms)
     has_per_elem_sa = any(getattr(e.style, "seam_allowance", None) is not None for e in seam_elems)
     has_per_elem_cj = any(getattr(e.style, "corner_join", None) is not None for e in seam_elems)
@@ -533,7 +498,6 @@ def _project_dart_notches_to_sa(part: PatternPart) -> None:
         _raw_inward = getattr(seam_elem, "_sa_center", None)
         effective_inward: Point = _raw_inward if isinstance(_raw_inward, Point) else centroid_pt
 
-        # Pre-compute orientation unit vectors from the existing triangle.
         along_pt = Point(*_normalize_vec((tri.p2 - tri.p1).coords))
         normal_pt = Point(*_normalize_vec((tri.p3 - base_centre).coords))
 
@@ -595,9 +559,6 @@ def _fold_line_sa_point(
             try:
                 hits = _intersect_geom(fold_ray, seg)
             except TypeError, ValueError, AttributeError:  # pragma: no cover
-                # intersect can raise TypeError for unsupported types,
-                # ValueError for degenerate geometry, or AttributeError
-                # for malformed objects — skip this edge and continue
                 continue
             for h in hits:
                 d = _dart.roof.distance_to(h)

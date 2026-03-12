@@ -102,11 +102,6 @@ def _resolve_edge_center_normal(
     return center, normal
 
 
-# ---------------------------------------------------------------------------
-# Module-level factory functions
-# ---------------------------------------------------------------------------
-
-
 def _validate_t(t: float) -> None:
     """Raise :exc:`ValueError` if *t* is outside ``[0, 1]``."""
     if not (0.0 <= t <= 1.0):
@@ -253,11 +248,6 @@ def dart_from_edge_free_tip(
     return _dart_from_points(leg_a, leg_b, center, tip, dart_type, name, edge_elem=edge_elem)
 
 
-# ---------------------------------------------------------------------------
-# Dart class
-# ---------------------------------------------------------------------------
-
-
 class Dart:
     """Immutable dart (Abnäher) geometry.
 
@@ -314,10 +304,6 @@ class Dart:
         self.stitch_curve_a: Segment | CubicBezier | None = stitch_curve_a
         self.stitch_curve_b: Segment | CubicBezier | None = stitch_curve_b
         self._edge_element = _edge_element
-
-    # ------------------------------------------------------------------
-    # Factory class methods — thin wrappers around the module-level functions
-    # ------------------------------------------------------------------
 
     @classmethod
     def from_tip_center_width(
@@ -417,10 +403,6 @@ class Dart:
         return dart_from_edge_free_tip(
             edge, t, width, reference_point, tip_shortfall, dart_type, name
         )
-
-    # ------------------------------------------------------------------
-    # Derived geometry
-    # ------------------------------------------------------------------
 
     @property
     def is_triangle(self) -> bool:
@@ -536,10 +518,6 @@ class Dart:
         Equivalent to ``math.degrees(self.intake_angle)``.
         """
         return math.degrees(self.intake_angle)
-
-    # ------------------------------------------------------------------
-    # Transformations
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _transform_curve(

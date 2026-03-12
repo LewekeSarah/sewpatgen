@@ -43,18 +43,9 @@ from ._primitives import (
     _LinearGeom,
 )
 
-# ---------------------------------------------------------------------------
-# Type alias
-# ---------------------------------------------------------------------------
-
 type GEOMETRIC_TYPE = (
     Point | Line | Ray | Circle | Segment | Rect | Triangle | InfoBox | CubicBezier
 )
-
-
-# ---------------------------------------------------------------------------
-# Linear helpers
-# ---------------------------------------------------------------------------
 
 
 def _intersect_linear_linear(
@@ -148,11 +139,6 @@ def _shapely_to_points(result: _sg.base.BaseGeometry) -> list[Point]:
     return []
 
 
-# ---------------------------------------------------------------------------
-# Public: intersect
-# ---------------------------------------------------------------------------
-
-
 def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
     """Find intersections between two geometric objects.
 
@@ -184,11 +170,9 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
         >>> intersect(seg, ray)
         [Point(5.0, 0.0)]
     """
-    # ── linear × linear ──────────────────────────────────────────────────────
     if isinstance(a, _LinearGeom) and isinstance(b, _LinearGeom):
         return _intersect_linear_linear(a, b, isinstance(a, Segment), isinstance(b, Segment))
 
-    # ── linear × circle ──────────────────────────────────────────────────────
     if isinstance(a, _LinearGeom) and isinstance(b, Circle):
         circle_shape = _sg.Point(b.center.x, b.center.y).buffer(b.radius)
         result = geom_to_shapely(a).intersection(circle_shape.exterior)
@@ -197,15 +181,12 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
     if isinstance(a, Circle) and isinstance(b, _LinearGeom):
         return intersect(b, a)
 
-    # ── circle × circle ──────────────────────────────────────────────────────
     if isinstance(a, Circle) and isinstance(b, Circle):
         return a._intersect_with_circle(b)
 
-    # ── Bézier × Bézier ──────────────────────────────────────────────────────
     if isinstance(a, CubicBezier) and isinstance(b, CubicBezier):
         return _intersect_bezier_bezier(a, b)
 
-    # ── Bézier × linear ──────────────────────────────────────────────────────
     if isinstance(a, CubicBezier) and isinstance(b, _LinearGeom):
         result = _bezier_shapely(a).intersection(geom_to_shapely(b))
         return _shapely_to_points(result)
@@ -213,7 +194,6 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
     if isinstance(a, _LinearGeom) and isinstance(b, CubicBezier):
         return intersect(b, a)
 
-    # ── Bézier × circle ──────────────────────────────────────────────────────
     if isinstance(a, CubicBezier) and isinstance(b, Circle):
         circle_shape = _sg.Point(b.center.x, b.center.y).buffer(b.radius)
         result = _bezier_shapely(a).intersection(circle_shape.exterior)
@@ -224,10 +204,6 @@ def intersect(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> list[Point]:
 
     raise TypeError(f"Intersection not implemented for {type(a)} and {type(b)}")
 
-
-# ---------------------------------------------------------------------------
-# Chain / offset helpers
-# ---------------------------------------------------------------------------
 
 _CHAIN_SNAP = 0.5  # mm — endpoint-matching tolerance
 

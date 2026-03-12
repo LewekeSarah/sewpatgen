@@ -12,10 +12,6 @@ from svgpathtools import CubicBezier as _SvgCubicBezier
 
 from ._primitives import Point, _split_at_ts
 
-# ---------------------------------------------------------------------------
-# Private helpers
-# ---------------------------------------------------------------------------
-
 
 def _bezier_closest_t(svg_bezier: _SvgCubicBezier, pt_c: complex) -> float:
     """Return the parameter *t* ∈ [0, 1] at which *svg_bezier* is closest to *pt_c*.
@@ -66,11 +62,6 @@ def _intersect_bezier_bezier(a: CubicBezier, b: CubicBezier, tol: float = 1e-12)
         if not any(pt.distance_to(ex) < tol for ex in intersections):
             intersections.append(pt)
     return intersections
-
-
-# ---------------------------------------------------------------------------
-# CubicBezier
-# ---------------------------------------------------------------------------
 
 
 class CubicBezier:

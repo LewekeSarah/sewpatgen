@@ -23,14 +23,9 @@ from ._notches import _place_notch_triangles
 if TYPE_CHECKING:
     from .part import PatternPart
 
-# Default notch dimensions used by :func:`add_dart` and :class:`PatternPart`.
+#: Default notch dimensions used by :func:`add_dart`.
 _DEFAULT_NOTCH_LENGTH: float = 0.8 * CM
 _DEFAULT_NOTCH_WIDTH: float = 0.4 * CM
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _roof_style(dart: Dart) -> StyleOptions:
@@ -74,7 +69,6 @@ def _split_edge_at_dart_mouth(part: PatternPart, dart: Dart) -> None:
     edge_elem = getattr(dart, "_edge_element", None)
 
     if edge_elem is None:
-        # Dart was not created from a part edge — nothing to split, not an error.
         return
 
     if edge_elem not in part.elements:
@@ -108,8 +102,6 @@ def _split_edge_at_dart_mouth(part: PatternPart, dart: Dart) -> None:
 
     src_style = copy.copy(edge_elem.style) if edge_elem.style is not None else StyleOptions()
     all_subs = edge_elem.geometry.split_at_points([dart.leg_a, dart.leg_b])
-
-    # Keep only the outer two sub-segments; discard the middle (dart mouth).
     outer_subs = all_subs[:1] + (all_subs[-1:] if len(all_subs) > 1 else [])
 
     edge_name = edge_elem.get_name()
@@ -323,11 +315,6 @@ def _add_rhombus_dart(
     if precision_tip:
         for tip in (dart.tip, st):
             _add_precision_tip(part, dart, precision_style, tip)
-
-
-# ---------------------------------------------------------------------------
-# Public entry point
-# ---------------------------------------------------------------------------
 
 
 def add_dart(

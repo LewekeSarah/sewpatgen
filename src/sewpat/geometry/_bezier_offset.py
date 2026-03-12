@@ -21,10 +21,6 @@ import numpy as np
 from ._bezier import CubicBezier, _bezier_shapely, _true_offset_ls
 from ._primitives import Point
 
-# ---------------------------------------------------------------------------
-# Private helpers
-# ---------------------------------------------------------------------------
-
 
 def _resolve_d(curve: CubicBezier, distance: float, center: Point | None) -> float:
     """Return the signed offset distance, resolving direction from *center* if given.
@@ -87,11 +83,6 @@ def _hodograph_offset(curve: CubicBezier, d: float) -> CubicBezier:
         _shifted(curve.p3, 1.0),
         name=curve.name,
     )
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 
 def bezier_offset(

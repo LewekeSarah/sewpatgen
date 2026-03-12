@@ -1,7 +1,4 @@
-"""Style options for rendering sewing pattern elements.
-
-Kept separate from geometry.py and render.py to avoid circular imports.
-"""
+"""Style options and named presets for rendering sewing pattern elements."""
 
 from enum import StrEnum
 from typing import Any
@@ -10,14 +7,7 @@ from typing import Any
 class Marker(StrEnum):
     """Named markers placed at line endpoints.
 
-    String values match ``<marker id="…">`` in render.py.
-
-    Members:
-        ARROW:    Filled triangular arrowhead.
-        SCISSOR:  Scissor blades; indicates a cut start/end point.
-        DISTANCE: Arrowhead with perpendicular stop-bar for dimension lines.
-        DOT:      Small filled circle; button or match-point marker.
-        STOP:     Short perpendicular bar; hem lines, dart ends.
+    String values match ``<marker id="…">`` definitions in the SVG renderer.
     """
 
     ARROW = "arrow"
@@ -27,9 +17,6 @@ class Marker(StrEnum):
     STOP = "stop"
 
 
-# ---------------------------------------------------------------------------
-# Stroke width constants
-# ---------------------------------------------------------------------------
 DEFAULT_STROKE_WIDTH: float = 0.5
 DEFAULT_STROKE_WIDTH_GRAIN: float = 0.2
 DEFAULT_FONT_SIZE_MM: float = 5.0
@@ -57,17 +44,9 @@ class StyleOptions:
         corner_join: str | None = None,
         no_notch: bool = False,
     ) -> None:
-        """Initialize StyleOptions.
+        """Initialise with the given visual properties.
 
         Args:
-            seam_allowance: Per-element SA override in mm.  ``None`` (default)
-                = use the global distance passed to ``add_seam_allowance()``.
-                ``0.0`` = explicitly no seam allowance on this edge (e.g. fold line).
-            corner_join: Per-element corner-join override (``"miter"``,
-                ``"round"``, ``"bevel"``); ``None`` = use the part-wide default.
-            no_notch: When ``True``, :func:`~sewpat.pattern.add_grid_notches`
-                will never place a notch on this edge regardless of grid
-                intersections.  Set on hem, fold, and centre-line presets.
             stroke_color: SVG stroke colour string.
             stroke_width: Stroke width in mm.
             fill_color: SVG fill colour string.
@@ -81,6 +60,14 @@ class StyleOptions:
             font_size_mm: Label font size in mm.
             font_weight: CSS font-weight string.
             font_style: CSS font-style string.
+            seam_allowance: Per-element SA override in mm.  ``None`` = use the
+                global distance passed to ``add_seam_allowance()``.  ``0.0`` =
+                explicitly no seam allowance on this edge (e.g. fold line).
+            corner_join: Per-element corner-join override (``"miter"``,
+                ``"round"``, ``"bevel"``); ``None`` = use the part-wide default.
+            no_notch: When ``True``, :func:`~sewpat.pattern.add_grid_notches`
+                never places a notch on this edge regardless of grid
+                intersections.
         """
         self.stroke_color = stroke_color
         self.stroke_width = stroke_width
@@ -115,11 +102,7 @@ class StyleOptions:
         return f"StyleOptions({', '.join(parts)})"
 
     def as_dict(self) -> dict[str, Any]:
-        """Convert style options to a dictionary.
-
-        Returns:
-            Dictionary with style attributes.
-        """
+        """Return a dict of SVG-ready attribute key/value pairs."""
         style_dict: dict[str, Any] = {
             "stroke": self.stroke_color,
             "stroke-width": self.stroke_width,
@@ -139,14 +122,7 @@ class StyleOptions:
         return style_dict
 
 
-# ---------------------------------------------------------------------------
-# Named style presets — ready-to-use StyleOptions for common pattern elements.
-# ---------------------------------------------------------------------------
-
-# -- Existing presets -------------------------------------------------------
-# based on https://de.scribd.com/document/564488289/Guide-to-read-Basic-Pattern-Symbols
-
-
+#: Grainline arrow style — grey dashed with arrowheads at both ends.
 STYLE_GRAINLINE = StyleOptions(
     stroke_color="grey",
     stroke_width=DEFAULT_STROKE_WIDTH_GRAIN,
@@ -155,42 +131,43 @@ STYLE_GRAINLINE = StyleOptions(
     dash_array=[3, 2],
 )
 
+#: Fold-line style — grey dashed, no notch.
 STYLE_FOLD = StyleOptions(
     stroke_color="grey",
     dash_array=[10.0, 2.0],
     no_notch=True,
 )
 
+#: Hem-line style — dashed with 2.5 cm default seam allowance, no notch.
 STYLE_HEM = StyleOptions(
     stroke_color="black",
-    seam_allowance=25.0,  # 2.5 cm default hem allowance
+    seam_allowance=25.0,  # 2.5 cm
     dash_array=[10.0, 2.0],
     no_notch=True,
 )
 
+#: Waistband style — solid with stop markers at both ends and 3 cm SA.
 STYLE_WAISTBAND = StyleOptions(
     stroke_color="black",
     marker_start=Marker.STOP,
     marker_end=Marker.STOP,
-    seam_allowance=30.0,  # 3 cm default hem allowance
+    seam_allowance=30.0,  # 3 cm
 )
 
-# Cutting Line — the outermost solid line; cut along this line.
-# A scissor marker at the start indicates where to begin cutting.
+#: Cutting-line style — solid with scissor marker at the end.
 STYLE_CUT = StyleOptions(
     stroke_color="black",
     marker_end=Marker.SCISSOR,
 )
 
-# Stitching Line — dashed line inside the cutting line showing where to sew.
+#: Stitching-line style — dashed.
 STYLE_STITCH = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
     dash_array=[5.0, 2.0],
 )
 
-# Stitching Line with bevel corner join — used where two stitch segments meet
-# at a sharp angle (e.g. center-front/back lines that change direction at the waist).
+#: Stitching-line style with bevel corner join for direction changes.
 STYLE_STITCH_BEVEL = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
@@ -198,9 +175,7 @@ STYLE_STITCH_BEVEL = StyleOptions(
     corner_join="bevel",
 )
 
-
-# Center Front / Center Back Line — long-dash–short-dash line marking
-# the vertical centre of a garment front or back.
+#: Center-front / center-back line — long-dash–short-dash, no notch.
 STYLE_CENTER_LINE = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
@@ -209,24 +184,20 @@ STYLE_CENTER_LINE = StyleOptions(
     corner_join="bevel",
 )
 
-# Seam Allowance Line — thin solid outer line showing where to cut.
-# Drawn outside (and parallel to) the stitching line by the seam allowance
-# distance. No markers – the outline speaks for itself.
+#: Seam-allowance outline style — thin solid, no markers.
 STYLE_SEAM_ALLOWANCE = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
 )
 
-# Debug highlight — thick red solid line used to visually verify which
-# segments are selected for a seam-length comparison.  Import and apply
-# temporarily; remove once the measurement is confirmed correct.
+#: Debug highlight style — thick red semi-transparent line for visual verification.
 STYLE_DEBUG_RED = StyleOptions(
     stroke_color="red",
     stroke_width=1.5,
     opacity=0.7,
 )
 
-# Construction Grid Line — light grey dashed line for the construction grid layer.
+#: Construction-grid line style — light grey dashed.
 STYLE_CONSTRUCTION_GRID = StyleOptions(
     stroke_color="lightgrey",
     stroke_width=0.8,
@@ -234,8 +205,7 @@ STYLE_CONSTRUCTION_GRID = StyleOptions(
     dash_array=[3.0, 2.0],
 )
 
-# Dart Stitching Lines — dashed lines running from the dart legs to the tip.
-# Drawn inside the seam allowance; show the sewing path for a dart (Abnäher).
+#: Dart stitching-line style — dashed with zero seam allowance.
 STYLE_DART_STITCH = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
@@ -243,8 +213,7 @@ STYLE_DART_STITCH = StyleOptions(
     seam_allowance=0.0,
 )
 
-# Dart Fold / Crease Line — long-dash–dot centre line of a dart.
-# Marks the fold axis from the mouth midpoint to the tip.
+#: Dart fold / crease-line style — long-dash–dot, no notch.
 STYLE_DART_FOLD = StyleOptions(
     stroke_color="black",
     stroke_width=DEFAULT_STROKE_WIDTH,
@@ -252,6 +221,7 @@ STYLE_DART_FOLD = StyleOptions(
     no_notch=True,
 )
 
+#: Precision-point marker style — thin grey stroke.
 STYLE_PRECISION_POINT = StyleOptions(
     stroke_color="grey",
     stroke_width=DEFAULT_STROKE_WIDTH_GRAIN,

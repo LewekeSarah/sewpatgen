@@ -17,21 +17,15 @@ from sewpat.units import CM
 if TYPE_CHECKING:
     from sewpat.fitclass import FitClass
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
 
 def _clamp(value: float, lo: float, hi: float) -> float:
     """Clamp *value* to the closed interval [lo, hi]."""
     return max(lo, min(hi, value))
 
 
-# Fractions used by calculate_waist_distribution().
-_SN_FRACTION: float = 0.25  # fraction of hip_shortfall → each side seam
-_FRONT_FRACTION: float = 0.40  # fraction of residual → front waist dart
+_SN_FRACTION: float = 0.25
+_FRONT_FRACTION: float = 0.40
 
-# Map from FitClass resolved property names → body measurement field names.
 _BODY_EASE_MAP: dict[str, str] = {
     "back_width_ease": "back_width",
     "armscye_width_ease": "armscye_width",
