@@ -37,7 +37,7 @@ def make_person() -> Person:
         hip=71 * CM,
         body_rise=19.6 * CM,  ## 18.5 * CM,
         inseam=51.5 * CM,
-        gender=Gender.boy,
+        gender=Gender.BOY,
     )  # gemessen 2025-09-15
     # return Person(
     #     height=122 * CM,
@@ -220,8 +220,6 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
             "side": ["Sitzhöhe"],
             "inner": ["Vorderhosenbreite"],
         },
-        tolerance=0.0,
-        corner_clearance=0.0,
     )
 
     # -----------------------------------------------------------------------
@@ -300,8 +298,6 @@ def boy_shorts(meas: TrouserMeasurements, model: TrouserConfig) -> Pattern:
             "side": ["Sitzhöhe"],
             "inner": ["Vorderhosenbreite"],
         },
-        tolerance=0.0,
-        corner_clearance=0.0,
         is_back=True,
     )
 

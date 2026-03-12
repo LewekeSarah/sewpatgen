@@ -1,9 +1,9 @@
 site_name: sewpat
-site_url: https://sleweke.github.io/sewpatgen/
+site_url: https://lewekesarah.github.io/sewpatgen/
 site_description: Python library for generating sewing patterns as SVG/PDF
 site_author: Sarah Leweke & Samuel Leweke
-repo_url: https://github.com/sleweke/sewpatgen
-repo_name: sleweke/sewpatgen
+repo_url: https://github.com/LewekeSarah/sewpatgen
+repo_name: LewekeSarah/sewpatgen
 edit_uri: ""
 
 theme:

@@ -27,12 +27,12 @@ def test_person_defaults_are_none():
     p = Person()
     assert p.bust is None
     assert p.waist is None
-    assert p.gender == Gender.female
+    assert p.gender == Gender.FEMALE
 
 
 @pytest.mark.parametrize(
     "gender",
-    [Gender.male, Gender.female, Gender.boy, Gender.girl, Gender.baby],
+    [Gender.MALE, Gender.FEMALE, Gender.BOY, Gender.GIRL, Gender.BABY],
 )
 def test_person_gender_values(gender: Gender):
     """All Gender enum values can be used."""
@@ -264,7 +264,7 @@ def test_person_analyser_no_bust_skips_derivation():
         hip=96 * CM,
         back_length=41 * CM,
         front_length=43 * CM,
-        gender=Gender.male,  # skip balance validation for simplicity
+        gender=Gender.MALE,  # skip balance validation for simplicity
     )
     # bust=None → BalanceValidator also gets None → NotImplementedError
     with pytest.raises(NotImplementedError):
@@ -298,13 +298,13 @@ def test_balance_validator_non_female_skips_check():
         bust=86 * CM,
         back_length=41 * CM,
         front_length=48 * CM,  # severely imbalanced — would fail for female
-        gender=Gender.male,
+        gender=Gender.MALE,
     )
     bp = validator.validate(person)
     assert isinstance(bp, BalancedPerson)
 
 
-@pytest.mark.parametrize("gender", [Gender.male, Gender.boy, Gender.girl, Gender.baby])
+@pytest.mark.parametrize("gender", [Gender.MALE, Gender.BOY, Gender.GIRL, Gender.BABY])
 def test_balance_validator_all_non_female_genders_skip(gender: Gender):
     """All non-female genders skip the balance check."""
     validator = BalanceValidator(bust=86 * CM)
@@ -329,7 +329,7 @@ def test_balance_validator_missing_front_length_raises():
         bust=86 * CM,
         back_length=41 * CM,
         front_length=None,
-        gender=Gender.female,
+        gender=Gender.FEMALE,
     )
     with pytest.raises(ValueError, match="front_length and back_length must both be set"):
         validator.validate(person)
@@ -342,7 +342,7 @@ def test_balance_validator_missing_back_length_raises():
         bust=86 * CM,
         back_length=None,
         front_length=43 * CM,
-        gender=Gender.female,
+        gender=Gender.FEMALE,
     )
     with pytest.raises(ValueError, match="front_length and back_length must both be set"):
         validator.validate(person)
@@ -390,7 +390,7 @@ def test_load_person_happy_path(mock_persons_csv):
     assert person.bust == pytest.approx(83.5 * CM)
     assert person.waist == pytest.approx(69.5 * CM)
     assert person.hip == pytest.approx(93.0 * CM)
-    assert person.gender == Gender.female
+    assert person.gender == Gender.FEMALE
 
 
 def test_load_person_case_insensitive(mock_persons_csv):
@@ -433,7 +433,7 @@ def test_load_person_male_gender(mock_persons_csv):
     """load_person correctly parses male gender."""
     mock_persons_csv(_make_csv(_CSV_ROW_TOM))
     person = load_person("Tom")
-    assert person.gender == Gender.male
+    assert person.gender == Gender.MALE
     assert person.bust == pytest.approx(98.0 * CM)
 
 

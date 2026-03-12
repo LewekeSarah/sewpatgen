@@ -79,11 +79,11 @@ def load_person(name: str, date: str | None = None) -> Person:
 class Gender(Enum):
     """Some pattern have gender-specific adjustments."""
 
-    male = "male"
-    female = "female"
-    boy = "boy"
-    girl = "girl"
-    baby = "baby"
+    MALE = "male"
+    FEMALE = "female"
+    BOY = "boy"
+    GIRL = "girl"
+    BABY = "baby"
 
 
 @dataclass
@@ -131,7 +131,7 @@ class Person:
     armscye_width: float | None = None  # ArD — Armdurchmesser
     chest_width: float | None = None  # BrB — Brustbreite
     height: float | None = None  # KöH — Körperhöhe
-    gender: Gender = Gender.female  # Geschlecht
+    gender: Gender = Gender.FEMALE  # Geschlecht
 
 
 @dataclass
@@ -354,7 +354,7 @@ class BalanceValidator:
             ValueError: If front_length and back_length are not both set, or if
                 the difference exceeds the optimal balance.
         """
-        if person.gender != Gender.female:
+        if person.gender != Gender.FEMALE:
             return BalancedPerson(person)
 
         fl = person.front_length

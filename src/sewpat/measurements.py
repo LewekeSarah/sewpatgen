@@ -84,20 +84,20 @@ class TrouserMeasurements:
     sTaH: float | None = None
     knee_height: float | None = None  # Kniehöhe
     front_trouser_width: float | None = None  # vHoB — Vorderhosenbreite
-    gender: Gender = Gender.female
+    gender: Gender = Gender.FEMALE
 
     def __post_init__(self) -> None:
         """Derive ``front_trouser_width`` and ``knee_height`` when not explicitly set."""
         self.front_trouser_width = (
             0.25 * self.hip_width if self.front_trouser_width is None else self.front_trouser_width
         )
-        if self.gender in [Gender.boy, Gender.girl]:
+        if self.gender in [Gender.BOY, Gender.GIRL]:
             inseam = self.inseam
             if inseam is None:
                 raise ValueError("inseam must be set for boy/girl trouser construction.")
             self.knee_height = 0.5 * inseam if self.knee_height is None else self.knee_height
             self.sTaH = inseam + self.body_rise
-        elif self.gender == Gender.female:
+        elif self.gender == Gender.FEMALE:
             inseam = self.inseam
             stah = self.sTaH
             if inseam is None:
@@ -159,7 +159,7 @@ class BlouseMeasurements:
     back_width: float  # RüB — Rückenbreite
     armscye_width: float  # ArD — Armdurchmesser
     chest_width: float  # BrB — Brustbreite
-    gender: Gender = Gender.female
+    gender: Gender = Gender.FEMALE
 
     def __post_init__(self) -> None:
         """Validate that back + armscye + chest widths sum to bust_width / 2."""
