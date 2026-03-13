@@ -14,6 +14,9 @@ from .part import (
     Pattern,
     PatternConfig,
     PatternPart,
+    SeamPairResult,
+    SeamPairSpec,
+    SeamValidationResult,
 )
 
 __all__ = [
@@ -30,4 +33,7 @@ __all__ = [
     "Block",
     "OverlayPart",
     "Pattern",
+    "SeamPairSpec",
+    "SeamPairResult",
+    "SeamValidationResult",
 ]

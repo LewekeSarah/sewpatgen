@@ -10,6 +10,7 @@ sewpat provides:
 - Dart construction and transfer
 - Pattern part management with seam allowance
 - Construction grids for basic blocks
+- Cross-part seam length validation (`Pattern.validate_seam_pairs`)
 - SVG/PDF rendering with scale and page format
 
 ## Quick Start

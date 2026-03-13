@@ -47,6 +47,9 @@ from .pattern import (
     OverlayPart,
     Pattern,
     PatternPart,
+    SeamPairResult,
+    SeamPairSpec,
+    SeamValidationResult,
 )
 from .person import (
     BalanceAdjustments,
@@ -123,6 +126,9 @@ __all__ = [
     "ConstructionGridPart",
     "Block",
     "OverlayPart",
+    "SeamPairSpec",
+    "SeamPairResult",
+    "SeamValidationResult",
     # Pages
     "DinA4",
     "DinA2",
