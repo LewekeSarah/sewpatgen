@@ -44,6 +44,8 @@ plugins:
 
 nav:
   - Home: index.md
+  - Guides:
+      - Darts: guides/darts.md
   - API Reference:
       - Geometry: api/geometry.md
       - Patterns & Pattern Parts: api/pattern.md

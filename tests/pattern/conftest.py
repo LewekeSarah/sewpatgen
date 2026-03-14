@@ -81,3 +81,26 @@ def _pattern_with_square_part(size: float = 200.0) -> tuple[Pattern, PatternPart
     pat = Pattern(name="P")
     pat.add_part(part)
     return pat, part
+
+
+def _make_side_part(name: str, side_len: float, hem_len: float = 50.0) -> PatternPart:
+    """PatternPart with role-tagged outline segments for seam-validation tests.
+
+    Contains:
+    - one ``is_outline`` segment of *side_len* mm with ``role="side"``
+    - one ``is_outline`` segment of *hem_len* mm with ``role="hem"``
+    - one construction line of 999 mm with ``role="side"`` (must never be counted)
+    """
+    part = PatternPart(name=name)
+    part.append(Segment(Point(0, 0), Point(side_len, 0)), is_outline=True, role="side")
+    part.append(Segment(Point(0, 0), Point(hem_len, 0)), is_outline=True, role="hem")
+    part.append(Segment(Point(0, 0), Point(999, 0)), is_construction=True, role="side")
+    return part
+
+
+def _simple_pattern(back_side: float, front_side: float) -> Pattern:
+    """Pattern with a 'Back' and 'Front' part, each built by :func:`_make_side_part`."""
+    pat = Pattern(name="TestPattern")
+    pat.add_part(_make_side_part("Back", back_side))
+    pat.add_part(_make_side_part("Front", front_side))
+    return pat

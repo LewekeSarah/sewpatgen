@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Dart (Abnäher) Examples — sewpat library showcase.
+"""Dart Examples — sewpat library showcase.
 
-This script generates six SVG files, each demonstrating a different aspect
+This script generates seven SVG files, each demonstrating a different aspect
 of dart support in sewpat:
 
     01_outer_dart_explicit_depth.svg   — Outer seam dart, depth given directly
@@ -9,10 +9,10 @@ of dart support in sewpat:
                                          (bust-point style)
     03_inner_dart_rhombus.svg          — Inner/reverse dart, rhombus rendering
     04_dart_split.svg                  — One dart split into two sub-darts
-    05_dart_transfer.svg               — Dart transferred to a new edge via the
-                                         pivot method (Schwenkverfahren)
+    05_dart_transfer.svg               — Dart translated along the seam edge
     06_curved_dart.svg                 — Bust dart with curved CubicBezier stitch
                                          legs (curved-seam / princess-style dart)
+    07_dart_seam_allowance.svg         — Bust dart with 10 mm seam allowance
 
 Each file uses the same simple rectangular bodice-front block with a
 construction grid so the geometry is easy to follow.
@@ -71,7 +71,7 @@ def _scaled(style: StyleOptions, factor: float = 0.5) -> StyleOptions:
     return s
 
 
-# Halved presets used throughout all five examples
+# Halved presets used throughout all examples
 _FOLD = _scaled(STYLE_FOLD)
 _STITCH = _scaled(STYLE_STITCH)
 _DART_STITCH = _scaled(STYLE_DART_STITCH)
@@ -106,14 +106,14 @@ def _build_block(name: str) -> tuple[Pattern, dict[str, Point]]:
     grid = ConstructionGrid(
         anchor=ANCHOR,
         horizontals=[
-            ("Schulterlinie", 0),
-            ("Brustlinie", BUST_Y),
-            ("Taillenlinie", WAIST_Y),
-            ("Saumlinie", PIECE_H),
+            ("Shoulder", 0),
+            ("Bust", BUST_Y),
+            ("Waist", WAIST_Y),
+            ("Hem", PIECE_H),
         ],
         verticals=[
-            ("Mitte-Vorne", 0),
-            ("Seitennaht", PIECE_W),
+            ("Centre Front", 0),
+            ("Side Seam", PIECE_W),
         ],
         part_name="Grid",
     )
@@ -121,12 +121,12 @@ def _build_block(name: str) -> tuple[Pattern, dict[str, Point]]:
     pattern.add_part(grid_part)
 
     # Resolve named grid elements
-    g_shoulder = grid_part.get_element("Schulterlinie").geometry
-    g_bust = grid_part.get_element("Brustlinie").geometry
-    g_waist = grid_part.get_element("Taillenlinie").geometry
-    g_hem = grid_part.get_element("Saumlinie").geometry
-    g_cf = grid_part.get_element("Mitte-Vorne").geometry
-    g_side = grid_part.get_element("Seitennaht").geometry
+    g_shoulder = grid_part.get_element("Shoulder").geometry
+    g_bust = grid_part.get_element("Bust").geometry
+    g_waist = grid_part.get_element("Waist").geometry
+    g_hem = grid_part.get_element("Hem").geometry
+    g_cf = grid_part.get_element("Centre Front").geometry
+    g_side = grid_part.get_element("Side Seam").geometry
 
     # Key corner points
     pts = {
@@ -143,10 +143,14 @@ def _build_block(name: str) -> tuple[Pattern, dict[str, Point]]:
     return pattern, pts
 
 
-def _add_outline(part: PatternPart, pts: dict[str, Point]) -> dict[str, Segment]:
+def _add_outline(part: PatternPart, pts: dict[str, Point]) -> dict[str, PatternElement]:
     """Add the four closed outline segments to *part* and return them by name."""
     segs = {
-        "cf": part.append(Segment(pts["hem_cf"], pts["shoulder_cf"]), style=_FOLD, is_outline=True),
+        "cf": part.append(
+            Segment(pts["hem_cf"], pts["shoulder_cf"]),
+            style=_FOLD,
+            is_outline=True,
+        ),
         "shoulder": part.append(
             Segment(pts["shoulder_cf"], pts["shoulder_side"]),
             style=_STITCH,
@@ -157,7 +161,11 @@ def _add_outline(part: PatternPart, pts: dict[str, Point]) -> dict[str, Segment]
             style=_STITCH,
             is_outline=True,
         ),
-        "hem": part.append(Segment(pts["hem_side"], pts["hem_cf"]), style=_STITCH, is_outline=True),
+        "hem": part.append(
+            Segment(pts["hem_side"], pts["hem_cf"]),
+            style=_STITCH,
+            is_outline=True,
+        ),
     }
     return segs
 
@@ -168,9 +176,9 @@ def _add_outline(part: PatternPart, pts: dict[str, Point]) -> dict[str, Segment]
 
 
 def example_01_outer_explicit_depth() -> None:
-    """Side-seam waist dart; depth given as an explicit mm value."""
-    pattern, pts = _build_block("Beispiel 1 – Außennaht-Abnäher (Tiefe explizit)")
-    part = PatternPart("Vorderteil")
+    """Side-seam and centre-front waist dart; depth given as an explicit mm value."""
+    pattern, pts = _build_block("Example 1 – Outer Dart (explicit depth)")
+    part = PatternPart("Bodice Front")
     pattern.add_part(part)
     segs = _add_outline(part, pts)
 
@@ -180,7 +188,7 @@ def example_01_outer_explicit_depth() -> None:
         width=22 * MM,
         depth=90 * MM,
         dart_type=DartType.TRIANGLE,
-        name="Seitennaht",
+        name="Side Seam Dart",
     )
     part.add_dart(
         dart_right,
@@ -196,13 +204,14 @@ def example_01_outer_explicit_depth() -> None:
         width=22 * MM,
         depth=90 * MM,
         dart_type=DartType.TRIANGLE,
-        name="Mittelnaht",
+        name="Centre Front Dart",
     )
     part.add_dart(dart_left, notches=True, precision_tip=True)
 
     part.add_info_box(
-        header="Beispiel 1",
-        notes=["Außennaht-Abnäher", "Tiefe 90 mm, Breite 22 mm"],
+        header="Example 1",
+        notes=["Outer seam dart", "Depth: 90 mm  |  Width: 22 mm"],
+        offset=(0, -20 * MM),
     )
     export_pattern_svg_mm(
         pattern,
@@ -220,8 +229,8 @@ def example_01_outer_explicit_depth() -> None:
 
 def example_02_outer_reference_point() -> None:
     """Side-seam bust dart directed at the bust point."""
-    pattern, pts = _build_block("Beispiel 2 – Bustnaht-Abnäher (Referenzpunkt)")
-    part = PatternPart("Vorderteil")
+    pattern, pts = _build_block("Example 2 – Bust Dart (reference point)")
+    part = PatternPart("Bodice Front")
     pattern.add_part(part)
     segs = _add_outline(part, pts)
 
@@ -235,7 +244,7 @@ def example_02_outer_reference_point() -> None:
         reference_point=pts["bust_point"],
         tip_shortfall=25 * MM,
         dart_type=DartType.TRIANGLE,
-        name="Bustnaht",
+        name="Bust Dart",
     )
     part.add_dart(
         dart,
@@ -249,17 +258,17 @@ def example_02_outer_reference_point() -> None:
     part.add_precision_points(pts["bust_point"])
 
     part.add_info_box(
-        header="Vorderteil",
+        header="Bust Dart — Reference Point",
         notes=[
-            "Bustnaht-Abnäher",
-            "Referenz: Bustpunkt",
-            "Kurzfall: 25 mm",
-            "Breite: 28 mm",
+            "Reference: bust point",
+            "Tip shortfall: 25 mm",
+            "Width: 28 mm",
         ],
     )
     part.add_grainline(
         ANCHOR + Point(10 * MM, 10 * MM),
         ANCHOR + Point(10 * MM, PIECE_H - 10 * MM),
+        name="Grain",
         style=_GRAINLINE,
     )
     export_pattern_svg_mm(
@@ -277,26 +286,38 @@ def example_02_outer_reference_point() -> None:
 
 
 def example_03_inner_dart_rhombus() -> None:
-    """Princess-seam inner dart rendered as a rhombus (Raute)."""
-    pattern, pts = _build_block("Beispiel 3 – Innennaht-Abnäher (Raute)")
-    part = PatternPart("Vorderteil")
+    """Princess-seam inner dart rendered as a rhombus."""
+    pattern, pts = _build_block("Example 3 – Inner Dart (Rhombus)")
+    part = PatternPart("Bodice Front")
     pattern.add_part(part)
     _add_outline(part, pts)
 
-    bust_line_elem = PatternElement(Segment(pts["bust_cf"], pts["bust_side"]), style=_STITCH)
+    bust_line_elem = PatternElement(
+        Segment(pts["bust_cf"], pts["bust_side"]),
+        style=_STITCH,
+    )
     dart = Dart.from_edge_at_t(
         bust_line_elem,
         t=0.5,
         width=24 * MM,
         depth=55 * MM,
         dart_type=DartType.RHOMBUS,
-        name="Raute",
+        name="Rhombus Dart",
     )
     part.add_dart(dart, stitch_style=_DART_STITCH, notches=True, precision_tip=True)
 
+    part.add_info_box(
+        header="Inner Dart — Rhombus",
+        notes=[
+            "Placed on bust line at t = 0.5",
+            f"Width: {dart.width:.0f} mm  |  Depth: {dart.depth:.0f} mm",
+        ],
+        offset=(0, 55 * MM),
+    )
     part.add_grainline(
         ANCHOR + Point(10 * MM, 10 * MM),
         ANCHOR + Point(10 * MM, PIECE_H - 10 * MM),
+        name="Grain",
         style=_GRAINLINE,
     )
     export_pattern_svg_mm(
@@ -315,8 +336,8 @@ def example_03_inner_dart_rhombus() -> None:
 
 def example_04_dart_split() -> None:
     """One large dart split into two equal sub-darts via Dart.split()."""
-    pattern, pts = _build_block("Beispiel 4 – Abnäher aufteilen (Split)")
-    part = PatternPart("Vorderteil")
+    pattern, pts = _build_block("Example 4 – Dart Split")
+    part = PatternPart("Bodice Front")
     pattern.add_part(part)
     segs = _add_outline(part, pts)
 
@@ -351,16 +372,17 @@ def example_04_dart_split() -> None:
     )
 
     part.add_info_box(
-        header="Vorderteil",
+        header="Dart Split",
         notes=[
-            "Ursprünglicher Abnäher: 36 mm",
-            "→ aufgeteilt in 2 × 18 mm",
-            "(grau = Original als Referenz)",
+            "Original: 36 mm wide",
+            "→ split into 2 × 18 mm",
+            "(grey = original, for reference)",
         ],
     )
     part.add_grainline(
         ANCHOR + Point(10 * MM, 10 * MM),
         ANCHOR + Point(10 * MM, PIECE_H - 10 * MM),
+        name="Grain",
         style=_GRAINLINE,
     )
     export_pattern_svg_mm(
@@ -380,21 +402,14 @@ def example_04_dart_split() -> None:
 def example_05_dart_transfer() -> None:
     """Reposition a side-seam dart 20 mm upward using Dart.translate().
 
-    In practice a fitter may need to slide a dart along a seam edge to sit
-    in a better position — for example to move a side-seam waist dart closer
-    to the bust level, or simply to clear a pocket.  Because a dart is an
-    immutable value object, ``Dart.translate(dx, dy)`` returns a new dart with
-    all four key points shifted by the given offset while the shape and intake
-    angle remain exactly the same.
-
-    This example places the original dart at t=0.45 on the side seam
-    (just below bust level) and translates it 20 mm upward (dy = -20 mm in
-    SVG coordinates where y increases downward).  Both darts sit on the side
-    seam so the result makes immediate sense to a sewer.  Positioning both
-    darts in the upper third of the piece keeps them clear of the info box.
+    A fitter may need to slide a dart along a seam edge — for example to move
+    a waist dart closer to the bust level, or to clear a pocket.  Because a
+    dart is an immutable value object, ``Dart.translate(dx, dy)`` returns a new
+    dart with all four key points shifted while the shape and intake angle stay
+    exactly the same.
     """
-    pattern, pts = _build_block("Beispiel 5 – Abnäher verschieben (translate, 20 mm nach oben)")
-    part = PatternPart("Vorderteil")
+    pattern, pts = _build_block("Example 5 – Dart Translate (20 mm upward)")
+    part = PatternPart("Bodice Front")
     pattern.add_part(part)
     segs = _add_outline(part, pts)
 
@@ -421,7 +436,7 @@ def example_05_dart_transfer() -> None:
         center=moved.center,
         tip=moved.tip,
         dart_type=DartType.TRIANGLE,
-        name="Verschoben (+20 mm)",
+        name="Translated (+20 mm)",
     )
 
     part.add_dart(
@@ -433,17 +448,19 @@ def example_05_dart_transfer() -> None:
     )
 
     part.add_info_box(
-        header="Vorderteil",
+        header="Dart Translate",
         notes=[
-            "Abnäher verschoben: 20 mm nach oben",
-            f"Breite: {moved.width:.0f} mm  |  Tiefe: {moved.depth:.0f} mm",
-            f"Einzug: {moved.intake_angle_deg:.1f}°  (unverändert)",
-            "(grau = ursprüngliche Position)",
+            "Dart shifted 20 mm upward",
+            f"Width: {moved.width:.0f} mm  |  Depth: {moved.depth:.0f} mm",
+            f"Intake angle: {moved.intake_angle_deg:.1f}°  (unchanged)",
+            "(grey = original position)",
         ],
+        offset=(0, 55 * MM),
     )
     part.add_grainline(
         ANCHOR + Point(10 * MM, 10 * MM),
         ANCHOR + Point(10 * MM, PIECE_H - 10 * MM),
+        name="Grain",
         style=_GRAINLINE,
     )
     export_pattern_svg_mm(
@@ -461,7 +478,7 @@ def example_05_dart_transfer() -> None:
 
 
 def example_06_curved_dart() -> None:
-    """Bust dart with curved stitch legs — the classic Schnittkurvenverfahren.
+    """Bust dart with curved stitch legs — the curved-seam method.
 
     Real garment patterns often use gently curved stitch lines instead of
     straight ones to improve the three-dimensional fit around the bust.
@@ -472,17 +489,14 @@ def example_06_curved_dart() -> None:
     1.  Build a standard straight dart with ``Dart.from_edge_free_tip()``.
     2.  Offset each stitch leg slightly inward at its midpoint to create
         a concave curve that pulls the seam toward the bust apex.
-    3.  Construct two ``CubicBezier`` objects (tip → leg) whose control
-        points lie on the inward-offset mid-points.
+    3.  Construct two ``CubicBezier`` objects (tip → leg) with control
+        points at the inward-offset mid-points.
     4.  Assign them as ``stitch_curve_a / b`` via the ``Dart`` constructor.
-    5.  Call ``part.add_dart()`` as usual — it automatically uses the
-        curved geometry for the stitch elements.
-
-    The straight reference lines are shown in light grey so the curvature
-    is easy to see.
+    5.  Call ``part.add_dart()`` as usual — it uses the curved geometry
+        automatically.
     """
-    pattern, pts = _build_block("Beispiel 6 – Bustnaht-Abnäher (geschwungene Stichlinien)")
-    part = PatternPart("Vorderteil")
+    pattern, pts = _build_block("Example 6 – Bust Dart (curved stitch legs)")
+    part = PatternPart("Bodice Front")
     pattern.add_part(part)
     segs = _add_outline(part, pts)
 
@@ -494,7 +508,7 @@ def example_06_curved_dart() -> None:
         reference_point=pts["bust_point"],
         tip_shortfall=20 * MM,
         dart_type=DartType.TRIANGLE,
-        name="Bustnaht",
+        name="Bust Dart",
     )
 
     # Show the straight stitch lines as a faint reference
@@ -503,31 +517,19 @@ def example_06_curved_dart() -> None:
     part.append(straight.fold_line, style=_REF_STYLE)
 
     # ── 2. Build curved stitch legs via CubicBezier ─────────────────────────
-    # Each leg runs tip → leg (consistent with the straight-leg direction).
-    # We pull the control points inward (toward the fold axis) to create a
-    # gentle concave curve that hugs the bust contour.
-
     tip = straight.tip
     leg_a = straight.leg_a
     leg_b = straight.leg_b
-    fold_dir = straight.fold_line.unit_direction  # unit vector center → tip
-    # Inward normal (toward the dart interior) — perpendicular to fold,
-    # pointing from leg_a side toward leg_b side.
-    inward = np.array([-fold_dir[1], fold_dir[0]])  # rotate 90° CCW
+    fold_dir = straight.fold_line.unit_direction
+    inward = np.array([-fold_dir[1], fold_dir[0]])  # 90° CCW — toward dart interior
 
-    # Mid-point of each straight leg
     mid_a = Point((tip.x + leg_a.x) / 2, (tip.y + leg_a.y) / 2)
     mid_b = Point((tip.x + leg_b.x) / 2, (tip.y + leg_b.y) / 2)
 
-    # Offset the mid-points inward by 8 mm to create a clearly visible curve
     CURVE_OFFSET = 8.0
     mid_a_curved = Point(mid_a.x + inward[0] * CURVE_OFFSET, mid_a.y + inward[1] * CURVE_OFFSET)
     mid_b_curved = Point(mid_b.x - inward[0] * CURVE_OFFSET, mid_b.y - inward[1] * CURVE_OFFSET)
 
-    # Cubic Bézier: tip → cp1 → cp2 → leg
-    # To make the curve pass near the offset midpoint we place both control
-    # points AT the offset midpoint (symmetric tent).  This gives a parabola-
-    # like arc that visibly bows inward by ~3/4 of CURVE_OFFSET at its peak.
     curve_a = CubicBezier(tip, mid_a_curved, mid_a_curved, leg_a)
     curve_b = CubicBezier(tip, mid_b_curved, mid_b_curved, leg_b)
 
@@ -538,7 +540,7 @@ def example_06_curved_dart() -> None:
         center=straight.center,
         tip=tip,
         dart_type=DartType.TRIANGLE,
-        name="Bustnaht (kurvig)",
+        name="Bust Dart (curved)",
         stitch_curve_a=curve_a,
         stitch_curve_b=curve_b,
         _edge_element=straight._edge_element,
@@ -553,23 +555,23 @@ def example_06_curved_dart() -> None:
         precision_tip=True,
     )
 
-    # Mark the bust point
     part.add_precision_points(pts["bust_point"])
     part.append(Segment(straight.center, pts["bust_point"]), style=_AUX)
 
     part.add_info_box(
-        header="Vorderteil",
+        header="Bust Dart — Curved",
         notes=[
-            "Bustnaht — geschwungene Stichlinien",
-            f"Einzug: {curved.intake_angle_deg:.1f}°",
-            f"Tiefe: {curved.depth:.0f} mm",
-            "Kurvenversatz: 8 mm inward",
-            "(grau = gerade Linien als Referenz)",
+            "Curved stitch legs via CubicBezier",
+            f"Intake angle: {curved.intake_angle_deg:.1f}°",
+            f"Depth: {curved.depth:.0f} mm",
+            "Curve offset: 8 mm inward",
+            "(grey = straight legs, for reference)",
         ],
     )
     part.add_grainline(
         ANCHOR + Point(10 * MM, 10 * MM),
         ANCHOR + Point(10 * MM, PIECE_H - 10 * MM),
+        name="Grain",
         style=_GRAINLINE,
     )
     export_pattern_svg_mm(
@@ -587,32 +589,24 @@ def example_06_curved_dart() -> None:
 
 
 def example_07_dart_with_seam_allowance() -> None:
-    """Bust dart on a bodice-front piece with full seam allowance.
+    """Bust dart on a bodice-front piece with 10 mm seam allowance.
 
-    Real patterns are cut with seam allowance (Nahtzugabe).  This example
-    shows how ``PatternPart.add_seam_allowance()`` works alongside a dart:
-
-    * **10 mm** SA on shoulder, side seam and hem (stitch lines).
-    * **0 mm** SA on the centre-front edge (fold / Fadenlauf — no seam here).
-    * The dart itself sits on the side seam and is rendered with notches
-      and a precision tip marker as usual.
-
-    The dashed outer rectangle is the cutting line; the inner solid rectangle
-    is the sewing line.  Sewers can see exactly where to place notches and
-    how the SA wraps around the dart legs.
+    The dart is added before ``add_seam_allowance()`` — always the correct
+    order.  The dashed outer line is the cutting line; the inner solid line
+    is the sewing line.
     """
-    pattern, pts = _build_block("Beispiel 7 – Bustnaht-Abnäher mit Nahtzugabe")
-    part = PatternPart("Vorderteil")
+    pattern, pts = _build_block("Example 7 – Bust Dart with Seam Allowance")
+    part = PatternPart("Bodice Front")
     pattern.add_part(part)
 
-    SA = 10 * MM  # standard seam allowance
+    SA = 10 * MM
 
-    # ── Outline: CF with seam_allowance=0 (fold, no seam), rest with 10 mm ──
+    # CF edge: fold line — no seam allowance here
     _FOLD_SA = StyleOptions(
         stroke_color=_FOLD.stroke_color,
         stroke_width=_FOLD.stroke_width,
         dash_array=_FOLD.dash_array,
-        seam_allowance=0.0,  # no SA on fold edge
+        seam_allowance=0.0,
     )
     _SA_STITCH = StyleOptions(
         stroke_color=_STITCH.stroke_color,
@@ -634,7 +628,6 @@ def example_07_dart_with_seam_allowance() -> None:
     )
     part.append(Segment(pts["hem_side"], pts["hem_cf"]), style=_SA_STITCH, is_outline=True)
 
-    # ── Dart ─────────────────────────────────────────────────────────────────
     dart = Dart.from_edge_free_tip(
         side,
         t=0.40,
@@ -642,7 +635,7 @@ def example_07_dart_with_seam_allowance() -> None:
         reference_point=pts["bust_point"],
         tip_shortfall=20 * MM,
         dart_type=DartType.TRIANGLE,
-        name="Bustnaht",
+        name="Bust Dart",
     )
     part.add_dart(
         dart,
@@ -651,28 +644,23 @@ def example_07_dart_with_seam_allowance() -> None:
         notches=True,
         precision_tip=True,
     )
-
-    # ── Seam allowance ───────────────────────────────────────────────────────
-    # add_dart() has already split the side edge at the dart legs and marked
-    # the two outer stubs as is_outline=True, so passing outline_elements=None
-    # lets add_seam_allowance() pick up the correct polygon automatically.
     part.add_seam_allowance(distance=SA)
 
     part.add_precision_points(pts["bust_point"])
     part.append(Segment(dart.tip, pts["bust_point"]), style=_AUX)
 
     part.add_info_box(
-        header="Vorderteil",
+        header="Seam Allowance",
         notes=[
-            "Bustnaht-Abnäher mit Nahtzugabe",
-            f"Nahtzugabe: {SA / MM:.0f} mm (Seiten-/Schulter-/Saum)",
-            "Fadenlauf (CF): keine Nahtzugabe",
-            f"Einzug: {dart.intake_angle_deg:.1f}°  |  Tiefe: {dart.depth / MM:.0f} mm",
+            f"SA: {SA / MM:.0f} mm (side, shoulder, hem)",
+            "Centre front: no SA (fold edge)",
+            f"Intake angle: {dart.intake_angle_deg:.1f}°  |  Depth: {dart.depth / MM:.0f} mm",
         ],
     )
     part.add_grainline(
         ANCHOR + Point(10 * MM, 10 * MM),
         ANCHOR + Point(10 * MM, PIECE_H - 10 * MM),
+        name="Grain",
         style=_GRAINLINE,
     )
     export_pattern_svg_mm(
@@ -682,60 +670,6 @@ def example_07_dart_with_seam_allowance() -> None:
         height_mm=_A4_H,
     )
     print("✓  07_dart_seam_allowance.svg")
-
-
-# ---------------------------------------------------------------------------
-# README — embed SVGs as inline base64 data URIs
-# ---------------------------------------------------------------------------
-
-
-def embed_svgs_in_readme() -> None:
-    """Embed the four example SVGs as base64 data URIs into README.md.
-
-    Each ``![alt](filename.svg)`` tag is replaced with an inline
-    ``![alt](data:image/svg+xml;base64,…)`` tag so the images display
-    in JetBrains Markdown preview (and other viewers that block relative
-    file references but allow data URIs).
-    """
-    import base64
-    import re
-
-    _SVG_ORDER = [
-        "01_outer_dart_explicit_depth.svg",
-        "02_outer_dart_reference_point.svg",
-        "03_inner_dart_rhombus.svg",
-        "04_dart_split.svg",
-        "05_dart_transfer.svg",
-        "06_curved_dart.svg",
-        "07_dart_seam_allowance.svg",
-    ]
-
-    readme = OUT_DIR / "README.md"
-    if not readme.exists():
-        return
-    text = readme.read_text(encoding="utf-8")
-
-    tag_re = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
-    matches = list(tag_re.finditer(text))
-
-    result = text
-    offset = 0
-    embedded = 0
-    for i, m in enumerate(matches):
-        if i >= len(_SVG_ORDER):
-            break
-        svg_path = OUT_DIR / _SVG_ORDER[i]
-        if not svg_path.exists():
-            continue
-        b64 = base64.b64encode(svg_path.read_bytes()).decode()
-        new_tag = f"![{m.group(1)}](data:image/svg+xml;base64,{b64})"
-        start, end = m.start() + offset, m.end() + offset
-        result = result[:start] + new_tag + result[end:]
-        offset += len(new_tag) - (end - start)
-        embedded += 1
-
-    readme.write_text(result, encoding="utf-8")
-    print(f"↺  README.md — {embedded} SVG(s) embedded as data URIs")
 
 
 # ---------------------------------------------------------------------------
@@ -751,5 +685,4 @@ if __name__ == "__main__":
     example_05_dart_transfer()
     example_06_curved_dart()
     example_07_dart_with_seam_allowance()
-    print(f"\nAll SVGs written to: {OUT_DIR.resolve()}\n")
-    embed_svgs_in_readme()
+    print(f"\nAll SVGs written to: {OUT_DIR.resolve()}")

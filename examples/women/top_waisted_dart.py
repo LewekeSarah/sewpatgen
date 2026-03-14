@@ -3,7 +3,7 @@
 
 from pathlib import Path
 
-from sewpat import GarmentPart
+from sewpat import GarmentPart, SeamValidationResult
 from sewpat.blocks import TopBlock
 from sewpat.fitclass import FitClass
 from sewpat.grids import TopGrid
@@ -72,6 +72,17 @@ def create_block(
     )
     pattern.add_part(block.back.part)
     pattern.add_part(block.front.part)
+
+    # Verify seam lengths. Side seams must match closely (±2 mm).
+    # The shoulder seam mismatch (~12 mm) is expected — the back shoulder is
+    # intentionally longer due shoulder ease (Einhalteweite).
+    seam_check: SeamValidationResult = pattern.validate_seam_pairs(
+        [
+            (Part.BLOCK_BACK, "side", Part.BLOCK_FRONT, "side"),  # ±2 mm (default)
+            (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 12.0),  # ±12 mm per-pair
+        ]
+    )
+    print(seam_check)
 
     return pattern
 

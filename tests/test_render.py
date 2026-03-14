@@ -214,6 +214,56 @@ def test_build_svg_xmlns_present():
     assert 'xmlns="http://www.w3.org/2000/svg"' in svg
 
 
+def test_build_svg_dark_mode_style_block_present():
+    """A <style> block is injected into every SVG."""
+    svg = _build_svg(**_default_build_svg_kwargs())
+    assert "<style>" in svg
+
+
+def test_build_svg_dark_mode_media_query_present():
+    """The dark-mode @media query is present in every SVG."""
+    svg = _build_svg(**_default_build_svg_kwargs())
+    assert "prefers-color-scheme: dark" in svg
+
+
+def test_build_svg_css_variables_defined():
+    """Core CSS colour variables are defined for both modes."""
+    svg = _build_svg(**_default_build_svg_kwargs())
+    for var in ("--c-fg", "--c-bg", "--c-grey", "--c-lightgrey"):
+        assert var in svg, f"Missing CSS variable: {var}"
+
+
+def test_build_svg_color_property_set_on_svg_rule():
+    """svg rule must set color: var(--c-fg) so that currentColor works in dark mode."""
+    svg = _build_svg(**_default_build_svg_kwargs())
+    assert "color: var(--c-fg)" in svg
+
+
+def test_build_svg_no_hardcoded_background_color_white():
+    """background-color:white must not appear — only the CSS variable version."""
+    svg = _build_svg(**_default_build_svg_kwargs())
+    assert "background-color:white" not in svg
+    assert "background-color: white" not in svg
+
+
+def test_build_svg_text_uses_currentcolor():
+    """Title text must use fill=currentColor so it adapts in dark mode."""
+    svg = _build_svg(**_default_build_svg_kwargs())
+    assert 'fill="currentColor"' in svg
+
+
+def test_build_svg_stroke_uses_css_variable_not_hardcoded_black():
+    """Strokes must reference CSS variables, not hardcoded 'black'."""
+    part = PatternPart(name="P")
+    part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
+    svg = _build_svg(**_default_build_svg_kwargs(element_groups=[part.elements]))
+    # var(--c-fg) is the resolved form of 'black'
+    assert 'stroke="var(--c-fg)"' in svg or 'stroke="var(--c-grey)"' in svg
+    # No raw stroke="black" should appear outside the <defs> marker paths
+    svg_body = svg.split("</defs>", 1)[-1]
+    assert 'stroke="black"' not in svg_body
+
+
 # ---------------------------------------------------------------------------
 # Per-element rendering (via _build_svg round-trip)
 # ---------------------------------------------------------------------------

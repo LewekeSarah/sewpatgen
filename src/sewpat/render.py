@@ -40,7 +40,7 @@ __all__ = [
 
 _DEFAULT_STYLES: dict[str, StyleOptions] = {
     "segment": StyleOptions(),
-    "point": StyleOptions(fill_color="black", stroke_width=0.1),
+    "point": StyleOptions(fill_color="var(--c-fg)", stroke_width=0.1),
     "circle": StyleOptions(),
     "cubicbezier": StyleOptions(),
 }
@@ -64,7 +64,7 @@ def _svg_text(x: float, y: float, font_size_mm: float, text: str, **extra: str) 
     Returns:
         SVG ``<text>`` element string.
     """
-    attrs = f'x="{x}" y="{y}" font-size="{font_size_mm}" fill="black"'
+    attrs = f'x="{x}" y="{y}" font-size="{font_size_mm}" fill="currentColor"'
     for key, value in extra.items():
         attrs += f' {key}="{value}"'
     return f"<text {attrs}>{_xml_escape(text)}</text>"
@@ -80,7 +80,7 @@ def _common_stroke_attrs(style_dict: dict[str, Any], *, force_fill: str | None =
     Returns:
         Space-separated SVG attribute string ready for embedding in an element tag.
     """
-    stroke = style_dict.get("stroke", "black") or "black"
+    stroke = _resolve_stroke_color(style_dict.get("stroke", "black") or "black")
     stroke_width = style_dict.get("stroke-width", 0.5)
     stroke_linejoin = style_dict.get("stroke-linejoin", "miter")
     stroke_miterlimit = style_dict.get("stroke-miterlimit", 4)
@@ -131,8 +131,8 @@ def _render_cubic_bezier(
         nodes.append(_svg_text(element.p0.x, element.p0.y, font_size_mm, str(element.name)))
 
     if show_control_points:
-        c_stroke = "red"
-        c_fill = "red"
+        c_stroke = _resolve_stroke_color("red")
+        c_fill = _resolve_stroke_color("red")
         c_width = 0.3
         for p_start, p_end in [(element.p0, element.p1), (element.p2, element.p3)]:
             nodes.append(
@@ -283,11 +283,11 @@ def _render_triangle(element: Triangle, style_dict: dict[str, Any]) -> list[str]
     Returns:
         List of SVG element strings.
     """
-    stroke = style_dict.get("stroke", "black") or "black"
+    stroke = _resolve_stroke_color(style_dict.get("stroke", "black") or "black")
     stroke_width = style_dict.get("stroke-width", 0.3)
     fill = style_dict.get("fill", "none")
     if fill == "none":
-        fill = "black"
+        fill = _resolve_stroke_color("black")
     opacity = style_dict.get("opacity", 1.0)
     pts = (
         f"{element.p1.x},{element.p1.y} {element.p2.x},{element.p2.y} {element.p3.x},{element.p3.y}"
@@ -318,7 +318,7 @@ def _render_info_box(element: InfoBox, style_dict: dict[str, Any]) -> list[str]:
 
     nodes.append(
         f'<text x="{x}" y="{y_start}" '
-        f'font-size="{font_size_mm * 1.2}" font-weight="bold" fill="black" '
+        f'font-size="{font_size_mm * 1.2}" font-weight="bold" fill="currentColor" '
         f'text-anchor="middle" dominant-baseline="middle">'
         f"{_xml_escape(element.header)}</text>"
     )
@@ -326,7 +326,7 @@ def _render_info_box(element: InfoBox, style_dict: dict[str, Any]) -> list[str]:
         y = y_start + (i + 1) * line_height
         nodes.append(
             f'<text x="{x}" y="{y}" '
-            f'font-size="{font_size_mm}" fill="black" '
+            f'font-size="{font_size_mm}" fill="currentColor" '
             f'text-anchor="middle" dominant-baseline="middle">'
             f"{_xml_escape(note)}</text>"
         )
@@ -394,7 +394,9 @@ def _render_point(element: Point, style_dict: dict[str, Any]) -> list[str]:
     """
     nodes: list[str] = []
     font_size_mm = style_dict.get("font-size-mm", DEFAULT_FONT_SIZE_MM)
-    attrs = _common_stroke_attrs(style_dict, force_fill=style_dict.get("fill", "black"))
+    attrs = _common_stroke_attrs(
+        style_dict, force_fill=_resolve_stroke_color(style_dict.get("fill", "black"))
+    )
     nodes.append(f'<circle cx="{element.x}" cy="{element.y}" r="1mm" {attrs} />')
     if element.name:
         nodes.append(_svg_text(element.x, element.y, font_size_mm, element.name))
@@ -561,6 +563,61 @@ def _resolve_styles(
     return styles
 
 
+def _dark_mode_style() -> str:
+    """Return a ``<style>`` block that adapts the SVG to light and dark mode.
+
+    In light mode (default): white background, dark strokes/text.
+    In dark mode: near-black background, light strokes/text.
+
+    All named colours in the pattern presets are remapped via CSS variables:
+    - ``--c-fg``       : primary stroke / text colour (black / #e8e8e8)
+    - ``--c-bg``       : canvas background            (white / #1e1e1e)
+    - ``--c-grey``     : secondary / grey elements    (#555555 / #999999)
+    - ``--c-lightgrey``: construction-grid lines      (#aaaaaa / #555555)
+    - ``--c-red``      : debug highlight              (red / #ff6b6b)
+    """
+    return (
+        "<style>\n"
+        "  :root {\n"
+        "    --c-fg: black;\n"
+        "    --c-bg: white;\n"
+        "    --c-grey: #555555;\n"
+        "    --c-lightgrey: #aaaaaa;\n"
+        "    --c-red: red;\n"
+        "  }\n"
+        "  @media (prefers-color-scheme: dark) {\n"
+        "    :root {\n"
+        "      --c-fg: #e8e8e8;\n"
+        "      --c-bg: #1e1e1e;\n"
+        "      --c-grey: #999999;\n"
+        "      --c-lightgrey: #555555;\n"
+        "      --c-red: #ff6b6b;\n"
+        "    }\n"
+        "  }\n"
+        "  svg { background-color: var(--c-bg); color: var(--c-fg); }\n"
+        "</style>"
+    )
+
+
+def _resolve_stroke_color(color: str) -> str:
+    """Map a hardcoded colour name to its CSS variable equivalent.
+
+    Colours used in the named style presets are mapped to CSS variables so
+    that the dark-mode ``<style>`` block can override them.  Any colour not
+    in the map is returned unchanged (e.g. hex codes, ``"none"``).
+    """
+    _MAP = {
+        "black": "var(--c-fg)",
+        "white": "var(--c-bg)",
+        "grey": "var(--c-grey)",
+        "gray": "var(--c-grey)",
+        "lightgrey": "var(--c-lightgrey)",
+        "lightgray": "var(--c-lightgrey)",
+        "red": "var(--c-red)",
+    }
+    return _MAP.get(color.lower(), color)
+
+
 def _build_svg(
     title: str,
     element_groups: list[list[PatternElement]],
@@ -592,7 +649,8 @@ def _build_svg(
     svg_nodes: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{width_mm}mm" height="{height_mm}mm" '
-        f'viewBox="0 0 {width_mm} {height_mm}" style="background-color:white">',
+        f'viewBox="0 0 {width_mm} {height_mm}">',
+        _dark_mode_style(),
         ARROW_DEFS,
         _svg_text(margin_mm, margin_mm, DEFAULT_FONT_SIZE_MM, title),
     ]
@@ -611,7 +669,7 @@ def _build_svg(
         )
 
     svg_nodes.append("</svg>")
-    return "\n".join(svg_nodes)
+    return "\n".join(svg_nodes) + "\n"
 
 
 def export_pattern_part_svg_mm(

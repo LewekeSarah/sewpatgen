@@ -231,17 +231,20 @@ def _add_precision_tip(
     dart: Dart,
     style: StyleOptions,
     tip: Point,
+    *,
+    show_name: bool = True,
 ) -> None:
     """Append precision circles and an optional name label at *tip*.
 
     Delegates circle rendering to :class:`~sewpat.element.PrecisionPoint`.
-    When ``dart.name`` is set an :class:`~sewpat.geometry.InfoBox` label is
-    placed 14 mm below *tip*.  All created elements receive ``role="dart_tip"``.
+    When ``dart.name`` is set and *show_name* is ``True`` an
+    :class:`~sewpat.geometry.InfoBox` label is placed 14 mm below *tip*.
+    All created elements receive ``role="dart_tip"``.
     """
     for e in PrecisionPoint(tip, style=style).build_elements():
         e.role = "dart_tip"
         part.elements.append(e)
-    if dart.name:
+    if dart.name and show_name:
         part.elements.append(
             PatternElement(
                 InfoBox(tip - Point(0, 14 * MM), header=dart.name),
@@ -313,8 +316,8 @@ def _add_rhombus_dart(
     part.elements.append(PatternElement(dart.fold_line, style=fold_style, role="dart_fold"))
 
     if precision_tip:
-        for tip in (dart.tip, st):
-            _add_precision_tip(part, dart, precision_style, tip)
+        _add_precision_tip(part, dart, precision_style, dart.tip, show_name=True)
+        _add_precision_tip(part, dart, precision_style, st, show_name=False)
 
 
 def add_dart(
