@@ -467,13 +467,20 @@ class PatternPart(NamedAccessMixin):
         )
 
     def add_info_box(
-        self, header: str | None = None, notes: list[str] | None = None
+        self,
+        header: str | None = None,
+        notes: list[str] | None = None,
+        offset: tuple[float, float] = (0.0, 3 * CM),
     ) -> PatternElement | None:
-        """Add an info box at the centroid of this part.
+        """Add an info box near the centroid of this part.
 
         Args:
             header: Bold header text. Defaults to the part name.
             notes: Optional note lines shown below the header.
+            offset: ``(dx, dy)`` shift from the centroid in mm.
+                Defaults to ``(0, 30)`` — 30 mm below the centroid.
+                Pass a negative dy to move the box upward, positive to move it
+                downward, so it clears dart geometry or precision marks.
 
         Returns:
             The created PatternElement, or ``None`` if no centroid exists yet.
@@ -483,7 +490,7 @@ class PatternPart(NamedAccessMixin):
             return None
         return self.append(
             InfoBox(
-                position=pos + Point(0, 3 * CM),
+                position=pos + Point(offset[0], offset[1]),
                 header=header if header is not None else self.name,
                 notes=notes,
             )

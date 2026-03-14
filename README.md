@@ -42,7 +42,7 @@ from sewpat import (
 from sewpat.render import export_pattern_svg_mm
 
 # Build a simple bodice-front piece
-part = PatternPart("Vorderteil")
+part = PatternPart("Bodice Front")
 o  = Point(0,   0)
 tl = Point(0,   200)
 tr = Point(120, 200)
@@ -55,17 +55,17 @@ part.append(Segment(br, o),  is_outline=True)
 # Place a waist dart on the side seam
 dart = Dart.from_edge_at_t(
     side, t=0.3, width=22 * MM, depth=80 * MM,
-    dart_type=DartType.TRIANGLE, name="Seitennaht",
+    dart_type=DartType.TRIANGLE, name="Side Seam Dart",
 )
 part.add_dart(dart, stitch_style=STYLE_DART_STITCH,
               fold_style=STYLE_DART_FOLD, notches=True, precision_tip=True)
 
-pattern = Pattern("Schnittmuster")
+pattern = Pattern("Bodice")
 pattern.add_part(part)
 export_pattern_svg_mm(pattern, filename="bodice.svg", width_mm=210, height_mm=297)
 ```
 
-## Darts (Abnäher)
+## Darts
 
 The dart API supports the full professional workflow:
 
@@ -82,8 +82,7 @@ Key properties: `width`, `depth`, `intake_angle`, `intake_angle_deg`, `fold_line
 
 Operations: `dart.split(ratio)`, `dart.rotate(pivot, angle_rad)`, `dart.translate(dx, dy)`.
 
-See [`examples/darts/`](examples/darts/) for five annotated SVG examples including
-dart splitting and the pivot-method dart transfer (Schwenkverfahren).
+See the [Darts guide](https://lewekesarah.github.io/sewpatgen/guides/darts/) for all factory methods, annotated SVG examples, dart splitting and the pivot-method dart transfer.
 
 ## Examples
 

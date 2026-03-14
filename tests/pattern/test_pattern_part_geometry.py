@@ -374,3 +374,70 @@ def test_part_seam_length_front_vs_back_inseam_comparison():
     back.append(Segment(Point(0, 0), Point(0, 205), name="Inseam"), is_outline=True)
     diff = back.seam_length(["Inseam"]) - front.seam_length(["Inseam"])
     assert abs(diff - 5.0) < 1e-6
+
+
+# ---------------------------------------------------------------------------
+# PatternPart -- add_info_box (offset parameter)
+# ---------------------------------------------------------------------------
+
+
+def test_add_info_box_returns_none_without_outline() -> None:
+    """add_info_box returns None when the part has no outline (no centroid)."""
+    part = PatternPart(name="Empty")
+    assert part.add_info_box(header="Title") is None
+
+
+def test_add_info_box_default_offset_is_30mm_below_centroid() -> None:
+    """Default offset places the box 30 mm below the centroid."""
+    part = _square_part(100)  # centroid at (50, 50)
+    elem = part.add_info_box(header="H")
+    assert elem is not None
+    box = elem.geometry
+    assert isinstance(box, InfoBox)
+    assert abs(box.position.x - 50.0) < 1e-6
+    assert abs(box.position.y - (50.0 + 30.0)) < 1e-6
+
+
+def test_add_info_box_positive_offset_moves_box_down() -> None:
+    """A positive dy offset moves the info box further below the centroid."""
+    part = _square_part(100)  # centroid at (50, 50)
+    elem = part.add_info_box(header="H", offset=(0, 55 * CM / 10))
+    assert elem is not None
+    box = elem.geometry
+    assert box.position.y > 50.0 + 30.0
+
+
+def test_add_info_box_negative_offset_moves_box_up() -> None:
+    """A negative dy offset moves the info box above the default position."""
+    part = _square_part(100)  # centroid at (50, 50)
+    elem_default = part.add_info_box(header="H")
+    elem_up = part.add_info_box(header="H", offset=(0, -20.0))
+    assert elem_default is not None and elem_up is not None
+    assert elem_up.geometry.position.y < elem_default.geometry.position.y
+
+
+def test_add_info_box_dx_offset_shifts_box_horizontally() -> None:
+    """A non-zero dx offsets the box horizontally from the centroid."""
+    part = _square_part(100)  # centroid at (50, 50)
+    elem = part.add_info_box(header="H", offset=(15.0, 30.0))
+    assert elem is not None
+    assert abs(elem.geometry.position.x - 65.0) < 1e-6
+
+
+def test_add_info_box_header_and_notes_stored() -> None:
+    """Header and notes are passed through to the InfoBox geometry."""
+    part = _square_part(100)
+    elem = part.add_info_box(header="Title", notes=["note 1", "note 2"])
+    assert elem is not None
+    box = elem.geometry
+    assert box.header == "Title"
+    assert box.notes == ["note 1", "note 2"]
+
+
+def test_add_info_box_default_header_is_part_name() -> None:
+    """When header is omitted, the part name is used."""
+    part = _square_part(100)
+    part.name = "Bodice Front"
+    elem = part.add_info_box()
+    assert elem is not None
+    assert elem.geometry.header == "Bodice Front"
