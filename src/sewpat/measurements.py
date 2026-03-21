@@ -196,6 +196,11 @@ class GarmentConfig:
                                (hem-side) tip on the back piece.  Range: 13–16 cm.
         waist_dart_front_tip:  Distance from the waist dart centre to its lower
                                (hem-side) tip on the front piece.
+        side_seam_intake_max:  Maximum side-seam intake per side used when
+                               distributing the waist shortfall.  Default 2 cm
+                               (fitted/waisted-dart block).  Set to 0–1 cm for a
+                               casual block where shaping is achieved by the side
+                               seam alone, without waist darts.
     """
 
     length: float  # MoL — Modell-Länge
@@ -205,6 +210,7 @@ class GarmentConfig:
     armscye_fit: float = 0.0  # Armlochpassform — 0 regular, 1 tight
     waist_dart_back_tip: float = 16 * CM  # hAbI-Spitze — back waist dart lower tip
     waist_dart_front_tip: float = 12 * CM  # vAbI-Spitze — front waist dart lower tip
+    side_seam_intake_max: float = 2 * CM  # SaEinzug-Max — max side-seam intake per side
 
     def __post_init__(self) -> None:
         """Validate ``armscye_fit`` and ``waist_dart_back_tip`` are within permitted ranges."""
@@ -217,6 +223,16 @@ class GarmentConfig:
             raise ValueError(
                 f"waist_dart_back_tip={self.waist_dart_back_tip / CM:.2f} cm is "
                 f"outside the valid range [13, 16] cm."
+            )
+        if not (0.5 * CM - 1e-9 <= self.shoulder_gather <= 1.5 * CM + 1e-9):
+            raise ValueError(
+                f"shoulder_gather={self.shoulder_gather / CM:.2f} cm is "
+                f"outside the valid range [13, 16] cm."
+            )
+        if not (0.0 - 1e-9 <= self.side_seam_intake_max <= 2.0 * CM + 1e-9):
+            raise ValueError(
+                f"side_seam_intake_max={self.side_seam_intake_max / CM:.2f} cm is "
+                f"outside the valid range [0, 2] cm."
             )
 
 
@@ -316,6 +332,7 @@ def calculate_waist_distribution(
     pt_waist_sf: Point,
     pt_waist_sb: Point,
     pt_waist_cb: Point,
+    side_seam_intake_max: float = 2.0 * CM,
 ) -> WaistDistribution:
     """Calculate how the waist hip_shortfall (Ausfallbetrag) is distributed to darts.
 
@@ -324,11 +341,16 @@ def calculate_waist_distribution(
     side seams and the front / back waist darts using rule-based clamping.
 
     Args:
-        meas:        Blouse measurements (ease already included).
-        pt_waist_cf: Intersection of center-front with waist line.
-        pt_waist_sf: Intersection of side-front with waist line.
-        pt_waist_sb: Intersection of side-back with waist line.
-        pt_waist_cb: Intersection of center-back with waist line.
+        meas:                Blouse measurements (ease already included).
+        pt_waist_cf:         Intersection of center-front with waist line.
+        pt_waist_sf:         Intersection of side-front with waist line.
+        pt_waist_sb:         Intersection of side-back with waist line.
+        pt_waist_cb:         Intersection of center-back with waist line.
+        side_seam_intake_max: Maximum side-seam intake per side (clamped upper
+                             bound).  Default 2 cm (waisted/fitted block).  Pass
+                             a smaller value (0–1 cm) for a casual block where
+                             no waist darts are used and shaping comes from the
+                             side seam only.
 
     Returns:
         :class:`WaistDistribution` with all computed values.
@@ -338,7 +360,7 @@ def calculate_waist_distribution(
     total_waist_width = front_waist_width + back_waist_width
     hip_shortfall = total_waist_width - meas.waist_width / 2
 
-    side_seam_intake = _clamp(hip_shortfall * _SN_FRACTION, 0.0, 2.0 * CM)
+    side_seam_intake = _clamp(hip_shortfall * _SN_FRACTION, 0.0, side_seam_intake_max)
     rest = hip_shortfall - 2.0 * side_seam_intake
     rest_pos = max(0.0, rest)
     front_dart_width = _clamp(

@@ -12,9 +12,10 @@ import warnings
 
 import pytest
 
-from sewpat.blocks import TopBlock
+from sewpat.blocks import BlockConfig, TopBlock
 from sewpat.fitclass import FitClass
 from sewpat.geometry import Point, Segment
+from sewpat.grids import GridConfig, TopGrid
 from sewpat.measurements import BlouseMeasurements, GarmentConfig
 from sewpat.pattern import GarmentPart, Pattern, PatternPart, SeamPairResult, SeamValidationResult
 from sewpat.units import CM
@@ -397,9 +398,17 @@ def top_block(
     standard_fitclass: FitClass,
 ) -> TopBlock:
     config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
+    grid = TopGrid.from_measurements(
+        meas=standard_blouse_measurements,
+        fit_class=standard_fitclass,
+        config=config,
+        grid_config=GridConfig.WAISTED_DART,
+    )
     return TopBlock.from_measurements(
         meas=standard_blouse_measurements,
         config=config,
+        grid=grid,
+        block_config=BlockConfig.WAISTED_DART,  # type: ignore[attr-defined]
         fit_class=standard_fitclass,
     )
 

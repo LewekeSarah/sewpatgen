@@ -227,41 +227,47 @@ def test_build_svg_dark_mode_media_query_present():
 
 
 def test_build_svg_css_variables_defined():
-    """Core CSS colour variables are defined for both modes."""
+    """No CSS custom properties in the SVG — all colours are literal hex."""
     svg = _build_svg(**_default_build_svg_kwargs())
     for var in ("--c-fg", "--c-bg", "--c-grey", "--c-lightgrey"):
-        assert var in svg, f"Missing CSS variable: {var}"
+        assert var not in svg, f"CSS variable should not appear: {var}"
 
 
 def test_build_svg_color_property_set_on_svg_rule():
-    """svg rule must set color: var(--c-fg) so that currentColor works in dark mode."""
+    """svg rule must set a literal background-color, not a CSS variable."""
     svg = _build_svg(**_default_build_svg_kwargs())
-    assert "color: var(--c-fg)" in svg
+    assert "background-color: #ffffff" in svg
 
 
 def test_build_svg_no_hardcoded_background_color_white():
-    """background-color:white must not appear — only the CSS variable version."""
+    """background-color must use hex #ffffff, not the keyword 'white'."""
     svg = _build_svg(**_default_build_svg_kwargs())
     assert "background-color:white" not in svg
+    assert "background-color: white" not in svg
     assert "background-color: white" not in svg
 
 
 def test_build_svg_text_uses_currentcolor():
-    """Title text must use fill=currentColor so it adapts in dark mode."""
+    """Title text must use fill="#000000" (literal hex, Inkscape-compatible)."""
     svg = _build_svg(**_default_build_svg_kwargs())
-    assert 'fill="currentColor"' in svg
+    assert 'fill="#000000"' in svg
+    assert 'fill="currentColor"' not in svg
 
 
-def test_build_svg_stroke_uses_css_variable_not_hardcoded_black():
-    """Strokes must reference CSS variables, not hardcoded 'black'."""
+def test_build_svg_stroke_uses_literal_hex_not_css_variables():
+    """Strokes must use literal hex colours, not CSS custom properties.
+
+    Inkscape does not support CSS custom properties (var(--c-...)) even inside
+    style="" attributes.  All colour values must be emitted as literal hex
+    so every conformant renderer including Inkscape displays lines correctly.
+    """
     part = PatternPart(name="P")
     part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
     svg = _build_svg(**_default_build_svg_kwargs(element_groups=[part.elements]))
-    # var(--c-fg) is the resolved form of 'black'
-    assert 'stroke="var(--c-fg)"' in svg or 'stroke="var(--c-grey)"' in svg
-    # No raw stroke="black" should appear outside the <defs> marker paths
-    svg_body = svg.split("</defs>", 1)[-1]
-    assert 'stroke="black"' not in svg_body
+    # Literal hex colours must appear in the style attribute
+    assert 'style="stroke:#000000' in svg or 'style="stroke:#555555' in svg
+    # No CSS custom properties anywhere in stroke/fill attributes
+    assert "var(--" not in svg
 
 
 # ---------------------------------------------------------------------------
@@ -945,3 +951,41 @@ def test_element_no_name_renders_without_label(svg_for_geometry):
     """A geometry with no name produces no spurious label in the SVG."""
     seg = Segment(Point(0, 0), Point(10, 0))
     assert "<svg" in svg_for_geometry(seg)
+
+
+# ---------------------------------------------------------------------------
+# Inkscape / standards compatibility
+# ---------------------------------------------------------------------------
+
+
+def test_stroke_width_has_no_mm_unit_suffix(svg_for_geometry):
+    """stroke-width must be a bare number — no 'mm' suffix.
+
+    Inkscape (and the SVG spec) treat stroke-width as a user-unit value.
+    Because the viewBox is expressed in mm-equivalent units (1 unit = 1 mm),
+    appending 'mm' would cause Inkscape to scale the width by the px/mm
+    factor (~3.78×), making lines invisible or extremely thick.
+    """
+    seg = Segment(Point(0, 0), Point(10, 0))
+    svg = svg_for_geometry(seg)
+    # Must not contain stroke-width with a mm suffix anywhere in the SVG
+    assert "stroke-width=" in svg
+    assert re.search(r'stroke-width="[^"]*mm"', svg) is None, (
+        "stroke-width must not carry a 'mm' unit suffix"
+    )
+
+
+def test_stroke_width_no_mm_suffix_for_bezier_control_points():
+    """Control-point rendering also emits unit-free stroke-width values."""
+    part = PatternPart(name="test")
+    bez = CubicBezier(Point(0, 0), Point(5, 10), Point(10, 10), Point(15, 0))
+    part.append(bez)
+    with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+        fname = f.name
+    from sewpat.render import export_pattern_part_svg_mm
+
+    export_pattern_part_svg_mm(part, fname, show_bezier_control_points=True)
+    svg = Path(fname).read_text()
+    assert re.search(r'stroke-width="[^"]*mm"', svg) is None, (
+        "Control-point stroke-width must not carry a 'mm' unit suffix"
+    )

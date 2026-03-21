@@ -49,15 +49,15 @@ def create_block(
     meas = make_top_measurements(person, fit_class)
 
     layout = PatternConfig()
-    pattern = Pattern(name="Waisted Top with Darts Block", anchor=layout.anchor)
+    pattern = Pattern(name="Casual Top without Darts Block", anchor=layout.anchor)
 
     grid = TopGrid.from_measurements(
         meas=meas,
         fit_class=fit_class,
         hip_offset=adjustments.hip_offset,
         config=config,
-        grid_config=GridConfig.WAISTED_DART,
         layout=layout,
+        grid_config=GridConfig.CASUAL,
     )
     pattern.add_part(grid.part)
 
@@ -65,7 +65,7 @@ def create_block(
         meas=meas,
         config=config,
         grid=grid,
-        block_config=BlockConfig.WAISTED_DART,  # type: ignore[attr-defined]
+        block_config=BlockConfig.CASUAL,  # type: ignore[attr-defined]
         fit_class=fit_class,
         adjustments=adjustments,
         layout=layout,
@@ -81,7 +81,7 @@ def create_block(
     seam_check: SeamValidationResult = pattern.validate_seam_pairs(
         [
             (Part.BLOCK_BACK, "side", Part.BLOCK_FRONT, "side"),  # ±2 mm (default)
-            (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 12.0),  # ±12 mm per-pair
+            (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 13.0),  # ±12 mm per-pair
         ]
     )
     print(seam_check)
@@ -93,26 +93,26 @@ if __name__ == "__main__":
     person = load_person("Sarah", date="2025-07-30")
     fit_class = FitClass(pk=4, hip_ease=6 * CM)
     adjustments = PersonalAdjustments(
-        hip_offset=1 * CM,
+        hip_offset=2 * CM,
         balance=BalanceAdjustments(front_length=-0.9 * CM),
     )
-    config = GarmentConfig(length=75 * CM)
+    config = GarmentConfig(length=75 * CM, shoulder_gather=1 * CM, side_seam_intake_max=1 * CM)
 
     person_balanced = PersonAnalyser(person, adjustments.balance).get_balanced_person()
 
     pattern = create_block(person_balanced, fit_class, adjustments, config)
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
-    grid_parts = []  # [Part.GRID]
+    grid_parts = [Part.GRID]
 
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
         pattern,
         width_mm=DinA0.width,
         height_mm=DinA0.height,
-        filename=str(Path(__file__).parent / "top_waisted_dart_grid.svg"),
+        filename=str(Path(__file__).parent / "top_casual_grid.svg"),
         parts=grid_parts + pattern_parts,
-        show_bezier_control_points=False,
+        show_bezier_control_points=True,
         show_construction=True,
         show_seam_allowance=True,
         dark_mode=False,

@@ -2,10 +2,10 @@
 
 import pytest
 
-from sewpat.blocks import TopBlock, TopBlockBack, TopBlockFront
+from sewpat.blocks import BlockConfig, TopBlock, TopBlockBack, TopBlockFront
 from sewpat.fitclass import FitClass
 from sewpat.geometry import CubicBezier, Dart, Point, Segment
-from sewpat.grids import TopGrid
+from sewpat.grids import GridConfig, TopGrid
 from sewpat.measurements import BlouseMeasurements, GarmentConfig
 from sewpat.pattern import PatternConfig, PatternPart
 from sewpat.person import PersonalAdjustments
@@ -13,11 +13,31 @@ from sewpat.units import CM
 
 
 @pytest.fixture
-def top_block(standard_blouse_measurements: BlouseMeasurements, standard_fitclass: FitClass):
+def top_grid(standard_blouse_measurements: BlouseMeasurements, standard_fitclass: FitClass):
+    """Shared WAISTED_DART grid for block tests."""
+    config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
+    return TopGrid.from_measurements(
+        meas=standard_blouse_measurements,
+        fit_class=standard_fitclass,
+        config=config,
+        grid_config=GridConfig.WAISTED_DART,
+    )
+
+
+@pytest.fixture
+def top_block(
+    standard_blouse_measurements: BlouseMeasurements,
+    standard_fitclass: FitClass,
+    top_grid: TopGrid,
+):
     """Top block without seam allowance."""
     config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
     return TopBlock.from_measurements(
-        meas=standard_blouse_measurements, config=config, fit_class=standard_fitclass
+        meas=standard_blouse_measurements,
+        config=config,
+        grid=top_grid,
+        block_config=BlockConfig.WAISTED_DART,  # type: ignore[attr-defined]
+        fit_class=standard_fitclass,
     )
 
 
@@ -173,8 +193,18 @@ def test_top_block_with_seam_allowance(
 ):
     """Building with seam_allowance > 0 does not raise."""
     config = GarmentConfig(length=70 * CM, seam_allowance=1.0 * CM)
+    grid = TopGrid.from_measurements(
+        meas=standard_blouse_measurements,
+        fit_class=standard_fitclass,
+        config=config,
+        grid_config=GridConfig.WAISTED_DART,
+    )
     block = TopBlock.from_measurements(
-        meas=standard_blouse_measurements, config=config, fit_class=standard_fitclass
+        meas=standard_blouse_measurements,
+        config=config,
+        grid=grid,
+        block_config=BlockConfig.WAISTED_DART,  # type: ignore[attr-defined]
+        fit_class=standard_fitclass,
     )
     assert isinstance(block, TopBlock)
 
@@ -185,37 +215,34 @@ def test_top_block_with_personal_adjustments(
     """PersonalAdjustments are accepted without error."""
     config = GarmentConfig(length=70 * CM)
     adj = PersonalAdjustments(hip_offset=2.0 * CM, shoulder_drop=1.5 * CM)
+    grid = TopGrid.from_measurements(
+        meas=standard_blouse_measurements,
+        fit_class=standard_fitclass,
+        config=config,
+        grid_config=GridConfig.WAISTED_DART,
+        hip_offset=adj.hip_offset,
+    )
     block = TopBlock.from_measurements(
         meas=standard_blouse_measurements,
         config=config,
+        grid=grid,
+        block_config=BlockConfig.WAISTED_DART,  # type: ignore[attr-defined]
         fit_class=standard_fitclass,
         adjustments=adj,
     )
     assert isinstance(block, TopBlock)
 
 
-def test_top_block_with_pre_built_grid(
-    standard_blouse_measurements: BlouseMeasurements, standard_fitclass: FitClass
-):
-    """A pre-built TopGrid is reused instead of building a new one."""
-    config = GarmentConfig(length=70 * CM)
-    grid = TopGrid.from_measurements(
-        meas=standard_blouse_measurements, fit_class=standard_fitclass, config=config
-    )
-    block = TopBlock.from_measurements(
-        meas=standard_blouse_measurements, config=config, fit_class=standard_fitclass, grid=grid
-    )
-    assert isinstance(block, TopBlock)
-
-
 def test_top_block_custom_part_names(
-    standard_blouse_measurements: BlouseMeasurements, standard_fitclass: FitClass
+    standard_blouse_measurements: BlouseMeasurements, standard_fitclass: FitClass, top_grid: TopGrid
 ):
     """Custom back_name and front_name are applied to the parts."""
     config = GarmentConfig(length=70 * CM)
     block = TopBlock.from_measurements(
         meas=standard_blouse_measurements,
         config=config,
+        grid=top_grid,
+        block_config=BlockConfig.WAISTED_DART,  # type: ignore[attr-defined]
         fit_class=standard_fitclass,
         back_name="Rückenteil",
         front_name="Vorderteil",
@@ -230,20 +257,62 @@ def test_top_block_custom_layout(
     """Custom PatternConfig layout is accepted."""
     config = GarmentConfig(length=70 * CM)
     layout = PatternConfig(anchor=Point(10 * CM, 10 * CM))
-    block = TopBlock.from_measurements(
-        meas=standard_blouse_measurements, config=config, fit_class=standard_fitclass, layout=layout
+    grid = TopGrid.from_measurements(
+        meas=standard_blouse_measurements,
+        fit_class=standard_fitclass,
+        config=config,
+        grid_config=GridConfig.WAISTED_DART,
+        layout=layout,
     )
-    assert isinstance(block, TopBlock)
-
-
-def test_top_block_without_fit_class_defaults_to_pk4(
-    standard_blouse_measurements: BlouseMeasurements,
-):
-    """from_measurements with fit_class=None auto-creates FitClass(pk=4) (lines 845-847)."""
-    config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
     block = TopBlock.from_measurements(
         meas=standard_blouse_measurements,
         config=config,
-        fit_class=None,  # triggers lazy import + default construction
+        grid=grid,
+        block_config=BlockConfig.WAISTED_DART,  # type: ignore[attr-defined]
+        fit_class=standard_fitclass,
+        layout=layout,
     )
     assert isinstance(block, TopBlock)
+
+
+def test_top_block_grid_is_mandatory(
+    standard_blouse_measurements: BlouseMeasurements, standard_fitclass: FitClass
+):
+    """Omitting grid raises TypeError — it is a mandatory parameter."""
+    config = GarmentConfig(length=70 * CM)
+    with pytest.raises(TypeError):
+        TopBlock.from_measurements(  # type: ignore[call-arg]
+            meas=standard_blouse_measurements,
+            config=config,
+            fit_class=standard_fitclass,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Center-back construction style
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def casual_grid(standard_blouse_measurements: BlouseMeasurements, standard_fitclass: FitClass):
+    """CASUAL grid."""
+    config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
+    return TopGrid.from_measurements(
+        meas=standard_blouse_measurements,
+        fit_class=standard_fitclass,
+        config=config,
+        grid_config=GridConfig.CASUAL,
+        hip_offset=2 * CM,
+    )
+
+
+def test_waisted_dart_center_back_has_two_segments(top_block: TopBlock):
+    """WAISTED_DART block: center back is built from two segments (kinked at waist)."""
+    center_back_elems = [
+        e
+        for e in top_block.back.part.elements
+        if e.role == "center_back" and isinstance(e.geometry, Segment)
+    ]
+    assert len(center_back_elems) == 2, (
+        f"Expected 2 center-back segments for WAISTED_DART, got {len(center_back_elems)}"
+    )

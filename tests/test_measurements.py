@@ -205,6 +205,26 @@ def test_garment_config_armscye_fit_at_boundary():
     GarmentConfig(length=70 * CM, armscye_fit=1.0 * CM)
 
 
+def test_garment_config_side_seam_intake_max_defaults_to_2cm():
+    """Default side_seam_intake_max is 2 cm."""
+    cfg = GarmentConfig(length=70 * CM)
+    assert cfg.side_seam_intake_max == pytest.approx(2.0 * CM)
+
+
+def test_garment_config_side_seam_intake_max_casual():
+    """Values in [0, 1 cm] are valid for casual use."""
+    GarmentConfig(length=70 * CM, side_seam_intake_max=0.0)
+    GarmentConfig(length=70 * CM, side_seam_intake_max=1.0 * CM)
+
+
+def test_garment_config_side_seam_intake_max_out_of_range_raises():
+    """Values outside [0, 2 cm] raise ValueError."""
+    with pytest.raises(ValueError):
+        GarmentConfig(length=70 * CM, side_seam_intake_max=3.0 * CM)
+    with pytest.raises(ValueError):
+        GarmentConfig(length=70 * CM, side_seam_intake_max=-1.0 * CM)
+
+
 # ---------------------------------------------------------------------------
 # make_measurements_trouser
 # ---------------------------------------------------------------------------

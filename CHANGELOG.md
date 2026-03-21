@@ -7,6 +7,111 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+---
+
+## [0.5.0] — 2026-03-21
+
+### Added
+
+- **`Pattern.validate_seam_pairs()`** — cross-part seam length validation.
+  Measures the total arc length of all `is_outline` elements carrying a given
+  `role` tag on each of two parts and reports whether the difference is within
+  tolerance.
+
+  ```python
+  result = pattern.validate_seam_pairs([
+      (Part.BLOCK_BACK, "side",     Part.BLOCK_FRONT, "side"),
+      (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 12.0),
+  ])
+  assert result.all_ok
+  ```
+
+  An optional 5th tuple element sets a per-pair tolerance, overriding the global
+  `tolerance_mm` keyword argument for that pair only.
+
+- **`SeamPairResult`** dataclass — result for one seam pair: `part_a`, `role_a`,
+  `length_a`, `part_b`, `role_b`, `length_b`, `delta_mm`, `tolerance_mm`, `ok`.
+
+- **`SeamValidationResult`** dataclass — aggregated result with `pairs`,
+  `all_ok`, `tolerance_mm`, and a human-readable `__str__` showing ✓/✗ per pair.
+
+- **`SeamPairSpec`** type alias — documents the `(part, role, part, role[, tol])`
+  tuple shape accepted by `validate_seam_pairs`; exported from `sewpat` and
+  `sewpat.pattern` for use in caller type annotations.
+
+- **`tests/pattern/conftest.py`** — added `_make_side_part()` and
+  `_simple_pattern()` shared helpers for seam-validation unit tests.
+
+- **`BlockConfig`** and **`GridConfig`** added to the public `sewpat` namespace
+  (`__all__`) and `from .grids import GridConfig` added to `__init__.py`.
+
+### Changed — Casual top block hem & side seam (`BlockConfig.CASUAL`)
+
+- **Back hem** — replaced the horizontal `Segment` with a straight `Segment`
+  orthogonal to the center-back edge.  Start and end are found by intersecting
+  a ray along the CB right-hand normal from `hem_center_back_outline` with a ray
+  along the CB direction from `hip_side_back`.  Guarantees hem ⊥ CB and side ‖ CB.
+
+- **Back side-hem (`side_hip_hem_back`)** — now runs along the CB direction from
+  `hip_side_back` to the hem endpoint, arriving exactly orthogonal to the hem.
+
+- **Back hip curve (`side_waist_hip_back`)** — rebuilt inside the casual branch
+  with `p2` pulled back along the reversed CB direction (`p2 ≠ p3`) so the Bézier
+  end-tangent is non-zero and aligned with `side_hip_hem_back`.  Eliminates the
+  degenerate SA miter gap that appeared when seam allowance was added.
+
+- **Front side-hem** — cropped to match the total back side length
+  (`side_waist_hip_back.length + side_hip_hem_back.length`) using `seam_length()`
+  and `Segment.point_at_length()`.
+
+- **Front hem** — replaced the straight `Segment` with a near-straight
+  `CubicBezier` departing horizontally from the CF hem point and arriving at the
+  cropped side end via a control point at `intersect(grid.hem, grid.bust_point)`.
+
+- **`_SideSeams.hem_side_to_center_back` / `hem_side_to_center_front`** — field
+  types widened from `Segment` to `Segment | CubicBezier`.
+
+### Changed — `blocks.py` refactored into three modules
+
+The monolithic 1 300-line `blocks.py` has been split into three focused files:
+
+| File | Lines | Responsibility |
+|---|---|---|
+| `blocks.py` | ~330 | Public API only: `BlockConfig`, `TopBlockBack`, `TopBlockFront`, `TopBlock` |
+| `_blocks_geometry.py` | ~800 | Internal dataclasses and all `_build_*` geometry builders |
+| `_blocks_assembly.py` | ~150 | `_assemble_back_part`, `_assemble_front_part`, role maps |
+
+`_build_side_seams` was further decomposed into:
+
+- **`_build_hip_curves()`** — hip outset points and waist-to-hip Béziers (shared).
+- **`_build_casual_back_hem()`** — casual back hem, side-hem, and hip curve end-tangent fix.
+- **`_build_casual_front_hem()`** — casual front side crop and hem Bézier.
+
+### Fixed
+
+- **`tests/test_render.py`** — corrected `part.add(bez)` to `part.append(bez)`;
+  `PatternPart` has no `add` method (`AttributeError`).
+
+- **SA gap at back hip-to-hem join** — `side_waist_hip_back` previously ended with
+  `p2 == p3` (zero end-tangent), causing `edge_tangent()` to fall back to a zero
+  vector and `miter_corner()` to produce a degenerate jump in the SA polygon.
+  Fixed by giving the Bézier a non-degenerate `p2` aligned to the CB direction.
+
+- **`grids.py` / `blocks.py` mypy `[misc]`** — `type: ignore[attr-defined]` on the
+  `GridConfig` and `BlockConfig` preset stubs did not cover `[misc]`; corrected to
+  `type: ignore[attr-defined,misc]`.
+
+- **ruff `B032`** — added `# noqa: B032` to the intentional forward-declaration
+  stubs for `BlockConfig.WAISTED_DART`, `BlockConfig.CASUAL`,
+  `GridConfig.WAISTED_DART`, and `GridConfig.CASUAL`.
+
+- **`__init__.py` ruff `F401`** — `BlockConfig` was imported but absent from
+  `__all__`; added `BlockConfig` and `GridConfig` to `__all__` and imports.
+
+---
+
 ## [0.4.0] — 2026-03-07
 
 ### Added
