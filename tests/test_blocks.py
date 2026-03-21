@@ -542,3 +542,24 @@ def test_casual_back_sa_does_not_raise(
         fit_class=standard_fitclass,
     )
     assert isinstance(block, TopBlock)
+
+
+# ---------------------------------------------------------------------------
+# TopBlock.from_measurements — fit_class=None fallback (blocks.py lines 229-231)
+# ---------------------------------------------------------------------------
+
+
+def test_top_block_fit_class_none_falls_back_to_pk4(
+    standard_blouse_measurements: BlouseMeasurements,
+    top_grid: TopGrid,
+) -> None:
+    """Omitting fit_class falls back to FitClass(pk=4) instead of raising."""
+    config = GarmentConfig(length=70 * CM)
+    block = TopBlock.from_measurements(
+        meas=standard_blouse_measurements,
+        config=config,
+        grid=top_grid,
+        block_config=BlockConfig.WAISTED_DART,  # type: ignore[attr-defined]
+        fit_class=None,
+    )
+    assert isinstance(block, TopBlock)

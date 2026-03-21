@@ -340,6 +340,19 @@ def test_role_with_no_outline_elements_raises_value_error():
         pat.validate_seam_pairs([(back, "side", front, "side")])
 
 
+def test_role_b_no_outline_elements_raises_value_error():
+    """Error message mentions role_b when part_a has outline elems but part_b does not."""
+    pat = Pattern(name="P")
+    back = PatternPart(name="Back")
+    back.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True, role="side")
+    front = PatternPart(name="Front")
+    front.append(Segment(Point(0, 0), Point(100, 0)), is_construction=True, role="side")
+    pat.add_part(back)
+    pat.add_part(front)
+    with pytest.raises(ValueError, match="side"):
+        pat.validate_seam_pairs([(back, "side", front, "side")])
+
+
 # ---------------------------------------------------------------------------
 # SeamValidationResult.__str__
 # ---------------------------------------------------------------------------

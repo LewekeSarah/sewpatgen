@@ -12,9 +12,13 @@ Covers:
 import math
 from typing import cast
 
+import pytest
+
+from sewpat.element import PatternElement
 from sewpat.geometry import (
     Circle,
     CubicBezier,
+    Dart,
     InfoBox,
     Point,
     Rect,
@@ -26,7 +30,7 @@ from sewpat.pattern import PatternPart
 from sewpat.style import STYLE_GRAINLINE
 from sewpat.units import CM
 
-from .conftest import _rect_part, _square_part
+from .conftest import _rect_part, _square_part, _square_part_with_dart
 
 # ---------------------------------------------------------------------------
 # PatternPart -- centroid
@@ -441,3 +445,106 @@ def test_add_info_box_default_header_is_part_name() -> None:
     elem = part.add_info_box()
     assert elem is not None
     assert elem.geometry.header == "Bodice Front"
+
+
+# ---------------------------------------------------------------------------
+# _NamedElementMixin.__getattr__ (part.py lines 176, 179-180)
+# ---------------------------------------------------------------------------
+
+
+def test_named_element_lookup_by_snake_case() -> None:
+    """Accessing part.center_back resolves to the element named 'Center Back'."""
+    part = PatternPart(name="P")
+    seg = Segment(Point(0, 0), Point(0, 100), name="Center Back")
+    part.append(seg, is_outline=True)
+    elem = part.center_back
+    assert elem.geometry == seg
+
+
+def test_named_element_private_attr_raises_immediately() -> None:
+    """Dunder/private lookup (snake starts with '_') raises AttributeError fast."""
+    part = PatternPart(name="P")
+    with pytest.raises(AttributeError):
+        _ = part._nonexistent_private
+
+
+def test_named_element_missing_name_raises_attribute_error() -> None:
+    """Accessing an unknown element name raises AttributeError with the looked-up name."""
+    part = PatternPart(name="P")
+    with pytest.raises(AttributeError, match="nonexistent_element"):
+        _ = part.nonexistent_element
+
+
+# ---------------------------------------------------------------------------
+# PatternPart.extend() — _stamp_construction (line 258) and Dart dispatch (line 275)
+# ---------------------------------------------------------------------------
+
+
+def test_extend_stamps_construction_flag() -> None:
+    """extend() propagates is_construction=True from a construction part."""
+    construction_part = PatternPart(name="Grid", is_construction=True)
+    elem = PatternElement(Segment(Point(0, 0), Point(50, 0)))
+    construction_part.extend([elem])
+    assert elem.is_construction is True
+
+
+def test_extend_with_dart_element_dispatches_to_add_dart() -> None:
+    """extend() with a PatternElement wrapping a Dart calls add_dart."""
+    part = _square_part_with_dart()
+    dart = Dart.from_tip_center_width(
+        tip=Point(50, 20),
+        center=Point(50, 0),
+        width=10.0,
+    )
+    dart_elem = PatternElement(dart)
+    before = len(part.elements)
+    part.extend([dart_elem])
+    # add_dart appends multiple stitch/fold elements — count must grow
+    assert len(part.elements) > before
+
+
+# ---------------------------------------------------------------------------
+# PatternPart.add_dart with notch_length / notch_width kwargs (lines 598, 600)
+# ---------------------------------------------------------------------------
+
+
+def test_add_dart_with_explicit_notch_geometry() -> None:
+    """add_dart forwards notch_length and notch_width to _dart_integration."""
+    part = PatternPart(name="P")
+    edge = Segment(Point(0, 100), Point(0, 0))
+    part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
+    part.append(Segment(Point(100, 0), Point(100, 100)), is_outline=True)
+    part.append(Segment(Point(100, 100), Point(0, 100)), is_outline=True)
+    part.append(edge, is_outline=True)
+    dart = Dart.from_tip_center_width(tip=Point(50, 80), center=Point(0, 50), width=12.0)
+    # Must not raise — notch_length and notch_width are forwarded via **kwargs
+    part.add_dart(dart, notch_length=6.0, notch_width=3.0)
+
+
+# ---------------------------------------------------------------------------
+# PatternPart.add_construction with geometry that has no set_name (line 676)
+# ---------------------------------------------------------------------------
+
+
+def test_add_construction_infobox_with_name() -> None:
+    """add_construction_line with an InfoBox (no set_name) falls back to geometry.name = name."""
+    part = PatternPart(name="P")
+    ib = InfoBox(position=Point(10, 10), header="Info")
+    elem = part.add_construction_line(ib, name="my label")
+    assert elem.geometry.name == "my label"  # type: ignore[union-attr]
+
+
+# ---------------------------------------------------------------------------
+# PatternPart.append_split_at_dart (lines 725-729)
+# ---------------------------------------------------------------------------
+
+
+def test_append_split_at_dart_appends_children() -> None:
+    """append_split_at_dart splits the element at the dart mouth and appends children."""
+    part = PatternPart(name="P")
+    edge = Segment(Point(0, 100), Point(0, 0))
+    dart = Dart.from_tip_center_width(tip=Point(40, 60), center=Point(0, 50), width=10.0)
+    elem = PatternElement(edge, is_outline=True)
+    children = part.append_split_at_dart(elem, dart)
+    assert len(children) >= 1
+    assert all(isinstance(c, PatternElement) for c in children)

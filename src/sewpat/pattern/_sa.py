@@ -169,9 +169,9 @@ def _orient_dart_roof_pairs(
 def _build_elem_overrides(
     seam_elems: list[PatternElement],
 ) -> tuple[
-    dict[frozenset, float],
-    dict[frozenset, Point],
-    dict[frozenset, str],
+    dict[frozenset[tuple[float, float]], float],
+    dict[frozenset[tuple[float, float]], Point],
+    dict[frozenset[tuple[float, float]], str],
 ]:
     """Extract per-element SA, center, and corner-join overrides from style/attrs.
 
@@ -187,9 +187,9 @@ def _build_elem_overrides(
     Raises:
         ValueError: If a ``corner_join`` style value is not one of the valid names.
     """
-    elem_sa: dict[frozenset, float] = {}
-    elem_center: dict[frozenset, Point] = {}
-    elem_cj: dict[frozenset, str] = {}
+    elem_sa: dict[frozenset[tuple[float, float]], float] = {}
+    elem_center: dict[frozenset[tuple[float, float]], Point] = {}
+    elem_cj: dict[frozenset[tuple[float, float]], str] = {}
 
     for e in seam_elems:
         key = _ep_key(cast(Segment | CubicBezier, e.geometry))
@@ -217,7 +217,7 @@ def _build_elem_overrides(
 def _stitch_corners(
     offset_groups: list[list[Segment | CubicBezier]],
     chain: list[Segment | CubicBezier],
-    elem_cj: dict[frozenset, str],
+    elem_cj: dict[frozenset[tuple[float, float]], str],
     default_cj: str,
     distance: float,
 ) -> list[Segment | CubicBezier]:

@@ -572,9 +572,13 @@ class TestAddDartOuter:
     def test_roof_inherits_edge_style(self) -> None:
         from sewpat.style import STYLE_CUT, Marker
 
-        edge = PatternElement(Segment(Point(40, 0), Point(60, 0)), style=STYLE_CUT)
-        dart = Dart.from_edge_at_t(edge, t=0.5, width=20.0, depth=80.0, name="test")
         part = _square_part()
+        # Replace the bottom edge with a STYLE_CUT segment so the dart's
+        # _edge_element is actually in the part and the roof can inherit its style.
+        edge_elem = part.append(
+            Segment(Point(40, 0), Point(60, 0)), style=STYLE_CUT, is_outline=True
+        )
+        dart = Dart.from_edge_at_t(edge_elem, t=0.5, width=20.0, depth=80.0, name="test")
         part.add_dart(dart, notches=False, precision_tip=False)
         for r in [e for e in part.elements if e.role == "dart_roof"]:
             assert r.style.marker_end == Marker.SCISSOR

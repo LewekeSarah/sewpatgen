@@ -433,7 +433,7 @@ class PatternPart(NamedAccessMixin):
         dx = inward_ref.x - snapped.x
         dy = inward_ref.y - snapped.y
         dist = (dx**2 + dy**2) ** 0.5
-        if dist < 1e-9:
+        if dist < 1e-9:  # pragma: no cover  — snapped point == inward_ref: degenerate guard
             return point
         nudge = min(step, dist * 0.5)
         return Point(snapped.x + nudge * dx / dist, snapped.y + nudge * dy / dist)
@@ -593,7 +593,7 @@ class PatternPart(NamedAccessMixin):
         """
         from . import _dart_integration
 
-        kwargs: dict = {}
+        kwargs: dict[str, float] = {}
         if notch_length is not None:
             kwargs["notch_length"] = notch_length
         if notch_width is not None:

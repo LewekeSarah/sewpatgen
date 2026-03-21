@@ -398,7 +398,7 @@ def _split_neckline_and_armscye(
         neckline_front = CubicBezier(_nf[0].p0, _nf[0].p1, _nf[0].p2, _ix)
         neckline_front_stub: CubicBezier | None = _nf[1] if len(_nf) > 1 else None
         _ix_neckline: Point | None = _ix
-    else:
+    else:  # pragma: no cover  — neckline ray always intersects for valid measurements
         shoulder_neckline = sh._shoulder_neckline_raw if block_config.has_shoulder_dart else None
         neckline_front = neckline_front_full
         neckline_front_stub = None
@@ -415,7 +415,7 @@ def _split_neckline_and_armscye(
     if len(_armscye_split) > 1:
         armscye_front_upper: CubicBezier | None = _armscye_split[0]
         armscye_front_lower = _armscye_split[1]
-    else:
+    else:  # pragma: no cover  — split point always found for valid measurements
         armscye_front_upper = None
         armscye_front_lower = armscye_front_full
 
