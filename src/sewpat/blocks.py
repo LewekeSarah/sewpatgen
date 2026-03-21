@@ -25,7 +25,7 @@ Example::
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from ._blocks_assembly import _assemble_back_part, _assemble_front_part
 from ._blocks_geometry import (
@@ -97,6 +97,10 @@ class BlockConfig:
         armscye_back_cp_y: Y offset of the back armscye lower Bézier CP.
     """
 
+    # ── Presets (class-level, not dataclass fields) ───────────────────────────
+    WAISTED_DART: ClassVar[BlockConfig]
+    CASUAL: ClassVar[BlockConfig]
+
     # ── Style ────────────────────────────────────────────────────────────────
     straight_center_back: bool = False
     has_shoulder_dart: bool = True
@@ -128,6 +132,7 @@ class BlockConfig:
 
     @classmethod
     def _make_waisted_dart(cls) -> BlockConfig:
+        """Return the waisted-dart preset with kinked CB and shoulder/waist darts."""
         return cls(
             straight_center_back=False,
             has_shoulder_dart=True,
@@ -138,6 +143,7 @@ class BlockConfig:
 
     @classmethod
     def _make_casual(cls) -> BlockConfig:
+        """Return the casual preset with straight CB and no darts."""
         return cls(
             straight_center_back=True,
             has_shoulder_dart=False,
@@ -151,10 +157,8 @@ class BlockConfig:
 
 
 # Presets — frozen dataclass instances assigned after class body.
-BlockConfig.WAISTED_DART: BlockConfig  # type: ignore[attr-defined,misc]  # noqa: B032
-BlockConfig.CASUAL: BlockConfig  # type: ignore[attr-defined,misc]  # noqa: B032
-BlockConfig.WAISTED_DART = BlockConfig._make_waisted_dart()  # type: ignore[attr-defined]
-BlockConfig.CASUAL = BlockConfig._make_casual()  # type: ignore[attr-defined]
+BlockConfig.WAISTED_DART = BlockConfig._make_waisted_dart()
+BlockConfig.CASUAL = BlockConfig._make_casual()
 
 
 @dataclass(frozen=True)

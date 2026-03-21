@@ -7,6 +7,7 @@ as ``.part`` for adding to a :class:`~sewpat.pattern.Pattern`.
 """
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 from .fitclass import FitClass
 from .geometry import Segment
@@ -57,11 +58,14 @@ class GridConfig:
     """
 
     # ------------------------------------------------------------------
-    # Presets (assigned after class body as class-level attributes)
+    # Presets (class-level, not dataclass fields)
     # ------------------------------------------------------------------
+    WAISTED_DART: ClassVar[GridConfig]
+    CASUAL: ClassVar[GridConfig]
 
     @classmethod
     def _make_waisted_dart(cls) -> GridConfig:
+        """Return the waisted-dart preset (bust-point ease from FitClass)."""
         return cls(
             bust_point_ease=None,  # taken from FitClass
             hip_adj_denominator="back_length",
@@ -69,6 +73,7 @@ class GridConfig:
 
     @classmethod
     def _make_casual(cls) -> GridConfig:
+        """Return the casual preset (fixed 1 cm bust-point ease, deeper hip denominator)."""
         return cls(
             bust_point_ease=1 * CM,  # fixed 1 cm — independent of fit class
             hip_adj_denominator="back_length+hip_depth",
@@ -99,11 +104,9 @@ class GridConfig:
         return float(value)
 
 
-# Presets — frozen dataclass, so we assign after class body.
-GridConfig.WAISTED_DART: GridConfig  # type: ignore[attr-defined,misc]  # noqa: B032
-GridConfig.CASUAL: GridConfig  # type: ignore[attr-defined,misc]  # noqa: B032
-GridConfig.WAISTED_DART = GridConfig._make_waisted_dart()  # type: ignore[attr-defined]
-GridConfig.CASUAL = GridConfig._make_casual()  # type: ignore[attr-defined]
+# Presets — frozen dataclass instances assigned after class body.
+GridConfig.WAISTED_DART = GridConfig._make_waisted_dart()
+GridConfig.CASUAL = GridConfig._make_casual()
 
 
 @dataclass(frozen=True)
@@ -247,6 +250,7 @@ class TopGrid:
         built = cg.build()
 
         def seg(name: str) -> Segment:
+            """Return the built grid element *name* as a :class:`Segment`."""
             geom = built.get_element(name).geometry
             assert isinstance(geom, Segment), f"Grid element {name!r} must be a Segment"
             return geom

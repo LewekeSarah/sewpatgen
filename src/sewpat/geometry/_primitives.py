@@ -392,10 +392,12 @@ class Segment(_LinearGeom):
 
     @property
     def _origin(self) -> Point:
+        """Axis origin — the segment start point ``p1``."""
         return self.p1
 
     @property
     def _direction(self) -> np.ndarray:
+        """Unit direction vector from ``p1`` to ``p2``."""
         return self.unit_direction
 
     @property
@@ -547,11 +549,13 @@ class Ray(_LinearGeom):
         return f"Ray(origin={self.origin}, direction={self.direction})"
 
     @property
-    def _origin(self) -> Point:
+    def _origin(self) -> Point:  # Ray override
+        """Axis origin — the ray's ``origin`` point."""
         return self.origin
 
     @property
-    def _direction(self) -> np.ndarray:
+    def _direction(self) -> np.ndarray:  # Ray override
+        """Unit direction vector of the ray."""
         return self.direction
 
     def contains_point(self, point: Point, tolerance: float = 1e-9) -> bool:
@@ -594,11 +598,13 @@ class Line(_LinearGeom):
         return f"Line(point={self.point}, direction={self.direction})"
 
     @property
-    def _origin(self) -> Point:
+    def _origin(self) -> Point:  # Line override
+        """Axis origin — the line's reference ``point``."""
         return self.point
 
     @property
-    def _direction(self) -> np.ndarray:
+    def _direction(self) -> np.ndarray:  # Line override
+        """Unit direction vector of the line."""
         return self.direction
 
     def contains_point(self, point: Point, tolerance: float = 1e-9) -> bool:

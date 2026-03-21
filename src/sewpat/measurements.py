@@ -227,7 +227,7 @@ class GarmentConfig:
         if not (0.5 * CM - 1e-9 <= self.shoulder_gather <= 1.5 * CM + 1e-9):
             raise ValueError(
                 f"shoulder_gather={self.shoulder_gather / CM:.2f} cm is "
-                f"outside the valid range [13, 16] cm."
+                f"outside the valid range [0.5, 1.5] cm."
             )
         if not (0.0 - 1e-9 <= self.side_seam_intake_max <= 2.0 * CM + 1e-9):
             raise ValueError(

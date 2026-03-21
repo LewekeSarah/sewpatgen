@@ -86,6 +86,7 @@ def _closest_sa_edge(
         return None
 
     def distance_to_edge(geom: Segment | CubicBezier) -> float:
+        """Return the shortest distance from *ref* to the nearest point on *geom*."""
         if isinstance(geom, Segment):
             seg_vec = geom.end - geom.start
             seg_len_sq = float(seg_vec.coords @ seg_vec.coords)

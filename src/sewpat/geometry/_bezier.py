@@ -40,6 +40,7 @@ def _true_offset_ls(b: CubicBezier, d: float, n: int = 64) -> _sg.LineString:
     """
 
     def _offset_pt(i: int) -> tuple[float, float]:
+        """Return the offset point at parameter *i/n* moved by *d* along the normal."""
         t = i / n
         p, nr = b.point_at_t(t), b.normal_at_t(t)
         return p.x + d * nr[0], p.y + d * nr[1]
