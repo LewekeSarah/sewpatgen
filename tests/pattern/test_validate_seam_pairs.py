@@ -497,3 +497,74 @@ def test_top_block_shoulder_back_longer_than_front(top_block: TopBlock, top_bloc
         warn=False,
     ).pairs[0]
     assert r.delta_mm > 5.0, f"Expected back shoulder longer by >5 mm, got {r.delta_mm:+.1f} mm"
+
+
+# ---------------------------------------------------------------------------
+# min_delta (6-tuple) — range check
+# ---------------------------------------------------------------------------
+
+
+def test_min_delta_passes_when_delta_within_range():
+    """6-tuple passes when min_delta ≤ Δ ≤ max_tol."""
+    pat = _simple_pattern(back_side=115.0, front_side=100.0)  # Δ = +15 mm
+    back, front = pat.parts[0], pat.parts[1]
+    result = pat.validate_seam_pairs([(back, "side", front, "side", 20.0, 10.0)], warn=False)
+    assert result.all_ok
+    assert result.pairs[0].ok
+    assert result.pairs[0].min_delta_mm == pytest.approx(10.0)
+
+
+def test_min_delta_fails_when_delta_below_lower_bound():
+    """6-tuple fails when Δ < min_delta even if Δ ≤ max_tol."""
+    pat = _simple_pattern(back_side=104.0, front_side=100.0)  # Δ = +4 mm < 10
+    back, front = pat.parts[0], pat.parts[1]
+    result = pat.validate_seam_pairs([(back, "side", front, "side", 20.0, 10.0)], warn=False)
+    assert not result.all_ok
+    assert not result.pairs[0].ok
+
+
+def test_min_delta_fails_when_delta_above_upper_bound():
+    """6-tuple fails when Δ > max_tol even if Δ ≥ min_delta."""
+    pat = _simple_pattern(back_side=125.0, front_side=100.0)  # Δ = +25 mm > 20
+    back, front = pat.parts[0], pat.parts[1]
+    result = pat.validate_seam_pairs([(back, "side", front, "side", 20.0, 10.0)], warn=False)
+    assert not result.all_ok
+    assert not result.pairs[0].ok
+
+
+def test_min_delta_result_stores_min_delta_mm():
+    """min_delta_mm is stored on the SeamPairResult."""
+    pat = _simple_pattern(back_side=115.0, front_side=100.0)
+    back, front = pat.parts[0], pat.parts[1]
+    r = pat.validate_seam_pairs([(back, "side", front, "side", 20.0, 10.0)], warn=False).pairs[0]
+    assert r.min_delta_mm == pytest.approx(10.0)
+
+
+def test_min_delta_none_when_not_provided():
+    """min_delta_mm is None for 4- and 5-tuples."""
+    pat = _simple_pattern(100.0, 100.0)
+    back, front = pat.parts[0], pat.parts[1]
+    r4 = pat.validate_seam_pairs([(back, "side", front, "side")], warn=False).pairs[0]
+    r5 = pat.validate_seam_pairs([(back, "side", front, "side", 5.0)], warn=False).pairs[0]
+    assert r4.min_delta_mm is None
+    assert r5.min_delta_mm is None
+
+
+def test_min_delta_str_shows_range():
+    """__str__ displays the range when min_delta_mm is set."""
+    pat = _simple_pattern(back_side=115.0, front_side=100.0)
+    back, front = pat.parts[0], pat.parts[1]
+    result = pat.validate_seam_pairs([(back, "side", front, "side", 20.0, 10.0)], warn=False)
+    s = str(result)
+    assert "+10.0" in s
+    assert "+20.0" in s
+
+
+def test_min_delta_warn_message_shows_range(recwarn):
+    """Warning message includes the expected range when min_delta is set."""
+    pat = _simple_pattern(back_side=104.0, front_side=100.0)  # Δ = +4 mm, fails lower bound
+    back, front = pat.parts[0], pat.parts[1]
+    pat.validate_seam_pairs([(back, "side", front, "side", 20.0, 10.0)], warn=True)
+    assert len(recwarn) == 1
+    assert "+10.0" in str(recwarn[0].message)
+    assert "+20.0" in str(recwarn[0].message)

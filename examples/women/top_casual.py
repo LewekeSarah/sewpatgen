@@ -81,7 +81,7 @@ def create_block(
     seam_check: SeamValidationResult = pattern.validate_seam_pairs(
         [
             (Part.BLOCK_BACK, "side", Part.BLOCK_FRONT, "side"),  # ±2 mm (default)
-            (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 13.0),  # ±12 mm per-pair
+            (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 13.0, 10.0),  # 10–13 mm
         ]
     )
     print(seam_check)

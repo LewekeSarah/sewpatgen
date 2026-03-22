@@ -22,24 +22,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   ```python
   result = pattern.validate_seam_pairs([
-      (Part.BLOCK_BACK, "side",     Part.BLOCK_FRONT, "side"),
-      (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 12.0),
+      (Part.BLOCK_BACK, "side",     Part.BLOCK_FRONT, "side"),              # ±2 mm (default)
+      (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 13.0, 10.0),  # 10–13 mm
   ])
   assert result.all_ok
   ```
 
-  An optional 5th tuple element sets a per-pair tolerance, overriding the global
-  `tolerance_mm` keyword argument for that pair only.
+  An optional 5th tuple element sets a per-pair upper tolerance, overriding the
+  global `tolerance_mm` keyword argument for that pair only.  An optional 6th
+  element adds a **signed lower bound** on `length_a − length_b`, enabling
+  range checks (e.g. shoulder ease must be between 10 mm and 13 mm).
 
 - **`SeamPairResult`** dataclass — result for one seam pair: `part_a`, `role_a`,
-  `length_a`, `part_b`, `role_b`, `length_b`, `delta_mm`, `tolerance_mm`, `ok`.
+  `length_a`, `part_b`, `role_b`, `length_b`, `delta_mm`, `tolerance_mm`, `ok`,
+  **`min_delta_mm`** (optional signed lower bound, `None` when not set).
 
 - **`SeamValidationResult`** dataclass — aggregated result with `pairs`,
   `all_ok`, `tolerance_mm`, and a human-readable `__str__` showing ✓/✗ per pair.
 
-- **`SeamPairSpec`** type alias — documents the `(part, role, part, role[, tol])`
+- **`SeamPairSpec`** type alias — documents the `(part, role, part, role[, tol[, min_delta]])`
   tuple shape accepted by `validate_seam_pairs`; exported from `sewpat` and
-  `sewpat.pattern` for use in caller type annotations.
+  `sewpat.pattern` for use in caller type annotations.  The optional 6th element
+  `min_delta` is a **signed lower bound** on `length_a − length_b`, enabling
+  range checks such as *shoulder ease must be 10–13 mm*:
+  ```python
+  (Part.BACK, "shoulder", Part.FRONT, "shoulder", 13.0, 10.0)
+  ```
 
 - **`tests/pattern/conftest.py`** — added `_make_side_part()` and
   `_simple_pattern()` shared helpers for seam-validation unit tests.
@@ -99,13 +107,6 @@ The monolithic 1 300-line `blocks.py` has been split into three focused files:
   vector and `miter_corner()` to produce a degenerate jump in the SA polygon.
   Fixed by giving the Bézier a non-degenerate `p2` aligned to the CB direction.
 
-- **`grids.py` / `blocks.py` mypy `[misc]`** — `type: ignore[attr-defined]` on the
-  `GridConfig` and `BlockConfig` preset stubs did not cover `[misc]`; corrected to
-  `type: ignore[attr-defined,misc]`.
-
-- **ruff `B032`** — added `# noqa: B032` to the intentional forward-declaration
-  stubs for `BlockConfig.WAISTED_DART`, `BlockConfig.CASUAL`,
-  `GridConfig.WAISTED_DART`, and `GridConfig.CASUAL`.
 
 - **`__init__.py` ruff `F401`** — `BlockConfig` was imported but absent from
   `__all__`; added `BlockConfig` and `GridConfig` to `__all__` and imports.

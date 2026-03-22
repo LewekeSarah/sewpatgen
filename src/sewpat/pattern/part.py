@@ -54,10 +54,15 @@ class PatternConfig:
 #: Type alias for one seam-pair specification passed to
 #: :meth:`Pattern.validate_seam_pairs`.
 #:
-#: Each entry is a 4- or 5-tuple::
+#: Each entry is a 4-, 5-, or 6-tuple::
 #:
-#:     (part_a, role_a, part_b, role_b)             # uses the global tolerance_mm
-#:     (part_a, role_a, part_b, role_b, tolerance)  # overrides tolerance for this pair only
+#:     (part_a, role_a, part_b, role_b)                      # global tolerance
+#:     (part_a, role_a, part_b, role_b, max_tol)             # override upper bound
+#:     (part_a, role_a, part_b, role_b, max_tol, min_delta)  # range: min_delta ≤ Δ ≤ max_tol
+#:
+#: The optional 6th element *min_delta* is a **signed** lower bound on
+#: ``length_a − length_b`` (e.g. ``10.0`` means *part_a* must be at least
+#: 10 mm longer than *part_b*).
 #:
 #: where each part is either a :class:`PatternPart` object or a name string
 #: (including :class:`GarmentPart` enum values), and each role is the
@@ -65,6 +70,7 @@ class PatternConfig:
 type SeamPairSpec = (
     tuple["PatternPart | str", str, "PatternPart | str", str]
     | tuple["PatternPart | str", str, "PatternPart | str", str, float]
+    | tuple["PatternPart | str", str, "PatternPart | str", str, float, float]
 )
 
 
@@ -81,9 +87,14 @@ class SeamPairResult:
         length_b: Total seam length in mm for the matched elements in *part_b*.
         delta_mm: Signed difference ``length_a - length_b`` in mm.
             Positive means *part_a* is longer, negative means *part_b* is longer.
-        tolerance_mm: The tolerance that was applied to this individual pair
-            (either the global default or the per-pair override).
-        ok: ``True`` when ``abs(delta_mm) <= tolerance_mm``.
+        tolerance_mm: The upper tolerance applied to this pair: ``delta_mm`` must
+            not exceed this value in absolute terms.
+        min_delta_mm: Optional signed lower bound.  When set, ``delta_mm`` must
+            also be ``>= min_delta_mm`` for the pair to be ``ok``.
+            ``None`` means no lower bound is enforced.
+        ok: ``True`` when all active bounds are satisfied:
+            ``abs(delta_mm) <= tolerance_mm`` and, if set,
+            ``delta_mm >= min_delta_mm``.
     """
 
     part_a: str
@@ -95,6 +106,7 @@ class SeamPairResult:
     delta_mm: float
     tolerance_mm: float
     ok: bool
+    min_delta_mm: float | None = None
 
 
 @dataclass
@@ -119,10 +131,14 @@ class SeamValidationResult:
         ]
         for r in self.pairs:
             mark = "✓" if r.ok else "✗"
+            if r.min_delta_mm is not None:
+                bound_str = f"({r.min_delta_mm:+.1f}..{r.tolerance_mm:+.1f} mm)"
+            else:
+                bound_str = f"(±{r.tolerance_mm:.1f} mm)"
             lines.append(
                 f"  {mark} {r.part_a!r}[{r.role_a}] {r.length_a:.1f} mm"
                 f"  vs  {r.part_b!r}[{r.role_b}] {r.length_b:.1f} mm"
-                f"  Δ = {r.delta_mm:+.1f} mm  (±{r.tolerance_mm:.1f} mm)"
+                f"  Δ = {r.delta_mm:+.1f} mm  {bound_str}"
             )
         return "\n".join(lines)
 
@@ -922,8 +938,7 @@ class Pattern:
 
         This is the cross-part equivalent of :meth:`PatternPart.seam_length`.
         A common use-case is verifying that the front and back side seams
-        match, or — once a sleeve block exists — that the sleeve cap ease
-        matches the armscye circumference.
+        match, or that the shoulder ease falls within an expected range.
 
         Example::
 
@@ -933,10 +948,17 @@ class Pattern:
                 (block.back.part, "shoulder", block.front.part, "shoulder"),
             ], tolerance_mm=2.0)
 
-            # Per-pair tolerance as optional 5th element:
+            # Per-pair upper bound as optional 5th element:
             result = pattern.validate_seam_pairs([
-                (Part.BLOCK_BACK, "side",     Part.BLOCK_FRONT, "side"),        # uses 2.0 mm
-                (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 12.0),  # 12 mm
+                (Part.BLOCK_BACK, "side",     Part.BLOCK_FRONT, "side"),       # uses 2.0 mm
+                (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 13.0),  # ≤ 13 mm
+            ])
+
+            # Range check — 6-tuple with lower bound as 6th element:
+            result = pattern.validate_seam_pairs([
+                (Part.BLOCK_BACK, "side",     Part.BLOCK_FRONT, "side"),
+                (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 13.0, 10.0),
+                # passes only when 10.0 mm ≤ Δ ≤ 13.0 mm
             ])
 
             print(result)
@@ -950,18 +972,18 @@ class Pattern:
         * ``"sleeve_cap"`` — sleeve cap curve (future: once a sleeve block exists).
 
         Args:
-            pairs: List of ``(part_a, role_a, part_b, role_b[, tolerance])`` tuples.
-                Each part may be a :class:`PatternPart` object or a name string
-                (including :class:`GarmentPart` enum values) — strings are
-                resolved via :meth:`get_part`.  The optional 5th element
-                overrides *tolerance_mm* for that individual pair, which is
-                useful when different seam types have different expected
-                tolerances (e.g. side seams ≤ 2 mm, shoulder ease ≤ 12 mm).
-            tolerance_mm: Default maximum acceptable absolute length difference
-                in mm, used for any pair that does not supply its own tolerance.
-                Defaults to ``2.0 mm``.
+            pairs: List of 4-, 5-, or 6-tuples
+                ``(part_a, role_a, part_b, role_b[, max_tol[, min_delta]])``.
+                Each part may be a :class:`PatternPart` object or a name string.
+                The optional 5th element overrides *tolerance_mm* (upper bound).
+                The optional 6th element is a **signed lower bound** on
+                ``length_a − length_b``: the pair passes only when
+                ``min_delta ≤ delta ≤ max_tol``.  Useful for seams that must
+                differ by a specific amount (e.g. shoulder ease of 10–13 mm).
+            tolerance_mm: Default upper tolerance in mm for pairs without a
+                5th element.  Defaults to ``2.0 mm``.
             warn: When ``True`` (default), emit a :class:`UserWarning` for
-                every pair that exceeds its tolerance.
+                every pair that fails its check.
 
         Returns:
             A :class:`SeamValidationResult` with one :class:`SeamPairResult`
@@ -975,7 +997,8 @@ class Pattern:
 
         for entry in pairs:
             part_a_ref, role_a, part_b_ref, role_b = entry[0], entry[1], entry[2], entry[3]
-            pair_tolerance = entry[4] if len(entry) == 5 else tolerance_mm
+            pair_tolerance = entry[4] if len(entry) >= 5 else tolerance_mm
+            pair_min_delta: float | None = entry[5] if len(entry) == 6 else None
 
             part_a = (
                 part_a_ref if isinstance(part_a_ref, PatternPart) else self.get_part(part_a_ref)
@@ -1003,7 +1026,9 @@ class Pattern:
             len_a = part_a.seam_length(elems_a)
             len_b = part_b.seam_length(elems_b)
             delta = len_a - len_b
-            ok = abs(delta) <= pair_tolerance
+            ok = abs(delta) <= pair_tolerance and (
+                pair_min_delta is None or delta >= pair_min_delta
+            )
 
             pair_result = SeamPairResult(
                 part_a=part_a.name,
@@ -1015,16 +1040,21 @@ class Pattern:
                 delta_mm=delta,
                 tolerance_mm=pair_tolerance,
                 ok=ok,
+                min_delta_mm=pair_min_delta,
             )
             result.pairs.append(pair_result)
             if not ok:
                 result.all_ok = False
                 if warn:
+                    if pair_min_delta is not None:
+                        bound_str = f"expected {pair_min_delta:+.1f}..{pair_tolerance:+.1f} mm"
+                    else:
+                        bound_str = f"tolerance ±{pair_tolerance:.1f} mm"
                     warnings.warn(
                         f"Seam mismatch: {part_a.name!r}[{role_a}] "
                         f"({len_a:.1f} mm) vs {part_b.name!r}[{role_b}] "
                         f"({len_b:.1f} mm) — Δ = {delta:+.1f} mm "
-                        f"(tolerance ±{pair_tolerance:.1f} mm)",
+                        f"({bound_str})",
                         UserWarning,
                         stacklevel=2,
                     )
