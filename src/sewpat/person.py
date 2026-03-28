@@ -4,6 +4,7 @@ import copy
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -64,7 +65,7 @@ def load_person(name: str, date: str | None = None) -> Person:
 
     row = rows.sort_values("date").iloc[-1]  # most recent if multiple
 
-    kwargs: dict = {}
+    kwargs: dict[str, Any] = {}
     for col in _FLOAT_COLS:
         val = row.get(col)
         if pd.notna(val):

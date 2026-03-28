@@ -12,10 +12,10 @@ This module owns:
 """
 
 import copy
-import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 
+import shapely as _shp
 import shapely.geometry as _sg
 
 from ..element import GeometryType, PatternElement, PrecisionPoint
@@ -41,6 +41,14 @@ from ..style import (
     StyleOptions,
 )
 from ..units import CM, MM
+from ._validation import (
+    SeamPairSpec,
+    SeamValidationResult,
+    WidthLevelSpec,
+    WidthValidationResult,
+)
+from ._validation import validate_seam_pairs as _validate_seam_pairs
+from ._validation import validate_widths as _validate_widths
 
 
 @dataclass
@@ -49,82 +57,6 @@ class PatternConfig:
 
     anchor: Point = Point(5 * CM, 5 * CM, "anchor")
     margin: float = 15 * CM
-
-
-#: Type alias for one seam-pair specification passed to
-#: :meth:`Pattern.validate_seam_pairs`.
-#:
-#: Each entry is a 4- or 5-tuple::
-#:
-#:     (part_a, role_a, part_b, role_b)             # uses the global tolerance_mm
-#:     (part_a, role_a, part_b, role_b, tolerance)  # overrides tolerance for this pair only
-#:
-#: where each part is either a :class:`PatternPart` object or a name string
-#: (including :class:`GarmentPart` enum values), and each role is the
-#: ``role`` tag used to select ``is_outline`` elements on that part.
-type SeamPairSpec = (
-    tuple["PatternPart | str", str, "PatternPart | str", str]
-    | tuple["PatternPart | str", str, "PatternPart | str", str, float]
-)
-
-
-@dataclass
-class SeamPairResult:
-    """Measurement result for a single matched seam pair.
-
-    Attributes:
-        part_a: Name of the first pattern part.
-        role_a: Role tag used to select elements in *part_a*.
-        length_a: Total seam length in mm for the matched elements in *part_a*.
-        part_b: Name of the second pattern part.
-        role_b: Role tag used to select elements in *part_b*.
-        length_b: Total seam length in mm for the matched elements in *part_b*.
-        delta_mm: Signed difference ``length_a - length_b`` in mm.
-            Positive means *part_a* is longer, negative means *part_b* is longer.
-        tolerance_mm: The tolerance that was applied to this individual pair
-            (either the global default or the per-pair override).
-        ok: ``True`` when ``abs(delta_mm) <= tolerance_mm``.
-    """
-
-    part_a: str
-    role_a: str
-    length_a: float
-    part_b: str
-    role_b: str
-    length_b: float
-    delta_mm: float
-    tolerance_mm: float
-    ok: bool
-
-
-@dataclass
-class SeamValidationResult:
-    """Aggregated result of :meth:`Pattern.validate_seam_pairs`.
-
-    Attributes:
-        pairs: One :class:`SeamPairResult` per checked seam pair, in the order
-            they were supplied to :meth:`~Pattern.validate_seam_pairs`.
-        all_ok: ``True`` when every pair is within tolerance.
-        tolerance_mm: The tolerance value that was used.
-    """
-
-    pairs: list[SeamPairResult] = field(default_factory=list)
-    all_ok: bool = True
-    tolerance_mm: float = 2.0
-
-    def __str__(self) -> str:
-        """Human-readable summary, one line per pair."""
-        lines: list[str] = [
-            f"Seam validation  {'✓ all OK' if self.all_ok else '✗ mismatches found'}"
-        ]
-        for r in self.pairs:
-            mark = "✓" if r.ok else "✗"
-            lines.append(
-                f"  {mark} {r.part_a!r}[{r.role_a}] {r.length_a:.1f} mm"
-                f"  vs  {r.part_b!r}[{r.role_b}] {r.length_b:.1f} mm"
-                f"  Δ = {r.delta_mm:+.1f} mm  (±{r.tolerance_mm:.1f} mm)"
-            )
-        return "\n".join(lines)
 
 
 class GarmentPart(StrEnum):
@@ -328,6 +260,42 @@ class PatternPart(NamedAccessMixin):
         minx, miny, maxx, maxy = poly.bounds
         return Point(minx, miny), Point(maxx, maxy)
 
+    def width_at_y(self, y: float) -> tuple[float, float]:
+        """Return ``(min_x, max_x)`` of the outline at horizontal slice *y* mm.
+
+        Intersects the outline polygon with a horizontal line at *y* and
+        returns the X-extent of the intersection.  Typical use-case: measure
+        the garment width at the bust, waist, or hip level.
+
+        Args:
+            y: Y-coordinate of the horizontal slice in mm (pattern coordinates).
+
+        Returns:
+            ``(min_x, max_x)`` — leftmost and rightmost X coordinates of the
+            outline at *y*.
+
+        Raises:
+            ValueError: If the part has no outline polygon.
+            ValueError: If the horizontal slice at *y* does not intersect the
+                outline.
+        """
+        poly = self._outline_polygon()
+        if poly is None or poly.is_empty:
+            raise ValueError(f"Part {self.name!r} has no outline polygon.")
+        h_line = _sg.LineString([(-1e9, y), (1e9, y)])
+        cross = poly.intersection(h_line)
+        if cross.is_empty:
+            raise ValueError(
+                f"Y level {y:.1f} mm does not intersect the outline of part {self.name!r}."
+            )
+        coords = _shp.get_coordinates(cross)
+        if len(coords) == 0:
+            raise ValueError(  # pragma: no cover — guarded by cross.is_empty above
+                f"No intersection coordinates found at Y={y:.1f} for part {self.name!r}."
+            )
+        xs = coords[:, 0]
+        return float(xs.min()), float(xs.max())
+
     def get_element(self, name: str) -> PatternElement:
         """Return the first :class:`PatternElement` whose geometry carries *name*.
 
@@ -433,7 +401,7 @@ class PatternPart(NamedAccessMixin):
         dx = inward_ref.x - snapped.x
         dy = inward_ref.y - snapped.y
         dist = (dx**2 + dy**2) ** 0.5
-        if dist < 1e-9:
+        if dist < 1e-9:  # pragma: no cover  — snapped point == inward_ref: degenerate guard
             return point
         nudge = min(step, dist * 0.5)
         return Point(snapped.x + nudge * dx / dist, snapped.y + nudge * dy / dist)
@@ -593,7 +561,7 @@ class PatternPart(NamedAccessMixin):
         """
         from . import _dart_integration
 
-        kwargs: dict = {}
+        kwargs: dict[str, float] = {}
         if notch_length is not None:
             kwargs["notch_length"] = notch_length
         if notch_width is not None:
@@ -920,48 +888,19 @@ class Pattern:
         ``is_outline`` elements carrying the given ``role`` tag and reports the
         length difference.
 
-        This is the cross-part equivalent of :meth:`PatternPart.seam_length`.
-        A common use-case is verifying that the front and back side seams
-        match, or — once a sleeve block exists — that the sleeve cap ease
-        matches the armscye circumference.
-
         Example::
 
-            # Same tolerance for all pairs:
             result = pattern.validate_seam_pairs([
-                (block.back.part, "side",     block.front.part, "side"),
-                (block.back.part, "shoulder", block.front.part, "shoulder"),
-            ], tolerance_mm=2.0)
-
-            # Per-pair tolerance as optional 5th element:
-            result = pattern.validate_seam_pairs([
-                (Part.BLOCK_BACK, "side",     Part.BLOCK_FRONT, "side"),        # uses 2.0 mm
-                (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 12.0),  # 12 mm
+                (Part.BLOCK_BACK, "side",     Part.BLOCK_FRONT, "side"),
+                (Part.BLOCK_BACK, "shoulder", Part.BLOCK_FRONT, "shoulder", 13.0, 10.0),
             ])
-
             print(result)
-            assert result.all_ok
-
-        **Role conventions for the top block:**
-
-        * ``"side"``       — side-seam edges (front ↔ back must match).
-        * ``"shoulder"``   — shoulder edges (front ↔ back must match).
-        * ``"armscye"``    — armscye curve (future: front+back ↔ sleeve cap).
-        * ``"sleeve_cap"`` — sleeve cap curve (future: once a sleeve block exists).
 
         Args:
-            pairs: List of ``(part_a, role_a, part_b, role_b[, tolerance])`` tuples.
-                Each part may be a :class:`PatternPart` object or a name string
-                (including :class:`GarmentPart` enum values) — strings are
-                resolved via :meth:`get_part`.  The optional 5th element
-                overrides *tolerance_mm* for that individual pair, which is
-                useful when different seam types have different expected
-                tolerances (e.g. side seams ≤ 2 mm, shoulder ease ≤ 12 mm).
-            tolerance_mm: Default maximum acceptable absolute length difference
-                in mm, used for any pair that does not supply its own tolerance.
-                Defaults to ``2.0 mm``.
-            warn: When ``True`` (default), emit a :class:`UserWarning` for
-                every pair that exceeds its tolerance.
+            pairs: List of 4-, 5-, or 6-tuples
+                ``(part_a, role_a, part_b, role_b[, max_tol[, min_delta]])``.
+            tolerance_mm: Default upper tolerance in mm.  Defaults to ``2.0``.
+            warn: Emit a :class:`UserWarning` for every failing pair when ``True``.
 
         Returns:
             A :class:`SeamValidationResult` with one :class:`SeamPairResult`
@@ -971,62 +910,63 @@ class Pattern:
             KeyError: If a name string does not match any part in this pattern.
             ValueError: If a role produces no ``is_outline`` elements in a part.
         """
-        result = SeamValidationResult(tolerance_mm=tolerance_mm)
+        return _validate_seam_pairs(self, pairs, tolerance_mm=tolerance_mm, warn=warn)
 
-        for entry in pairs:
-            part_a_ref, role_a, part_b_ref, role_b = entry[0], entry[1], entry[2], entry[3]
-            pair_tolerance = entry[4] if len(entry) == 5 else tolerance_mm
+    def validate_widths(
+        self,
+        specs: list[WidthLevelSpec],
+        *,
+        tolerance_mm: float = 5.0,
+        warn: bool = True,
+    ) -> WidthValidationResult:
+        """Check that the combined back + front widths at key levels match measurements.
 
-            part_a = (
-                part_a_ref if isinstance(part_a_ref, PatternPart) else self.get_part(part_a_ref)
+        For each level, the width is measured by intersecting a construction-grid
+        :class:`~sewpat.geometry.Segment` with the role-tagged seam edges of the
+        back and front pieces.  This approach is independent of the pattern's
+        orientation on the page.
+
+        Typical expected values for a top block:
+
+        * bust:  ``meas.bust_width / 2``
+        * waist: ``meas.waist_width / 2``
+        * hip:   ``meas.hip_width / 2``
+
+        Example::
+
+            width_check = pattern.validate_widths(
+                [
+                    (Part.BLOCK_BACK, "center_back", "side",
+                     Part.BLOCK_FRONT, "center_front", "side",
+                     "Bust",  grid.chest, meas.bust_width / 2),
+                    (Part.BLOCK_BACK, "center_back", "side",
+                     Part.BLOCK_FRONT, "center_front", "side",
+                     "Waist", grid.waist, meas.waist_width / 2),
+                    (Part.BLOCK_BACK, "center_back", "side",
+                     Part.BLOCK_FRONT, "center_front", "side",
+                     "Hip",   grid.hip,   meas.hip_width / 2),
+                ],
+                tolerance_mm=5.0,
             )
-            part_b = (
-                part_b_ref if isinstance(part_b_ref, PatternPart) else self.get_part(part_b_ref)
-            )
+            print(width_check)
 
-            elems_a: list[PatternElement | str] = [
-                e for e in part_a.elements if e.role == role_a and e.is_outline
-            ]
-            elems_b: list[PatternElement | str] = [
-                e for e in part_b.elements if e.role == role_b and e.is_outline
-            ]
+        Args:
+            specs: List of 9- or 10-tuples
+                ``(back_part, back_center_role, back_side_role,
+                front_part, front_center_role, front_side_role,
+                label, grid_segment, expected_mm[, tol_mm])``.
+                Each part may be a :class:`PatternPart` object or a name string.
+                The optional 10th element overrides *tolerance_mm* for that level.
+            tolerance_mm: Default tolerance in mm.  Defaults to ``5.0``.
+            warn: Emit a :class:`UserWarning` for every failing check when ``True``.
 
-            if not elems_a:
-                raise ValueError(
-                    f"No is_outline elements with role {role_a!r} found in part {part_a.name!r}."
-                )
-            if not elems_b:
-                raise ValueError(
-                    f"No is_outline elements with role {role_b!r} found in part {part_b.name!r}."
-                )
+        Returns:
+            A :class:`WidthValidationResult` with one :class:`WidthCheckResult`
+            per entry in *specs*.
 
-            len_a = part_a.seam_length(elems_a)
-            len_b = part_b.seam_length(elems_b)
-            delta = len_a - len_b
-            ok = abs(delta) <= pair_tolerance
-
-            pair_result = SeamPairResult(
-                part_a=part_a.name,
-                role_a=role_a,
-                length_a=len_a,
-                part_b=part_b.name,
-                role_b=role_b,
-                length_b=len_b,
-                delta_mm=delta,
-                tolerance_mm=pair_tolerance,
-                ok=ok,
-            )
-            result.pairs.append(pair_result)
-            if not ok:
-                result.all_ok = False
-                if warn:
-                    warnings.warn(
-                        f"Seam mismatch: {part_a.name!r}[{role_a}] "
-                        f"({len_a:.1f} mm) vs {part_b.name!r}[{role_b}] "
-                        f"({len_b:.1f} mm) — Δ = {delta:+.1f} mm "
-                        f"(tolerance ±{pair_tolerance:.1f} mm)",
-                        UserWarning,
-                        stacklevel=2,
-                    )
-
-        return result
+        Raises:
+            KeyError: If a name string does not match any part in this pattern.
+            ValueError: If a role has no ``is_outline`` elements, or none of them
+                intersect the grid segment.
+        """
+        return _validate_widths(self, specs, tolerance_mm=tolerance_mm, warn=warn)

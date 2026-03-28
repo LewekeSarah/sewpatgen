@@ -73,6 +73,7 @@ def _hodograph_offset(curve: CubicBezier, d: float) -> CubicBezier:
     """
 
     def _shifted(pt: Point, t: float) -> Point:
+        """Shift *pt* by distance *d* along the curve normal at parameter *t*."""
         n = curve.normal_at_t(t)
         return Point(pt.x + d * n[0], pt.y + d * n[1])
 

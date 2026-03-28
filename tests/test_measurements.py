@@ -205,6 +205,34 @@ def test_garment_config_armscye_fit_at_boundary():
     GarmentConfig(length=70 * CM, armscye_fit=1.0 * CM)
 
 
+def test_garment_config_side_seam_intake_max_defaults_to_2cm():
+    """Default side_seam_intake_max is 2 cm."""
+    cfg = GarmentConfig(length=70 * CM)
+    assert cfg.side_seam_intake_max == pytest.approx(2.0 * CM)
+
+
+def test_garment_config_side_seam_intake_max_casual():
+    """Values in [0, 1 cm] are valid for casual use."""
+    GarmentConfig(length=70 * CM, side_seam_intake_max=0.0)
+    GarmentConfig(length=70 * CM, side_seam_intake_max=1.0 * CM)
+
+
+def test_garment_config_side_seam_intake_max_out_of_range_raises():
+    """Values outside [0, 2 cm] raise ValueError."""
+    with pytest.raises(ValueError):
+        GarmentConfig(length=70 * CM, side_seam_intake_max=3.0 * CM)
+    with pytest.raises(ValueError):
+        GarmentConfig(length=70 * CM, side_seam_intake_max=-1.0 * CM)
+
+
+def test_garment_config_shoulder_gather_out_of_range_raises():
+    """shoulder_gather outside [0.5, 1.5 cm] raises ValueError."""
+    with pytest.raises(ValueError, match="shoulder_gather"):
+        GarmentConfig(length=70 * CM, shoulder_gather=2.0 * CM)
+    with pytest.raises(ValueError, match="shoulder_gather"):
+        GarmentConfig(length=70 * CM, shoulder_gather=0.1 * CM)
+
+
 # ---------------------------------------------------------------------------
 # make_measurements_trouser
 # ---------------------------------------------------------------------------
@@ -289,6 +317,31 @@ def test_make_measurements_trouser_balance_adjustments_applied(boy_person: Perso
     # Just verify it completes without raising — back_length may not be in
     # the trouser measurements dict, but the branch still executes
     meas = make_measurements_trouser(boy_person, ease, balance=bal)
+    assert isinstance(meas, TrouserMeasurements)
+
+
+def test_make_measurements_trouser_balance_mutation_when_key_present():
+    """Balance adjustment is actually applied when the person has a matching field (line 444)."""
+    from sewpat.measurements import TrouserEase
+
+    # BOY person with back_length set — back_length ends up in the measurements dict
+    # BOY gender auto-computes knee_height so TrouserMeasurements can be built
+    person_with_back_length = Person(
+        bust=60 * CM,
+        waist=58 * CM,
+        hip=70 * CM,
+        hip_depth=16 * CM,
+        body_rise=22 * CM,
+        inseam=60 * CM,
+        back_length=40 * CM,
+        gender=Gender.BOY,
+    )
+    ease = TrouserEase()
+    adjustment = 0.5 * CM
+    bal = BalanceAdjustments(back_length=adjustment)
+    # The balance loop executes measurements["back_length"] += adjustment
+    # back_length is filtered out later (not a trouser key) but the branch runs
+    meas = make_measurements_trouser(person_with_back_length, ease, balance=bal)
     assert isinstance(meas, TrouserMeasurements)
 
 

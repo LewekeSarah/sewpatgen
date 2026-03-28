@@ -535,6 +535,7 @@ class Dart:
         """Return a translated copy."""
 
         def mv(p: Point) -> Point:
+            """Translate *p* by (dx, dy)."""
             return p.translate(dx, dy)
 
         return Dart(
@@ -572,6 +573,7 @@ class Dart:
         """Return a rotated copy (CCW around *pivot*)."""
 
         def rot(p: Point) -> Point:
+            """Rotate *p* CCW by *angle_rad* around *pivot*."""
             return p.rotate(pivot, angle_rad)
 
         return Dart(

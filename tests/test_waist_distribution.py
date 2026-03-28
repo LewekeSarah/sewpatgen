@@ -118,3 +118,47 @@ class TestWaistDistributionClamping:
         meas = replace(standard_blouse_measurements, waist_width=78 * CM)
         wd = calculate_waist_distribution(meas, *_make_points(22 * CM, 18 * CM))
         assert wd.remainder < 0.5 * CM
+
+
+class TestWaistDistributionCasual:
+    """Behaviour when side_seam_intake_max is reduced (casual / no-dart block)."""
+
+    def _wd(
+        self,
+        standard_blouse_measurements,
+        front=22 * CM,
+        back=18 * CM,
+        ww=78 * CM,
+        max_intake=1 * CM,
+    ):
+        meas = replace(standard_blouse_measurements, waist_width=ww)
+        return calculate_waist_distribution(
+            meas,
+            *_make_points(front, back),
+            side_seam_intake_max=max_intake,
+        )
+
+    def test_side_seam_intake_capped_at_max(self, standard_blouse_measurements):
+        """side_seam_intake never exceeds the provided cap."""
+        for cap in [0.0, 0.5 * CM, 1.0 * CM]:
+            wd = self._wd(standard_blouse_measurements, max_intake=cap)
+            assert wd.side_seam_intake <= cap + 1e-9
+
+    def test_zero_cap_all_in_darts(self, standard_blouse_measurements):
+        """With cap=0 the side seam intake is zero; all excess goes to darts."""
+        wd = self._wd(standard_blouse_measurements, max_intake=0.0)
+        assert wd.side_seam_intake == pytest.approx(0.0, abs=1e-9)
+
+    def test_balance_holds_with_custom_max(self, standard_blouse_measurements):
+        """Distribution still sums to hip_shortfall with a custom cap."""
+        wd = self._wd(standard_blouse_measurements)
+        total = 2 * wd.side_seam_intake + wd.front_dart_width + wd.back_dart_width + wd.remainder
+        assert total == pytest.approx(wd.hip_shortfall, abs=1e-9)
+
+    def test_default_max_unchanged(self, standard_blouse_measurements):
+        """Calling without side_seam_intake_max gives the same result as max=2 cm."""
+        meas = replace(standard_blouse_measurements, waist_width=78 * CM)
+        pts = _make_points(22 * CM, 18 * CM)
+        wd_default = calculate_waist_distribution(meas, *pts)
+        wd_explicit = calculate_waist_distribution(meas, *pts, side_seam_intake_max=2 * CM)
+        assert wd_default.side_seam_intake == pytest.approx(wd_explicit.side_seam_intake)

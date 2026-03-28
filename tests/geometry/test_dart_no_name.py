@@ -1,5 +1,7 @@
 """Regression: SVG export must not crash when dart has no name."""
 
+import pytest
+
 from sewpat import MM, Dart, DartType, Pattern, PatternPart, Point, Segment
 from sewpat.element import PatternElement
 from sewpat.render import export_pattern_svg_mm
@@ -14,7 +16,8 @@ def _nameless_dart() -> Dart:
 
 def test_add_dart_no_name_tip_elements():
     part = PatternPart("test")
-    part.add_dart(_nameless_dart(), notches=False, precision_tip=True)
+    with pytest.warns(UserWarning, match="_edge_element is not in the part"):
+        part.add_dart(_nameless_dart(), notches=False, precision_tip=True)
     # Only two circles — no InfoBox when name is None
     tip_elems = [e for e in part.elements if e.role == "dart_tip"]
     assert len(tip_elems) == 2
@@ -22,7 +25,8 @@ def test_add_dart_no_name_tip_elements():
 
 def test_svg_export_no_name(tmp_path):
     part = PatternPart("test")
-    part.add_dart(_nameless_dart(), notches=False, precision_tip=True)
+    with pytest.warns(UserWarning, match="_edge_element is not in the part"):
+        part.add_dart(_nameless_dart(), notches=False, precision_tip=True)
     pattern = Pattern("test")
     pattern.add_part(part)
     out = tmp_path / "noname.svg"

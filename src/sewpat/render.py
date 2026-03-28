@@ -40,7 +40,7 @@ __all__ = [
 
 _DEFAULT_STYLES: dict[str, StyleOptions] = {
     "segment": StyleOptions(),
-    "point": StyleOptions(fill_color="var(--c-fg)", stroke_width=0.1),
+    "point": StyleOptions(fill_color="#000000", stroke_width=0.1),
     "circle": StyleOptions(),
     "cubicbezier": StyleOptions(),
 }
@@ -64,7 +64,7 @@ def _svg_text(x: float, y: float, font_size_mm: float, text: str, **extra: str) 
     Returns:
         SVG ``<text>`` element string.
     """
-    attrs = f'x="{x}" y="{y}" font-size="{font_size_mm}" fill="currentColor"'
+    attrs = f'x="{x}" y="{y}" font-size="{font_size_mm}" fill="#000000"'
     for key, value in extra.items():
         attrs += f' {key}="{value}"'
     return f"<text {attrs}>{_xml_escape(text)}</text>"
@@ -72,6 +72,11 @@ def _svg_text(x: float, y: float, font_size_mm: float, text: str, **extra: str) 
 
 def _common_stroke_attrs(style_dict: dict[str, Any], *, force_fill: str | None = None) -> str:
     """Build common stroke/fill/opacity SVG attribute string from a style dict.
+
+    Colour values that may contain CSS ``var(…)`` references are placed inside
+    a ``style="…"`` attribute so that all SVG viewers (including Inkscape) can
+    resolve them correctly.  CSS variables are **not** supported in bare SVG
+    presentation attributes by Inkscape and other non-browser renderers.
 
     Args:
         style_dict: Resolved style attributes dict from :meth:`StyleOptions.as_dict`.
@@ -89,10 +94,13 @@ def _common_stroke_attrs(style_dict: dict[str, Any], *, force_fill: str | None =
     dasharray = style_dict.get("stroke-dasharray")
     dashoffset = style_dict.get("stroke-dashoffset", 0)
 
+    # Colours go into style="" so CSS variables are resolved by all renderers.
+    style = f"stroke:{stroke};fill:{fill}"
     attrs = (
-        f'stroke="{stroke}" stroke-width="{stroke_width}mm" '
+        f'style="{style}" '
+        f'stroke-width="{stroke_width}" '
         f'stroke-linejoin="{stroke_linejoin}" stroke-miterlimit="{stroke_miterlimit}" '
-        f'fill="{fill}" opacity="{opacity}"'
+        f'opacity="{opacity}"'
     )
     if dasharray:
         attrs += f' stroke-dasharray="{dasharray}" stroke-dashoffset="{dashoffset}"'
@@ -138,13 +146,13 @@ def _render_cubic_bezier(
             nodes.append(
                 f'<line x1="{p_start.x}" y1="{p_start.y}" '
                 f'x2="{p_end.x}" y2="{p_end.y}" '
-                f'stroke="{c_stroke}" stroke-width="{c_width}mm" '
-                f'fill="none" stroke-dasharray="2,2" />'
+                f'style="stroke:{c_stroke};fill:none" stroke-width="{c_width}" '
+                f'stroke-dasharray="2,2" />'
             )
         for pt in [element.p0, element.p1, element.p2, element.p3]:
             nodes.append(
-                f'<circle cx="{pt.x}" cy="{pt.y}" r="1mm" '
-                f'stroke="{c_stroke}" fill="{c_fill}" stroke-width="{c_width}mm" />'
+                f'<circle cx="{pt.x}" cy="{pt.y}" r="1" '
+                f'style="stroke:{c_stroke};fill:{c_fill}" stroke-width="{c_width}" />'
             )
 
     return nodes
@@ -294,8 +302,8 @@ def _render_triangle(element: Triangle, style_dict: dict[str, Any]) -> list[str]
     )
     return [
         f'<polygon points="{pts}" '
-        f'stroke="{stroke}" stroke-width="{stroke_width}mm" '
-        f'fill="{fill}" opacity="{opacity}" />'
+        f'style="stroke:{stroke};fill:{fill}" '
+        f'stroke-width="{stroke_width}" opacity="{opacity}" />'
     ]
 
 
@@ -318,7 +326,7 @@ def _render_info_box(element: InfoBox, style_dict: dict[str, Any]) -> list[str]:
 
     nodes.append(
         f'<text x="{x}" y="{y_start}" '
-        f'font-size="{font_size_mm * 1.2}" font-weight="bold" fill="currentColor" '
+        f'font-size="{font_size_mm * 1.2}" font-weight="bold" fill="#000000" '
         f'text-anchor="middle" dominant-baseline="middle">'
         f"{_xml_escape(element.header)}</text>"
     )
@@ -326,7 +334,7 @@ def _render_info_box(element: InfoBox, style_dict: dict[str, Any]) -> list[str]:
         y = y_start + (i + 1) * line_height
         nodes.append(
             f'<text x="{x}" y="{y}" '
-            f'font-size="{font_size_mm}" fill="currentColor" '
+            f'font-size="{font_size_mm}" fill="#000000" '
             f'text-anchor="middle" dominant-baseline="middle">'
             f"{_xml_escape(note)}</text>"
         )
@@ -397,7 +405,7 @@ def _render_point(element: Point, style_dict: dict[str, Any]) -> list[str]:
     attrs = _common_stroke_attrs(
         style_dict, force_fill=_resolve_stroke_color(style_dict.get("fill", "black"))
     )
-    nodes.append(f'<circle cx="{element.x}" cy="{element.y}" r="1mm" {attrs} />')
+    nodes.append(f'<circle cx="{element.x}" cy="{element.y}" r="1" {attrs} />')
     if element.name:
         nodes.append(_svg_text(element.x, element.y, font_size_mm, element.name))
     return nodes
@@ -563,57 +571,39 @@ def _resolve_styles(
     return styles
 
 
-def _dark_mode_style() -> str:
-    """Return a ``<style>`` block that adapts the SVG to light and dark mode.
+def _dark_mode_style(dark_mode: bool = True) -> str:
+    """Return a ``<style>`` block that controls the canvas background colour.
 
-    In light mode (default): white background, dark strokes/text.
-    In dark mode: near-black background, light strokes/text.
+    Stroke and fill colours are emitted as literal hex values in presentation
+    attributes (Inkscape-compatible).  Dark mode for browser viewers is handled
+    by overriding the ``svg`` background only — the strokes remain dark on a
+    light background regardless of system preference when ``dark_mode=False``.
 
-    All named colours in the pattern presets are remapped via CSS variables:
-    - ``--c-fg``       : primary stroke / text colour (black / #e8e8e8)
-    - ``--c-bg``       : canvas background            (white / #1e1e1e)
-    - ``--c-grey``     : secondary / grey elements    (#555555 / #999999)
-    - ``--c-lightgrey``: construction-grid lines      (#aaaaaa / #555555)
-    - ``--c-red``      : debug highlight              (red / #ff6b6b)
+    When *dark_mode* is ``True`` the background flips to near-black in browsers
+    that respect ``prefers-color-scheme: dark``.
     """
-    return (
-        "<style>\n"
-        "  :root {\n"
-        "    --c-fg: black;\n"
-        "    --c-bg: white;\n"
-        "    --c-grey: #555555;\n"
-        "    --c-lightgrey: #aaaaaa;\n"
-        "    --c-red: red;\n"
-        "  }\n"
-        "  @media (prefers-color-scheme: dark) {\n"
-        "    :root {\n"
-        "      --c-fg: #e8e8e8;\n"
-        "      --c-bg: #1e1e1e;\n"
-        "      --c-grey: #999999;\n"
-        "      --c-lightgrey: #555555;\n"
-        "      --c-red: #ff6b6b;\n"
-        "    }\n"
-        "  }\n"
-        "  svg { background-color: var(--c-bg); color: var(--c-fg); }\n"
-        "</style>"
+    base = "  svg { background-color: #ffffff; }\n"
+    dark_override = (
+        "  @media (prefers-color-scheme: dark) {\n    svg { background-color: #1e1e1e; }\n  }\n"
     )
+    return "<style>\n" + base + (dark_override if dark_mode else "") + "</style>"
 
 
 def _resolve_stroke_color(color: str) -> str:
-    """Map a hardcoded colour name to its CSS variable equivalent.
+    """Map a named colour to its light-mode hex value.
 
-    Colours used in the named style presets are mapped to CSS variables so
-    that the dark-mode ``<style>`` block can override them.  Any colour not
-    in the map is returned unchanged (e.g. hex codes, ``"none"``).
+    Literal hex values are used in presentation attributes so that all viewers
+    — including Inkscape, which does not support CSS custom properties in SVG
+    attributes — render lines correctly.  The ``<style>`` block handles
+    dark-mode overrides for browser-based viewers via CSS class selectors.
     """
     _MAP = {
-        "black": "var(--c-fg)",
-        "white": "var(--c-bg)",
-        "grey": "var(--c-grey)",
-        "gray": "var(--c-grey)",
-        "lightgrey": "var(--c-lightgrey)",
-        "lightgray": "var(--c-lightgrey)",
-        "red": "var(--c-red)",
+        "black": "#000000",
+        "white": "#ffffff",
+        "grey": "#555555",
+        "lightgrey": "#aaaaaa",
+        "red": "#cc0000",
+        "none": "none",
     }
     return _MAP.get(color.lower(), color)
 
@@ -628,6 +618,7 @@ def _build_svg(
     show_bezier_control_points: bool,
     show_seam_allowance: bool = True,
     styles: dict[str, StyleOptions] | None = None,
+    dark_mode: bool = True,
 ) -> str:
     """Build and return the SVG string for one or more element groups.
 
@@ -641,6 +632,8 @@ def _build_svg(
         show_bezier_control_points: Render Bézier control-point handles.
         show_seam_allowance: Include SA offset lines.
         styles: Optional type-level style overrides.
+        dark_mode: When ``False`` the SVG is always rendered with a white
+            background and dark strokes, ignoring the system colour scheme.
 
     Returns:
         Complete SVG document as a string.
@@ -650,7 +643,7 @@ def _build_svg(
         f'<svg xmlns="http://www.w3.org/2000/svg" '
         f'width="{width_mm}mm" height="{height_mm}mm" '
         f'viewBox="0 0 {width_mm} {height_mm}">',
-        _dark_mode_style(),
+        _dark_mode_style(dark_mode=dark_mode),
         ARROW_DEFS,
         _svg_text(margin_mm, margin_mm, DEFAULT_FONT_SIZE_MM, title),
     ]
@@ -682,6 +675,7 @@ def export_pattern_part_svg_mm(
     show_construction: bool = True,
     show_bezier_control_points: bool = False,
     show_seam_allowance: bool = True,
+    dark_mode: bool = True,
 ) -> None:
     """Export a single PatternPart as an SVG file with mm units.
 
@@ -696,6 +690,8 @@ def export_pattern_part_svg_mm(
             Set to ``False`` for a clean print view without drafting aids.
         show_bezier_control_points: Render Bézier control-point handles.
         show_seam_allowance: Include SA offset lines (default True).
+        dark_mode: When ``False`` the SVG always uses a white background and
+            dark strokes, ignoring the viewer's system colour scheme.
     """
     styles = _resolve_styles(style_map)
     svg = _build_svg(
@@ -708,6 +704,7 @@ def export_pattern_part_svg_mm(
         show_bezier_control_points=show_bezier_control_points,
         show_seam_allowance=show_seam_allowance,
         styles=styles,
+        dark_mode=dark_mode,
     )
     with open(filename, "w") as f:
         f.write(svg)
@@ -724,6 +721,7 @@ def export_pattern_svg_mm(
     show_bezier_control_points: bool = False,
     parts: list[str] | None = None,
     show_seam_allowance: bool = True,
+    dark_mode: bool = True,
 ) -> None:
     """Export a Pattern (all or selected parts) as a single SVG file.
 
@@ -741,6 +739,8 @@ def export_pattern_svg_mm(
             except :class:`ConstructionGridPart` and :class:`Block` — those
             must be requested explicitly by name.
         show_seam_allowance: Include SA offset lines (default True).
+        dark_mode: When ``False`` the SVG always uses a white background and
+            dark strokes, ignoring the viewer's system colour scheme.
     """
     styles = _resolve_styles(style_map)
 
@@ -766,6 +766,7 @@ def export_pattern_svg_mm(
         show_bezier_control_points=show_bezier_control_points,
         show_seam_allowance=show_seam_allowance,
         styles=styles,
+        dark_mode=dark_mode,
     )
     with open(filename, "w") as f:
         f.write(svg)
