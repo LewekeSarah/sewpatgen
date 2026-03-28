@@ -51,6 +51,9 @@ from .pattern import (
     SeamPairResult,
     SeamPairSpec,
     SeamValidationResult,
+    WidthCheckResult,
+    WidthLevelSpec,
+    WidthValidationResult,
 )
 from .person import (
     BalanceAdjustments,
@@ -132,6 +135,9 @@ __all__ = [
     "SeamPairSpec",
     "SeamPairResult",
     "SeamValidationResult",
+    "WidthLevelSpec",
+    "WidthCheckResult",
+    "WidthValidationResult",
     # Pages
     "DinA4",
     "DinA2",

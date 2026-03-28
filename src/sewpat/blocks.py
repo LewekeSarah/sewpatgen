@@ -39,6 +39,7 @@ from .grids import TopGrid
 from .measurements import (
     BlouseMeasurements,
     GarmentConfig,
+    WaistDistribution,
     calculate_hip_distribution,
     calculate_waist_distribution,
 )
@@ -206,10 +207,18 @@ class TopBlock:
 
     Build via :meth:`TopBlock.from_measurements`; then add ``.back``
     and ``.front`` to your pattern.
+
+    Attributes:
+        back:               The back pattern piece with all dart/seam geometry.
+        front:              The front pattern piece with all dart/seam geometry.
+        waist_distribution: Result of the waist excess calculation — exposes
+            ``side_seam_intake``, ``front_dart_width``, ``back_dart_width``,
+            ``total_waist_width`` etc. for use in downstream width checks.
     """
 
     back: TopBlockBack
     front: TopBlockFront
+    waist_distribution: WaistDistribution
 
     @classmethod
     def from_measurements(
@@ -323,4 +332,4 @@ class TopBlock:
             hip_outset=sides.hip_side_front,
             bust_point=front_geom.bust_point,
         )
-        return cls(back=back, front=front)
+        return cls(back=back, front=front, waist_distribution=wd)

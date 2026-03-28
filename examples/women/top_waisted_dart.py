@@ -3,7 +3,7 @@
 
 from pathlib import Path
 
-from sewpat import GarmentPart, SeamValidationResult
+from sewpat import GarmentPart, SeamValidationResult, WidthValidationResult
 from sewpat.blocks import BlockConfig, TopBlock
 from sewpat.fitclass import FitClass
 from sewpat.grids import GridConfig, TopGrid
@@ -85,6 +85,65 @@ def create_block(
         ]
     )
     print(seam_check)
+
+    # Verify horizontal widths at bust, waist and hip levels.
+    # Width is measured by intersecting the grid construction line with the
+    # center and side seam edges, so the check is independent of how the
+    # pattern is oriented on the page.
+    #
+    # Tolerance notes for the waisted-dart block:
+    #   Bust  — construction target; should be within 5 mm.
+    #   Waist — the waist darts are interior rhombus darts, so their mouth
+    #            openings are fully present in the flat pattern piece.  The
+    #            expected flat-pattern width therefore equals waist_width/2
+    #            *plus* the two dart widths.  After this correction a 5 mm
+    #            tolerance is sufficient.
+    #   Hip   — construction target; should be within 5 mm.
+    back_dart_w = block.waist_distribution.back_dart_width
+    front_dart_w = block.waist_distribution.front_dart_width
+    waist_expected = meas.waist_width / 2 + back_dart_w + front_dart_w
+    width_check: WidthValidationResult = pattern.validate_widths(
+        [
+            (
+                Part.BLOCK_BACK,
+                "center_back",
+                "side",
+                Part.BLOCK_FRONT,
+                "center_front",
+                "side",
+                "Bust",
+                grid.chest,
+                meas.bust_width / 2,
+                5.0,
+            ),
+            (
+                Part.BLOCK_BACK,
+                "center_back",
+                "side",
+                Part.BLOCK_FRONT,
+                "center_front",
+                "side",
+                "Waist",
+                grid.waist,
+                waist_expected,
+                5.0,
+            ),
+            (
+                Part.BLOCK_BACK,
+                "center_back",
+                "side",
+                Part.BLOCK_FRONT,
+                "center_front",
+                "side",
+                "Hip",
+                grid.hip,
+                meas.hip_width / 2,
+                5.0,
+            ),
+        ],
+        tolerance_mm=5.0,
+    )
+    print(width_check)
 
     return pattern
 

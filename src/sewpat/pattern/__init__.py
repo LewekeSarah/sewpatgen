@@ -5,6 +5,14 @@ of the old monolithic ``pattern.py`` into sub-modules.
 """
 
 from ..element import GeometryType, PatternElement, PrecisionPoint
+from ._validation import (
+    SeamPairResult,
+    SeamPairSpec,
+    SeamValidationResult,
+    WidthCheckResult,
+    WidthLevelSpec,
+    WidthValidationResult,
+)
 from .construction import ConstructionGrid, ConstructionGridPart
 from .part import (
     Block,
@@ -14,9 +22,6 @@ from .part import (
     Pattern,
     PatternConfig,
     PatternPart,
-    SeamPairResult,
-    SeamPairSpec,
-    SeamValidationResult,
 )
 
 __all__ = [
@@ -36,4 +41,7 @@ __all__ = [
     "SeamPairSpec",
     "SeamPairResult",
     "SeamValidationResult",
+    "WidthLevelSpec",
+    "WidthCheckResult",
+    "WidthValidationResult",
 ]
