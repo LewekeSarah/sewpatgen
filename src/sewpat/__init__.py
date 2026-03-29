@@ -64,6 +64,15 @@ from .person import (
     PersonAnalyser,
     load_person,
 )
+from .sleeve import (
+    SleeveArmhole,
+    SleeveBlockConfig,
+    SleeveConfig,
+    SleeveConstructionMeasures,
+    SleeveMeasurements,
+    SleeveMode,
+    SleeveType,
+)
 from .style import (
     DEFAULT_STROKE_WIDTH,
     DEFAULT_STROKE_WIDTH_GRAIN,
@@ -120,6 +129,14 @@ __all__ = [
     "TopBlock",
     "TopBlockBack",
     "TopBlockFront",
+    # Sleeve
+    "SleeveType",
+    "SleeveMode",
+    "SleeveBlockConfig",
+    "SleeveConfig",
+    "SleeveMeasurements",
+    "SleeveArmhole",
+    "SleeveConstructionMeasures",
     # Pattern element
     "GeometryType",
     "PatternElement",

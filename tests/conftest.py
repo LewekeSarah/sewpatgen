@@ -15,12 +15,15 @@ from typing import Any
 
 import pytest
 
+from sewpat.blocks import BlockConfig, TopBlock
 from sewpat.fitclass import FitClass
 from sewpat.geometry import Point, Rect, Segment
-from sewpat.measurements import BlouseMeasurements
+from sewpat.grids import GridConfig, TopGrid
+from sewpat.measurements import BlouseMeasurements, GarmentConfig
 from sewpat.pattern import Pattern, PatternPart
 from sewpat.person import BalancedPerson, Person, PersonAnalyser
 from sewpat.render import _build_svg
+from sewpat.sleeve import SleeveArmhole, SleeveConfig, SleeveMeasurements
 from sewpat.units import CM
 
 # ---------------------------------------------------------------------------
@@ -166,6 +169,55 @@ def standard_blouse_measurements() -> BlouseMeasurements:
 def standard_fitclass() -> FitClass:
     """Pytest fixture for standard FitClass (PK 4)."""
     return make_standard_fitclass()
+
+
+@pytest.fixture
+def top_grid(
+    standard_blouse_measurements: BlouseMeasurements, standard_fitclass: FitClass
+) -> TopGrid:
+    """WAISTED_DART construction grid for the standard PK 4 measurements."""
+    config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
+    return TopGrid.from_measurements(
+        meas=standard_blouse_measurements,
+        fit_class=standard_fitclass,
+        config=config,
+        grid_config=GridConfig.WAISTED_DART,
+    )
+
+
+@pytest.fixture
+def top_block(
+    standard_blouse_measurements: BlouseMeasurements,
+    standard_fitclass: FitClass,
+    top_grid: TopGrid,
+) -> TopBlock:
+    """Assembled WAISTED_DART block without seam allowance."""
+    config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
+    return TopBlock.from_measurements(
+        meas=standard_blouse_measurements,
+        config=config,
+        grid=top_grid,
+        block_config=BlockConfig.WAISTED_DART,  # type: ignore[attr-defined]
+        fit_class=standard_fitclass,
+    )
+
+
+@pytest.fixture
+def sleeve_armhole(top_block: TopBlock, top_grid: TopGrid) -> SleeveArmhole:
+    """SleeveArmhole extracted from the standard WAISTED_DART block."""
+    return SleeveArmhole.from_block(top_block, top_grid)
+
+
+@pytest.fixture
+def sleeve_meas() -> SleeveMeasurements:
+    """Standard sleeve body measurements: armscye_width=9 cm, upper_arm=28 cm, wrist=16 cm."""
+    return SleeveMeasurements(armscye_width=9 * CM, upper_arm=28 * CM, wrist=16 * CM)
+
+
+@pytest.fixture
+def sleeve_config() -> SleeveConfig:
+    """Standard sleeve garment config: 60 cm sleeve length."""
+    return SleeveConfig(sleeve_length=60 * CM)
 
 
 # ---------------------------------------------------------------------------
