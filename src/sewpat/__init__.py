@@ -1,6 +1,6 @@
 """Sewpat — a Python library for generating sewing patterns."""
 
-from .blocks import BlockConfig, TopBlock, TopBlockBack, TopBlockFront
+from .blocks import BlockConfig, TopBlock, TopBlockBack, TopBlockFront, WideSleeveBlock
 from .element import GeometryType, PatternElement, PrecisionPoint
 from .fitclass import FitClass
 from .geometry import (
@@ -25,7 +25,7 @@ from .geometry import (
     intersect,
     seam_length,
 )
-from .grids import GridConfig
+from .grids import GridConfig, WideSleeveGrid
 from .measurements import (
     BlouseMeasurements,
     GarmentConfig,
@@ -129,6 +129,8 @@ __all__ = [
     "TopBlock",
     "TopBlockBack",
     "TopBlockFront",
+    "WideSleeveBlock",
+    "WideSleeveGrid",
     # Sleeve
     "SleeveType",
     "SleeveMode",

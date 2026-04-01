@@ -13,6 +13,26 @@ from svgpathtools import CubicBezier as _SvgCubicBezier
 from ._primitives import Point, _split_at_ts
 
 
+def _bernstein_basis(t: float) -> tuple[float, float, float, float]:
+    """Return the four cubic Bernstein basis values at parameter *t* ∈ [0, 1].
+
+    The standard cubic Bernstein polynomials are::
+
+        b0 = (1-t)³
+        b1 = 3·t·(1-t)²
+        b2 = 3·t²·(1-t)
+        b3 = t³
+
+    so that ``b0+b1+b2+b3 = 1`` for every *t*.  Used by both
+    :meth:`CubicBezier.point_at_t` and :func:`fit_cubic_bezier`.
+
+    Returns:
+        ``(b0, b1, b2, b3)`` as a 4-tuple of :class:`float`.
+    """
+    mt = 1.0 - t
+    return mt**3, 3.0 * t * mt**2, 3.0 * t**2 * mt, t**3
+
+
 def _bezier_closest_t(svg_bezier: _SvgCubicBezier, pt_c: complex) -> float:
     """Return the parameter *t* ∈ [0, 1] at which *svg_bezier* is closest to *pt_c*.
 
@@ -63,6 +83,73 @@ def _intersect_bezier_bezier(a: CubicBezier, b: CubicBezier, tol: float = 1e-12)
         if not any(pt.distance_to(ex) < tol for ex in intersections):
             intersections.append(pt)
     return intersections
+
+
+def fit_cubic_bezier(
+    start: Point,
+    end: Point,
+    ref: tuple[Point, Point, Point],
+    t_params: tuple[float, float, float] = (0.25, 0.50, 0.75),
+) -> CubicBezier:
+    """Fit a cubic Bézier from *start* to *end* passing near three reference points.
+
+    The curve is constrained to have a **horizontal tangent at** *end* —
+    i.e. ``p2.y = end.y`` — so it arrives level at the endpoint.  This
+    matches the requirement for a sleeve cap curve that must be horizontal
+    at the crown.
+
+    The two free control points ``p1`` and ``p2`` are found analytically
+    by least-squares minimisation at the three parameter values given in
+    *t_params*:
+
+    * **y component** — 3 equations / 1 unknown (``p1.y``):
+      solved as a weighted dot product using :func:`_bernstein_basis`.
+    * **x component** — 3 equations / 2 unknowns (``p1.x``, ``p2.x``):
+      solved via :func:`numpy.linalg.lstsq`.
+
+    No external dependencies beyond NumPy and the project's own
+    :class:`Point` / :class:`CubicBezier` types are required.
+
+    Args:
+        start:    Start point of the curve (``p0``).
+        end:      End point of the curve (``p3``).  The curve arrives here
+                  with a horizontal tangent (``p2.y = end.y``).
+        ref:      Three reference points the curve should pass near, at the
+                  parameters given by *t_params*.
+        t_params: Parameter values at which *ref* is evaluated.
+                  Defaults to ``(0.25, 0.50, 0.75)``.
+
+    Returns:
+        A :class:`CubicBezier` with ``p0=start``, ``p3=end``, and
+        ``p2.y = end.y``.
+    """
+    crown_y = end.y
+
+    b1_col: list[float] = []
+    rhs_y: list[float] = []
+    b1x_col: list[float] = []
+    b2x_col: list[float] = []
+    rhs_x: list[float] = []
+
+    for t, r in zip(t_params, ref, strict=True):
+        b0, b1, b2, b3 = _bernstein_basis(t)
+        # Y: p2.y = p3.y = crown_y, so (b2+b3) is the combined known coefficient.
+        rhs_y.append(r.y - b0 * start.y - (b2 + b3) * crown_y)
+        b1_col.append(b1)
+        # X: p1.x and p2.x are both free unknowns.
+        rhs_x.append(r.x - b0 * start.x - b3 * end.x)
+        b1x_col.append(b1)
+        b2x_col.append(b2)
+
+    # ── Y component: 1 unknown — closed-form least-squares (normal equation) ─
+    b1_arr = np.array(b1_col)
+    p1_y = float(np.dot(b1_arr, rhs_y) / np.dot(b1_arr, b1_arr))
+
+    # ── X component: 2 unknowns — least-squares via numpy ────────────────────
+    A = np.column_stack([b1x_col, b2x_col])
+    p1_x, p2_x = np.linalg.lstsq(A, rhs_x, rcond=None)[0]
+
+    return CubicBezier(start, Point(float(p1_x), p1_y), Point(float(p2_x), crown_y), end)
 
 
 class CubicBezier:
@@ -142,18 +229,13 @@ class CubicBezier:
     def point_at_t(self, t: float) -> Point:
         """Evaluate the curve at parameter *t* ∈ [0, 1].
 
-        Computed directly from the Bernstein basis — no library call.
-        ``t=0`` returns :attr:`p0`; ``t=1`` returns :attr:`p3`.
+        Computed directly from the Bernstein basis via :func:`_bernstein_basis`
+        — no library call.  ``t=0`` returns :attr:`p0`; ``t=1`` returns
+        :attr:`p3`.
         """
-        t2 = t * t
-        t3 = t2 * t
-        mt = 1.0 - t
-        mt2 = mt * mt
-        mt3 = mt2 * mt
-
-        x = mt3 * self.p0.x + 3 * mt2 * t * self.p1.x + 3 * mt * t2 * self.p2.x + t3 * self.p3.x
-        y = mt3 * self.p0.y + 3 * mt2 * t * self.p1.y + 3 * mt * t2 * self.p2.y + t3 * self.p3.y
-
+        b0, b1, b2, b3 = _bernstein_basis(t)
+        x = b0 * self.p0.x + b1 * self.p1.x + b2 * self.p2.x + b3 * self.p3.x
+        y = b0 * self.p0.y + b1 * self.p1.y + b2 * self.p2.y + b3 * self.p3.y
         return Point(x, y)
 
     def _svg(self) -> _SvgCubicBezier:

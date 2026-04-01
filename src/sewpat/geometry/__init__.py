@@ -21,6 +21,7 @@ from ._algorithms import (
 )
 from ._bezier import (
     CubicBezier,
+    fit_cubic_bezier,
 )
 from ._bezier_offset import (
     bezier_offset,
@@ -60,6 +61,7 @@ __all__ = [
     "InfoBox",
     # Bezier
     "CubicBezier",
+    "fit_cubic_bezier",
     "bezier_offset",
     "bezier_offset_error",
     "bezier_offset_adaptive",

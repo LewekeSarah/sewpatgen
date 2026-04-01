@@ -14,8 +14,17 @@ distinguishes two usage contexts (blouse/dress vs. jacket/coat):
 Use ``SleeveBlockConfig.NARROW_BLOUSE`` or ``SleeveBlockConfig.NARROW_JACKET``
 together with ``SleeveType.NARROW`` to select the appropriate constants.
 
+All sleeve styles share the single :class:`SleeveConfig` garment config.  The
+``cap_offset`` and ``ease`` fields on :class:`SleeveConfig` are consumed only
+by :class:`~sewpat.grids.WideSleeveGrid`; they are ignored for other styles:
+
+* ``SleeveConfig.cap_offset`` ∈ [0, 2] cm — 0 cm → highest / narrowest cap,
+  2 cm → lowest / widest cap.
+* ``SleeveConfig.ease`` ∈ [0, 1] cm — larger ease → narrower sleeve.
+
 Typical usage::
 
+    from sewpat.grids import WideSleeveGrid
     from sewpat.sleeve import (
         SleeveArmhole,
         SleeveBlockConfig,
@@ -29,18 +38,21 @@ Typical usage::
     armhole = SleeveArmhole.from_block(block, grid)
     meas    = SleeveMeasurements.from_blouse_and_person(blouse_meas, person)
     config  = SleeveConfig(sleeve_length=60 * CM)
-    cm      = SleeveConstructionMeasures.from_armhole(
+
+    # Narrow blouse sleeve construction measures:
+    cm = SleeveConstructionMeasures.from_armhole(
         armhole, meas, config, SleeveBlockConfig.NARROW_BLOUSE, SleeveType.NARROW
     )
-    print(
-        f"armscye_height={cm.armscye_height:.1f} mm"
-        f"  circumference={cm.armscye_circumference:.1f} mm"
-        f"  cap_height={cm.cap_height:.1f} mm"
-    )
+
+    # Wide sleeve construction grid (cap_offset and ease taken from config):
+    wide_config = SleeveConfig(sleeve_length=60 * CM, cap_offset=1 * CM, ease=0.5 * CM)
+    wide_grid   = WideSleeveGrid.from_armhole(armhole, wide_config)
+    pattern.add_part(wide_grid.part)
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, ClassVar
@@ -374,12 +386,56 @@ SleeveBlockConfig.NARROW_JACKET = SleeveBlockConfig._make_narrow_jacket()
 class SleeveConfig:
     """Garment-design choices for a sleeve — independent of body measurements.
 
+    ``sleeve_length`` applies to all sleeve styles.  ``cap_offset`` and
+    ``ease`` are consumed only by :class:`~sewpat.grids.WideSleeveGrid` when
+    building the wide sleeve construction grid; for other sleeve styles they
+    are simply ignored.
+
+    +--------------+-------------------+--------------------------------------+
+    | Field        | Used by           | Effect                               |
+    +==============+===================+======================================+
+    | sleeve_length| all styles        | finished sleeve length (mm)          |
+    +--------------+-------------------+--------------------------------------+
+    | cap_offset   | wide sleeve grid  | [0, 2] cm; 0 → highest/narrowest cap;|
+    |              |                   | 2 cm → lowest/widest cap             |
+    +--------------+-------------------+--------------------------------------+
+    | ease         | wide sleeve grid  | [0, 1] cm; larger → narrower sleeve  |
+    +--------------+-------------------+--------------------------------------+
+
     Attributes:
         sleeve_length: ArL — Ärmellänge (finished sleeve length in mm,
             measured from the shoulder point to the hem).
+        cap_offset: Reduction applied to ``armscye_height / 3`` to derive
+            the wide sleeve cap height.  0 cm → tallest/narrowest cap;
+            2 cm → shortest/widest cap.  Only used by :class:`~sewpat.grids.WideSleeveGrid`.
+        ease: Circumference ease subtracted from ``armscye_circumference``
+            before computing the wide sleeve width.  Larger ease → narrower
+            sleeve.  Only used by :class:`~sewpat.grids.WideSleeveGrid`.
     """
 
     sleeve_length: float  # ArL — Ärmellänge
+
+    # ── Wide sleeve grid constants ────────────────────────────────────────────
+    cap_offset: float = 1.0 * CM  # [0, 2] cm — mid of range
+    ease: float = 0.5 * CM  # [0, 1] cm — mid of range
+
+    def __post_init__(self) -> None:
+        """Validate cap_offset and ease against their allowed ranges.
+
+        Raises:
+            ValueError: When ``cap_offset`` is outside [0, 2] cm or
+                ``ease`` is outside [0, 1] cm.
+        """
+        if not (-1e-9 <= self.cap_offset <= 2.0 * CM + 1e-9):
+            raise ValueError(
+                f"cap_offset={self.cap_offset / CM:.2f} cm is outside the valid range "
+                "[0, 2] cm (0 cm → highest/narrowest cap; 2 cm → lowest/widest cap)."
+            )
+        if not (-1e-9 <= self.ease <= 1.0 * CM + 1e-9):
+            raise ValueError(
+                f"ease={self.ease / CM:.2f} cm is outside the valid range "
+                "[0, 1] cm (larger ease → narrower sleeve width)."
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -493,21 +549,40 @@ class SleeveArmhole:
     # ── Derived measures ──────────────────────────────────────────────────────
 
     @property
-    def armscye_height(self) -> float:
-        """AlH — Armlöcherhöhe: vertical height of the armscye opening (mm).
+    def back_armscye_height(self) -> float:
+        """Back component of the armscye height (mm).
 
-        Computed as the absolute vertical distance between:
-
-        * **bottom** — the intersection of ``armscye_back_line`` with
-          ``bust_line`` (the deepest point of the armscye at construction
-          grid level).
-        * **top** — ``back_armscye_upper.p3``, the actual shoulder endpoint
-          of the back armscye stitch line (includes all shoulder-raise and
-          shoulder-drop adjustments).
+        Orthogonal distance from the back-armscye shoulder endpoint
+        (``back_armscye_upper.p3``) to the bust line, computed via
+        :meth:`~sewpat.geometry.Segment.project_point` so the result is
+        correct regardless of the bust line's orientation in the coordinate
+        system.
         """
-        pt_bottom = intersect(self.armscye_back_line, self.bust_line)[0]
-        pt_top = self.back_armscye_upper.p3
-        return abs(pt_bottom.y - pt_top.y)
+        pt = self.back_armscye_upper.p3
+        return pt.distance_to(self.bust_line.project_point(pt))
+
+    @property
+    def front_armscye_height(self) -> float:
+        """Front component of the armscye height (mm).
+
+        Euclidean distance from the upper endpoint of the front armscye curve
+        (``front_armscye.p0``, the shoulder-armscye junction) to the
+        intersection of ``armscye_front_line`` with ``bust_line`` (the front
+        armscye grid reference at bust level).
+        """
+        pt_shoulder = self.front_armscye.p0
+        pt_bottom = intersect(self.armscye_front_line, self.bust_line)[0]
+        return pt_shoulder.distance_to(pt_bottom)
+
+    @property
+    def armscye_height(self) -> float:
+        """AlH — Armlöcherhöhe: total armscye height in mm.
+
+        Sum of :attr:`back_armscye_height` and :attr:`front_armscye_height`.
+        Each component is measured from the respective shoulder endpoint to the
+        bust line.
+        """
+        return self.back_armscye_height + self.front_armscye_height
 
     @property
     def armscye_circumference(self) -> float:
@@ -596,16 +671,17 @@ class SleeveConstructionMeasures:
     armscye_circumference: float  # AlU Armlochümfang
 
     # ── From body measurements ────────────────────────────────────────────────
-    armscye_width: float  # ArD Armdurchmesser
-    wrist_circumference: float  # HgU Handgelenksumfang
-    upper_arm_circumference: float  # OaU Oberarmumfang
+    # None for SleeveType.WIDE — body circumferences are not required by the wide-sleeve formulas.
+    armscye_width: float | None  # ArD Armdurchmesser
+    wrist_circumference: float | None  # HgU Handgelenksumfang
+    upper_arm_circumference: float | None  # OaU Oberarmumfang
 
     # ── From garment config ───────────────────────────────────────────────────
     sleeve_length: float  # ArL Ärmellänge
 
     # ── Derived by formula ────────────────────────────────────────────────────
     cap_height: float  # Ärmelkopfhöhe (AekH)
-    sleeve_width: float | None  # OaW Oberarmweite — None for WIDE
+    sleeve_width: float | None  # OaW Oberarmweite — None for WIDE via from_armhole
     sleeve_hem_width: float | None  # AeSaW Ärmelaufschlagweite — None for WIDE
     upper_arm_ease: float | None  # Erleichterungszugabe (ease used) — None for WIDE
 
@@ -616,58 +692,109 @@ class SleeveConstructionMeasures:
     def from_armhole(
         cls,
         armhole: SleeveArmhole,
-        meas: SleeveMeasurements,
+        meas: SleeveMeasurements | None,
         config: SleeveConfig,
         block_config: SleeveBlockConfig,
         sleeve_type: SleeveType,
     ) -> SleeveConstructionMeasures:
-        """Compute all sleeve construction measures from geometry and measurements.
+        """Compute all sleeve construction measures from armhole geometry.
+
+        For **WIDE** sleeves ``meas`` may be ``None`` — body circumferences are
+        not needed because the wide sleeve width is derived purely from armscye
+        geometry via the Pythagorean formula.  When ``meas`` is ``None`` the
+        body-measurement fields (``armscye_width``, ``wrist_circumference``,
+        ``upper_arm_circumference``) are stored as ``None``.
+
+        For **STRETCH** and **NARROW** sleeves ``meas`` is required; a
+        :exc:`ValueError` is raised when it is ``None``.
+
+        .. note::
+            For WIDE mode ``meas`` may be ``None`` because
+            ``cap_arm_diameter_frac = 0`` — the arm-diameter term drops out of
+            the cap height formula and body circumferences are not needed.
+            When ``meas`` is ``None`` the body-measurement fields
+            (``armscye_width``, ``wrist_circumference``,
+            ``upper_arm_circumference``) are stored as ``None``.
 
         Args:
             armhole:      Armhole geometry — provides ``armscye_height``
                           and ``armscye_circumference``.
-            meas:         Sleeve body measurements — provides ``armscye_width``,
-                          ``upper_arm_circumference``, ``wrist_circumference``.
-            config:       Garment config — provides ``sleeve_length``.
-            block_config: Formula constants — selects the cap height formula mode,
-                          coefficients, and ease values.
+            meas:         Sleeve body measurements. May be ``None`` for WIDE;
+                          required for STRETCH and NARROW.
+            config:       Garment config — provides ``sleeve_length`` and
+                          ``ease`` (for the WIDE sleeve width formula).
+            block_config: Formula constants — selects the formula path and
+                          coefficients.  For WIDE, ``block_config.cap_offset``
+                          is the additive constant for cap height.
             sleeve_type:  Sleeve style, stored for reference on the result.
 
         Returns:
             :class:`SleeveConstructionMeasures` with all fields populated.
+
+        Raises:
+            ValueError: When ``meas`` is ``None`` for a non-WIDE mode, or
+                when the WIDE geometry is infeasible.
         """
         armhole_h = armhole.armscye_height
         armhole_u = armhole.armscye_circumference
+        is_wide = block_config.mode == SleeveMode.WIDE
 
-        # Sleeve cap height: circumference-based (STRETCH / WIDE)
-        # or height-based with arm diameter correction (NARROW)
+        if meas is None and not is_wide:
+            raise ValueError(
+                "meas (SleeveMeasurements) is required for non-WIDE sleeve types "
+                f"(mode={block_config.mode.value!r})."
+            )
+
+        # ── Cap height ────────────────────────────────────────────────────────
+        # The original formula covers all modes uniformly:
+        #   STRETCH:        circumference / 3  (cap_arm_diameter_frac = 0)
+        #   WIDE:           height / 3 + block_config.cap_offset
+        #                   (cap_arm_diameter_frac = 0, so armscye_w drops out)
+        #   NARROW_BLOUSE:  height / 2 − armscye_w / 5 + block_config.cap_offset
+        #   NARROW_JACKET:  height / 2 − armscye_w / 10 + block_config.cap_offset
         if block_config.cap_uses_circumference:
             cap_height = armhole_u * block_config.cap_height_frac + block_config.cap_offset
         else:
+            armscye_w = meas.armscye_width if meas is not None else 0.0
             cap_height = (
                 armhole_h * block_config.cap_height_frac
-                - meas.armscye_width * block_config.cap_arm_diameter_frac
+                - armscye_w * block_config.cap_arm_diameter_frac
                 + block_config.cap_offset
             )
 
-        # Sleeve width = upper arm circumference + ease constant  (None for WIDE)
-        sleeve_width: float | None = (
-            meas.upper_arm + block_config.upper_arm_ease
-            if block_config.upper_arm_ease is not None
-            else None
-        )
+        # ── Sleeve width ──────────────────────────────────────────────────────
+        sleeve_width: float | None
+        if is_wide:
+            # Pythagorean formula: sleeve_width = sqrt((armscye_circ/2 − ease)² − cap_height²)
+            # sleeve_width is the HALF-width (centre fold → side seam); the full
+            # sleeve spans 2 × sleeve_width.
+            radicand = (armhole_u / 2 - config.ease) ** 2 - cap_height**2
+            if radicand < 0:
+                raise ValueError(
+                    f"Infeasible wide sleeve geometry: "
+                    f"(armscye_circumference − ease)² − cap_height² = {radicand:.2f} mm² < 0. "
+                    f"Reduce cap_offset or ease, or verify that the armhole belongs to a real "
+                    f"bodice block."
+                )
+            sleeve_width = math.sqrt(radicand)
+        elif block_config.upper_arm_ease is not None and meas is not None:
+            sleeve_width = meas.upper_arm + block_config.upper_arm_ease
+        else:
+            sleeve_width = None
 
-        # Sleeve hem width = wrist circumference + hem ease  (None for WIDE)
+        # ── Sleeve hem width ──────────────────────────────────────────────────
         sleeve_hem_width: float | None = (
-            meas.wrist + block_config.hem_ease if block_config.hem_ease is not None else None
+            meas.wrist + block_config.hem_ease
+            if meas is not None and block_config.hem_ease is not None
+            else None
         )
 
         return cls(
             armscye_height=armhole_h,
             armscye_circumference=armhole_u,
-            armscye_width=meas.armscye_width,
-            wrist_circumference=meas.wrist,
-            upper_arm_circumference=meas.upper_arm,
+            armscye_width=meas.armscye_width if meas is not None else None,
+            wrist_circumference=meas.wrist if meas is not None else None,
+            upper_arm_circumference=meas.upper_arm if meas is not None else None,
             sleeve_length=config.sleeve_length,
             cap_height=cap_height,
             sleeve_width=sleeve_width,

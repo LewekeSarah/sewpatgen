@@ -18,12 +18,19 @@ import pytest
 from sewpat.blocks import BlockConfig, TopBlock
 from sewpat.fitclass import FitClass
 from sewpat.geometry import Point, Rect, Segment
-from sewpat.grids import GridConfig, TopGrid
+from sewpat.grids import GridConfig, TopGrid, WideSleeveGrid
 from sewpat.measurements import BlouseMeasurements, GarmentConfig
 from sewpat.pattern import Pattern, PatternPart
 from sewpat.person import BalancedPerson, Person, PersonAnalyser
 from sewpat.render import _build_svg
-from sewpat.sleeve import SleeveArmhole, SleeveConfig, SleeveMeasurements
+from sewpat.sleeve import (
+    SleeveArmhole,
+    SleeveBlockConfig,
+    SleeveConfig,
+    SleeveConstructionMeasures,
+    SleeveMeasurements,
+    SleeveType,
+)
 from sewpat.units import CM
 
 # ---------------------------------------------------------------------------
@@ -352,3 +359,78 @@ def svg_for_geometry() -> Callable[[Any], str]:
             assert "<line " in svg
     """
     return build_svg_for_geometry
+
+
+# ---------------------------------------------------------------------------
+# SleeveConstructionMeasures fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def cm_stretch(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_meas: SleeveMeasurements,
+    sleeve_config: SleeveConfig,
+) -> SleeveConstructionMeasures:
+    """SleeveConstructionMeasures built with the STRETCH preset."""
+    return SleeveConstructionMeasures.from_armhole(
+        sleeve_armhole, sleeve_meas, sleeve_config, SleeveBlockConfig.STRETCH, SleeveType.STRETCH
+    )
+
+
+@pytest.fixture
+def cm_wide(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_meas: SleeveMeasurements,
+    sleeve_config: SleeveConfig,
+) -> SleeveConstructionMeasures:
+    """SleeveConstructionMeasures built with the WIDE preset."""
+    return SleeveConstructionMeasures.from_armhole(
+        sleeve_armhole, sleeve_meas, sleeve_config, SleeveBlockConfig.WIDE, SleeveType.WIDE
+    )
+
+
+@pytest.fixture
+def cm_narrow_blouse(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_meas: SleeveMeasurements,
+    sleeve_config: SleeveConfig,
+) -> SleeveConstructionMeasures:
+    """SleeveConstructionMeasures built with the NARROW_BLOUSE preset."""
+    return SleeveConstructionMeasures.from_armhole(
+        sleeve_armhole,
+        sleeve_meas,
+        sleeve_config,
+        SleeveBlockConfig.NARROW_BLOUSE,
+        SleeveType.NARROW,
+    )
+
+
+@pytest.fixture
+def cm_narrow_jacket(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_meas: SleeveMeasurements,
+    sleeve_config: SleeveConfig,
+) -> SleeveConstructionMeasures:
+    """SleeveConstructionMeasures built with the NARROW_JACKET preset."""
+    return SleeveConstructionMeasures.from_armhole(
+        sleeve_armhole,
+        sleeve_meas,
+        sleeve_config,
+        SleeveBlockConfig.NARROW_JACKET,
+        SleeveType.NARROW,
+    )
+
+
+# ---------------------------------------------------------------------------
+# WideSleeveGrid fixture
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def default_wide_grid(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_config: SleeveConfig,
+) -> WideSleeveGrid:
+    """WideSleeveGrid built from the standard armhole with default SleeveConfig."""
+    return WideSleeveGrid.from_armhole(sleeve_armhole, sleeve_config)

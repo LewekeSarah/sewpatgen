@@ -565,8 +565,51 @@ def test_sleeve_armhole_height_is_positive(sleeve_armhole: SleeveArmhole) -> Non
 
 
 def test_sleeve_armhole_height_reasonable(sleeve_armhole: SleeveArmhole) -> None:
-    """armscye_height (AlH) is between 15 cm and 35 cm for a standard bodice."""
-    assert 15 * CM <= sleeve_armhole.armscye_height <= 35 * CM
+    """armscye_height (AlH) is between 20 cm and 55 cm (back + front combined)."""
+    assert 20 * CM <= sleeve_armhole.armscye_height <= 55 * CM
+
+
+def test_sleeve_armhole_back_height_is_positive(sleeve_armhole: SleeveArmhole) -> None:
+    """back_armscye_height is a positive value."""
+    assert sleeve_armhole.back_armscye_height > 0.0
+
+
+def test_sleeve_armhole_back_height_equals_orthogonal_distance(
+    sleeve_armhole: SleeveArmhole,
+) -> None:
+    """back_armscye_height equals p3.distance_to(bust_line.project_point(p3))."""
+    pt = sleeve_armhole.back_armscye_upper.p3
+    expected = pt.distance_to(sleeve_armhole.bust_line.project_point(pt))
+    assert sleeve_armhole.back_armscye_height == pytest.approx(expected)
+
+
+def test_sleeve_armhole_front_height_is_positive(sleeve_armhole: SleeveArmhole) -> None:
+    """front_armscye_height is a positive value."""
+    assert sleeve_armhole.front_armscye_height > 0.0
+
+
+def test_sleeve_armhole_front_height_reasonable(sleeve_armhole: SleeveArmhole) -> None:
+    """front_armscye_height is between 10 cm and 30 cm for a standard bodice."""
+    assert 10 * CM <= sleeve_armhole.front_armscye_height <= 30 * CM
+
+
+def test_sleeve_armhole_front_height_is_distance_to_bust_intersection(
+    sleeve_armhole: SleeveArmhole,
+) -> None:
+    """front_armscye_height = distance from front_armscye.p0 to (armscye_front_line ∩ bust_line)."""
+    from sewpat.geometry import intersect
+
+    pt_shoulder = sleeve_armhole.front_armscye.p0
+    pt_bottom = intersect(sleeve_armhole.armscye_front_line, sleeve_armhole.bust_line)[0]
+    expected = pt_shoulder.distance_to(pt_bottom)
+    assert sleeve_armhole.front_armscye_height == pytest.approx(expected)
+
+
+def test_sleeve_armhole_height_is_sum_of_components(sleeve_armhole: SleeveArmhole) -> None:
+    """armscye_height equals back_armscye_height + front_armscye_height."""
+    assert sleeve_armhole.armscye_height == pytest.approx(
+        sleeve_armhole.back_armscye_height + sleeve_armhole.front_armscye_height
+    )
 
 
 def test_sleeve_armhole_circumference_is_positive(sleeve_armhole: SleeveArmhole) -> None:
@@ -582,18 +625,6 @@ def test_sleeve_armhole_circumference_reasonable(sleeve_armhole: SleeveArmhole) 
 # ---------------------------------------------------------------------------
 # SleeveConstructionMeasures — STRETCH
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def cm_stretch(
-    sleeve_armhole: SleeveArmhole,
-    sleeve_meas: SleeveMeasurements,
-    sleeve_config: SleeveConfig,
-) -> SleeveConstructionMeasures:
-    """SleeveConstructionMeasures built with the STRETCH preset."""
-    return SleeveConstructionMeasures.from_armhole(
-        sleeve_armhole, sleeve_meas, sleeve_config, SleeveBlockConfig.STRETCH, SleeveType.STRETCH
-    )
 
 
 def test_sleeve_cm_stretch_type(cm_stretch: SleeveConstructionMeasures) -> None:
@@ -651,29 +682,32 @@ def test_sleeve_cm_stretch_sleeve_type(cm_stretch: SleeveConstructionMeasures) -
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def cm_wide(
-    sleeve_armhole: SleeveArmhole,
-    sleeve_meas: SleeveMeasurements,
-    sleeve_config: SleeveConfig,
-) -> SleeveConstructionMeasures:
-    """SleeveConstructionMeasures built with the WIDE preset."""
-    return SleeveConstructionMeasures.from_armhole(
-        sleeve_armhole, sleeve_meas, sleeve_config, SleeveBlockConfig.WIDE, SleeveType.WIDE
-    )
-
-
 def test_sleeve_cm_wide_cap_height_from_height_plus_offset(
     sleeve_armhole: SleeveArmhole, cm_wide: SleeveConstructionMeasures
 ) -> None:
-    """WIDE: cap_height = armscye_height / 3 + cap_offset."""
+    """WIDE: cap_height = armscye_height / 3 + block_config.cap_offset."""
     expected = sleeve_armhole.armscye_height / 3.0 + SleeveBlockConfig.WIDE.cap_offset
     assert cm_wide.cap_height == pytest.approx(expected)
 
 
-def test_sleeve_cm_wide_sleeve_width_is_none(cm_wide: SleeveConstructionMeasures) -> None:
-    """WIDE: sleeve_width is None (not applicable for this sleeve type)."""
-    assert cm_wide.sleeve_width is None
+def test_sleeve_cm_wide_sleeve_width_is_computed(
+    sleeve_armhole: SleeveArmhole,
+    cm_wide: SleeveConstructionMeasures,
+    sleeve_config: SleeveConfig,
+) -> None:
+    """WIDE: sleeve_width is the half-width computed via the Pythagorean formula.
+
+    sleeve_width = sqrt((armscye_circumference / 2 − ease)² − cap_height²)
+    The full sleeve spans 2 × sleeve_width.
+    """
+    import math
+
+    cap_height = sleeve_armhole.armscye_height / 3.0 + SleeveBlockConfig.WIDE.cap_offset
+    expected = math.sqrt(
+        (sleeve_armhole.armscye_circumference / 2 - sleeve_config.ease) ** 2 - cap_height**2
+    )
+    assert cm_wide.sleeve_width is not None
+    assert cm_wide.sleeve_width == pytest.approx(expected)
 
 
 def test_sleeve_cm_wide_sleeve_hem_width_is_none(cm_wide: SleeveConstructionMeasures) -> None:
@@ -697,22 +731,6 @@ def test_sleeve_cm_wide_cap_height_less_than_stretch(
 # ---------------------------------------------------------------------------
 # SleeveConstructionMeasures — NARROW_BLOUSE
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def cm_narrow_blouse(
-    sleeve_armhole: SleeveArmhole,
-    sleeve_meas: SleeveMeasurements,
-    sleeve_config: SleeveConfig,
-) -> SleeveConstructionMeasures:
-    """SleeveConstructionMeasures built with the NARROW_BLOUSE preset."""
-    return SleeveConstructionMeasures.from_armhole(
-        sleeve_armhole,
-        sleeve_meas,
-        sleeve_config,
-        SleeveBlockConfig.NARROW_BLOUSE,
-        SleeveType.NARROW,
-    )
 
 
 def test_sleeve_cm_narrow_blouse_cap_height_formula(
@@ -754,22 +772,6 @@ def test_sleeve_cm_narrow_blouse_sleeve_type(
 # ---------------------------------------------------------------------------
 # SleeveConstructionMeasures — NARROW_JACKET
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def cm_narrow_jacket(
-    sleeve_armhole: SleeveArmhole,
-    sleeve_meas: SleeveMeasurements,
-    sleeve_config: SleeveConfig,
-) -> SleeveConstructionMeasures:
-    """SleeveConstructionMeasures built with the NARROW_JACKET preset."""
-    return SleeveConstructionMeasures.from_armhole(
-        sleeve_armhole,
-        sleeve_meas,
-        sleeve_config,
-        SleeveBlockConfig.NARROW_JACKET,
-        SleeveType.NARROW,
-    )
 
 
 def test_sleeve_cm_narrow_jacket_cap_height_formula(
