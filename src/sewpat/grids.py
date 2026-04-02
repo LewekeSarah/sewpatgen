@@ -455,12 +455,13 @@ class WideSleeveGrid:
         )
 
         assert cm.sleeve_width is not None, "WIDE sleeve_width must be a float after from_armhole"
+        hem_offset = 1.0 * CM + (sleeve_config.cuff_width / 2 if sleeve_config.cuff_width else 0.0)
         cg = ConstructionGrid(
             anchor=layout.anchor,
             horizontals=[
                 ("Cap Line", cm.cap_height),
                 ("Sleeve Length", sleeve_config.sleeve_length),
-                ("Hem Line", sleeve_config.sleeve_length - 1.0 * CM),
+                ("Hem Line", sleeve_config.sleeve_length - hem_offset),
             ],
             verticals=[
                 ("Left Sleeve", 0.0),

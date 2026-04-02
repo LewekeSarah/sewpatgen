@@ -64,6 +64,7 @@ from .person import (
     PersonAnalyser,
     load_person,
 )
+from .pleat import Pleat
 from .sleeve import (
     SleeveArmhole,
     SleeveBlockConfig,
@@ -131,6 +132,8 @@ __all__ = [
     "TopBlockFront",
     "WideSleeveBlock",
     "WideSleeveGrid",
+    # Pleat
+    "Pleat",
     # Sleeve
     "SleeveType",
     "SleeveMode",

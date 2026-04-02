@@ -17,6 +17,7 @@ from sewpat.person import (
     PersonAnalyser,
     load_person,
 )
+from sewpat.pleat import PleatConfig
 from sewpat.render import export_pattern_svg_mm
 from sewpat.sleeve import SleeveArmhole, SleeveConfig
 from sewpat.units import CM
@@ -176,7 +177,15 @@ if __name__ == "__main__":
         balance=BalanceAdjustments(front_length=-0.9 * CM),
     )
     config = GarmentConfig(length=75 * CM, shoulder_gather=1 * CM, side_seam_intake_max=1 * CM)
-    sleeve_config = SleeveConfig(sleeve_length=62 * CM, cap_offset=1 * CM, ease=0.5 * CM)
+    sleeve_config = SleeveConfig(
+        sleeve_length=62 * CM,
+        cap_offset=1 * CM,
+        ease=0.5 * CM,
+        cuff_length=20 * CM,
+        cuff_width=4 * CM,
+        slit_height=8 * CM,
+        pleat_config=PleatConfig(depth=3 * CM, num_pleats=3, spacing=1.5 * CM),
+    )
 
     person_balanced = PersonAnalyser(person, adjustments.balance).get_balanced_person()
 

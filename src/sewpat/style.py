@@ -226,3 +226,27 @@ STYLE_PRECISION_POINT = StyleOptions(
     stroke_color="grey",
     stroke_width=DEFAULT_STROKE_WIDTH_GRAIN,
 )
+
+#: Sleeve slit — solid black line with a stop marker at the top (closed end).
+STYLE_SLIT = StyleOptions(
+    stroke_color="black",
+    stroke_width=DEFAULT_STROKE_WIDTH,
+    marker_end=Marker.STOP,
+)
+
+#: Pleat fold line — solid black, no seam allowance, no notch.
+STYLE_PLEAT_FOLD = StyleOptions(
+    stroke_color="black",
+    stroke_width=DEFAULT_STROKE_WIDTH,
+    seam_allowance=0.0,
+    no_notch=True,
+)
+
+#: Pleat folding-direction arrow — solid black with arrowhead at end, no SA.
+STYLE_PLEAT_ARROW = StyleOptions(
+    stroke_color="black",
+    stroke_width=DEFAULT_STROKE_WIDTH,
+    marker_end=Marker.ARROW,
+    seam_allowance=0.0,
+    no_notch=True,
+)

@@ -60,6 +60,7 @@ from typing import TYPE_CHECKING, ClassVar
 from .geometry import CubicBezier, Point, Segment, intersect, seam_length
 from .measurements import BlouseMeasurements
 from .person import Person
+from .pleat import PleatConfig
 from .units import CM
 
 if TYPE_CHECKING:
@@ -389,7 +390,8 @@ class SleeveConfig:
     ``sleeve_length`` applies to all sleeve styles.  ``cap_offset`` and
     ``ease`` are consumed only by :class:`~sewpat.grids.WideSleeveGrid` when
     building the wide sleeve construction grid; for other sleeve styles they
-    are simply ignored.
+    are simply ignored.  ``cuff_length`` and ``pleat_config``
+    apply only to the wide sleeve hem.
 
     +--------------+-------------------+--------------------------------------+
     | Field        | Used by           | Effect                               |
@@ -401,6 +403,17 @@ class SleeveConfig:
     +--------------+-------------------+--------------------------------------+
     | ease         | wide sleeve grid  | [0, 1] cm; larger → narrower sleeve  |
     +--------------+-------------------+--------------------------------------+
+    | cuff_length  | wide sleeve hem   | finished cuff/hem circumference;     |
+    |              |                   | ``None`` → no hem shortening         |
+    +--------------+-------------------+--------------------------------------+
+    | cuff_width   | wide sleeve hem   | cuff band height; hem raised by      |
+    |              |                   | ``cuff_width / 2``; ``None`` = skip  |
+    +--------------+-------------------+--------------------------------------+
+    | slit_height  | wide sleeve slit  | height of the slit (8–10 cm);        |
+    |              |                   | ``None`` = no slit                   |
+    +--------------+-------------------+--------------------------------------+
+    | pleat_config | wide sleeve hem   | pleat layout; ``None`` = no pleats   |
+    +--------------+-------------------+--------------------------------------+
 
     Attributes:
         sleeve_length: ArL — Ärmellänge (finished sleeve length in mm,
@@ -411,6 +424,19 @@ class SleeveConfig:
         ease: Circumference ease subtracted from ``armscye_circumference``
             before computing the wide sleeve width.  Larger ease → narrower
             sleeve.  Only used by :class:`~sewpat.grids.WideSleeveGrid`.
+        cuff_length: Bündchenlänge — finished cuff circumference (mm).  The
+            wide sleeve hem width is
+            ``cuff_length + pleat_config.depth * pleat_config.num_pleats``.
+            ``None`` means no hem shortening is applied.
+        cuff_width: Bündchenbreite — height of the cuff band (mm).  The sleeve
+            hem is raised by ``cuff_width / 2`` so the cuff sits correctly.
+            ``None`` means no hem raising is applied.
+        slit_height: Schlitzhöhe — height of the sleeve slit in mm (typically
+            80–100 mm).  The slit is placed at the 4/6 position of the hem
+            and runs parallel to the sleeve centre line.
+            ``None`` means no slit is added.
+        pleat_config: Pleat layout — depth, count, spacing, and fold-line
+            height for the hem pleats.  ``None`` means no pleats are drawn.
     """
 
     sleeve_length: float  # ArL — Ärmellänge
@@ -419,12 +445,17 @@ class SleeveConfig:
     cap_offset: float = 1.0 * CM  # [0, 2] cm — mid of range
     ease: float = 0.5 * CM  # [0, 1] cm — mid of range
 
+    # ── Wide sleeve hem constants ─────────────────────────────────────────────
+    cuff_length: float | None = None  # Bündchenlänge; None → no hem shortening
+    cuff_width: float | None = None  # Bündchenbreite; None → no hem raising
+    slit_height: float | None = None  # Schlitzhöhe; None → no slit
+    pleat_config: PleatConfig | None = None  # pleat layout; None → no pleats
+
     def __post_init__(self) -> None:
-        """Validate cap_offset and ease against their allowed ranges.
+        """Validate all fields against their allowed ranges.
 
         Raises:
-            ValueError: When ``cap_offset`` is outside [0, 2] cm or
-                ``ease`` is outside [0, 1] cm.
+            ValueError: When any field is outside its valid range.
         """
         if not (-1e-9 <= self.cap_offset <= 2.0 * CM + 1e-9):
             raise ValueError(
@@ -436,6 +467,13 @@ class SleeveConfig:
                 f"ease={self.ease / CM:.2f} cm is outside the valid range "
                 "[0, 1] cm (larger ease → narrower sleeve width)."
             )
+        if self.cuff_length is not None and self.cuff_length < -1e-9:
+            raise ValueError(f"cuff_length={self.cuff_length / CM:.2f} cm must be non-negative.")
+        if self.cuff_width is not None and self.cuff_width < -1e-9:
+            raise ValueError(f"cuff_width={self.cuff_width / CM:.2f} cm must be non-negative.")
+        if self.slit_height is not None and self.slit_height < -1e-9:
+            raise ValueError(f"slit_height={self.slit_height / CM:.2f} cm must be non-negative.")
+        # PleatConfig validates itself in its own __post_init__
 
 
 # ---------------------------------------------------------------------------
@@ -782,12 +820,22 @@ class SleeveConstructionMeasures:
         else:
             sleeve_width = None
 
-        # ── Sleeve hem width ──────────────────────────────────────────────────
-        sleeve_hem_width: float | None = (
-            meas.wrist + block_config.hem_ease
-            if meas is not None and block_config.hem_ease is not None
-            else None
-        )
+        # ── Sleeve hem width ──────────────────────────────────────────────────────
+        # WIDE: derived from cuff garment config (not wrist circumference).
+        #   sleeve_hem_width = cuff_length + pleat_config.depth × pleat_config.num_pleats
+        # Other modes: wrist circumference + hem ease from block config.
+        sleeve_hem_width: float | None
+        if is_wide and config.cuff_length is not None:
+            pleat_total = (
+                config.pleat_config.depth * config.pleat_config.num_pleats
+                if config.pleat_config is not None
+                else 0.0
+            )
+            sleeve_hem_width = config.cuff_length + pleat_total
+        elif not is_wide and meas is not None and block_config.hem_ease is not None:
+            sleeve_hem_width = meas.wrist + block_config.hem_ease
+        else:
+            sleeve_hem_width = None
 
         return cls(
             armscye_height=armhole_h,

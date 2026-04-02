@@ -22,6 +22,8 @@ from ._algorithms import (
 from ._bezier import (
     CubicBezier,
     fit_cubic_bezier,
+    fit_cubic_bezier_free,
+    split_bezier_seam_fn,
 )
 from ._bezier_offset import (
     bezier_offset,
@@ -62,6 +64,8 @@ __all__ = [
     # Bezier
     "CubicBezier",
     "fit_cubic_bezier",
+    "fit_cubic_bezier_free",
+    "split_bezier_seam_fn",
     "bezier_offset",
     "bezier_offset_error",
     "bezier_offset_adaptive",

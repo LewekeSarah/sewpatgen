@@ -6,6 +6,8 @@ Bézier–Bézier intersection).  The numerically-intensive offset subsystem liv
 in :mod:`sewpat.geometry._bezier_offset`.
 """
 
+from collections.abc import Callable, Sequence
+
 import numpy as np
 import shapely.geometry as _sg
 from svgpathtools import CubicBezier as _SvgCubicBezier
@@ -88,33 +90,31 @@ def _intersect_bezier_bezier(a: CubicBezier, b: CubicBezier, tol: float = 1e-12)
 def fit_cubic_bezier(
     start: Point,
     end: Point,
-    ref: tuple[Point, Point, Point],
-    t_params: tuple[float, float, float] = (0.25, 0.50, 0.75),
+    ref: Sequence[Point],
+    t_params: Sequence[float] = (0.25, 0.50, 0.75),
 ) -> CubicBezier:
-    """Fit a cubic Bézier from *start* to *end* passing near three reference points.
+    """Fit a cubic Bézier from *start* to *end* passing near N reference points.
 
     The curve is constrained to have a **horizontal tangent at** *end* —
     i.e. ``p2.y = end.y`` — so it arrives level at the endpoint.  This
     matches the requirement for a sleeve cap curve that must be horizontal
     at the crown.
 
-    The two free control points ``p1`` and ``p2`` are found analytically
-    by least-squares minimisation at the three parameter values given in
-    *t_params*:
+    The two free control points ``p1`` and ``p2`` are found by least-squares
+    minimisation over the N parameter values given in *t_params*:
 
-    * **y component** — 3 equations / 1 unknown (``p1.y``):
+    * **y component** — N equations / 1 unknown (``p1.y``):
       solved as a weighted dot product using :func:`_bernstein_basis`.
-    * **x component** — 3 equations / 2 unknowns (``p1.x``, ``p2.x``):
+    * **x component** — N equations / 2 unknowns (``p1.x``, ``p2.x``):
       solved via :func:`numpy.linalg.lstsq`.
 
-    No external dependencies beyond NumPy and the project's own
-    :class:`Point` / :class:`CubicBezier` types are required.
+    *ref* and *t_params* must have the same length (≥ 3).
 
     Args:
         start:    Start point of the curve (``p0``).
         end:      End point of the curve (``p3``).  The curve arrives here
                   with a horizontal tangent (``p2.y = end.y``).
-        ref:      Three reference points the curve should pass near, at the
+        ref:      Reference points the curve should pass near, at the
                   parameters given by *t_params*.
         t_params: Parameter values at which *ref* is evaluated.
                   Defaults to ``(0.25, 0.50, 0.75)``.
@@ -150,6 +150,55 @@ def fit_cubic_bezier(
     p1_x, p2_x = np.linalg.lstsq(A, rhs_x, rcond=None)[0]
 
     return CubicBezier(start, Point(float(p1_x), p1_y), Point(float(p2_x), crown_y), end)
+
+
+def fit_cubic_bezier_free(
+    start: Point,
+    end: Point,
+    ref: Sequence[Point],
+    t_params: Sequence[float],
+) -> CubicBezier:
+    """Fit a cubic Bézier from *start* to *end* with both control points free.
+
+    Unlike :func:`fit_cubic_bezier`, there is **no** horizontal-tangent
+    constraint at *end*: all four coordinates of ``p1`` and ``p2`` are
+    determined simultaneously by least-squares over *ref* / *t_params*.
+
+    When ``len(ref) == 2`` (exactly two reference points for two unknowns per
+    dimension) the system is square and the curve passes **exactly** through
+    both points.
+
+    Args:
+        start:    Start point (``p0``).
+        end:      End point (``p3``).
+        ref:      Reference points the curve should pass near (≥ 2).
+        t_params: Parameter values matching each entry of *ref*.
+
+    Returns:
+        A :class:`CubicBezier` from *start* to *end*.
+    """
+    b1_col: list[float] = []
+    b2_col: list[float] = []
+    rhs_x: list[float] = []
+    rhs_y: list[float] = []
+
+    for t, r in zip(t_params, ref, strict=True):
+        b0, b1, b2, b3 = _bernstein_basis(t)
+        rhs_x.append(r.x - b0 * start.x - b3 * end.x)
+        rhs_y.append(r.y - b0 * start.y - b3 * end.y)
+        b1_col.append(b1)
+        b2_col.append(b2)
+
+    A = np.column_stack([b1_col, b2_col])
+    p1_x, p2_x = np.linalg.lstsq(A, rhs_x, rcond=None)[0]
+    p1_y, p2_y = np.linalg.lstsq(A, rhs_y, rcond=None)[0]
+
+    return CubicBezier(
+        start,
+        Point(float(p1_x), float(p1_y)),
+        Point(float(p2_x), float(p2_y)),
+        end,
+    )
 
 
 class CubicBezier:
@@ -521,3 +570,45 @@ class CubicBezier:
             _depth=_depth,
             _max_depth=_max_depth,
         )
+
+
+# ---------------------------------------------------------------------------
+# Split-Bézier seam helper
+# ---------------------------------------------------------------------------
+
+
+def split_bezier_seam_fn(
+    left_curve: CubicBezier,
+    right_curve: CubicBezier,
+    total_length: float,
+) -> Callable[[float], Point]:
+    """Return a callable that maps a straight-seam projection onto a split-Bézier seam.
+
+    The two sub-curves together span a straight reference segment of
+    *total_length* mm.  The resulting callable converts a linear arc-length
+    projection along that straight segment to the corresponding point on the
+    shaped Bézier seam, splitting at the midpoint (``t = 0.5``):
+
+    * ``proj ∈ [0, total_length / 2]``  →  ``left_curve.point_at_t(2·t)``
+    * ``proj ∈ (total_length / 2, …]``  →  ``right_curve.point_at_t(2·t − 1)``
+
+    This mapping is exact when each sub-curve was fitted with its two interior
+    reference points placed at ``t = 1/3`` and ``t = 2/3``
+    (as produced by :func:`fit_cubic_bezier_free` with
+    ``t_params=(1/3, 2/3)``).  The returned callable is suitable for passing
+    as *curved_seam_fn* to :meth:`~sewpat.pleat.Pleat.build_along_seam`.
+
+    Args:
+        left_curve:   Left-half Bézier (seam-left endpoint → split midpoint).
+        right_curve:  Right-half Bézier (split midpoint → seam-right endpoint).
+        total_length: Arc-length of the straight reference segment in mm.
+
+    Returns:
+        A callable ``fn(proj: float) -> Point``.
+    """
+
+    def _fn(proj: float) -> Point:
+        t = max(0.0, min(1.0, proj / total_length))
+        return left_curve.point_at_t(2.0 * t) if t <= 0.5 else right_curve.point_at_t(2.0 * t - 1.0)
+
+    return _fn

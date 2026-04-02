@@ -27,14 +27,21 @@ Example::
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
 
-from ._blocks_assembly import _assemble_back_part, _assemble_front_part
+from ._blocks_assembly import _assemble_back_part, _assemble_front_part, _assemble_wide_sleeve_part
 from ._blocks_geometry import (
     _build_back_geometry,
     _build_darts,
     _build_front_geometry,
     _build_side_seams,
+    _build_wide_sleeve_geometry,
 )
-from .geometry import CubicBezier, Dart, Point, Segment, fit_cubic_bezier, intersect
+from .geometry import (
+    CubicBezier,
+    Dart,
+    Point,
+    Segment,
+    intersect,
+)
 from .grids import TopGrid, WideSleeveGrid
 from .measurements import (
     BlouseMeasurements,
@@ -45,7 +52,8 @@ from .measurements import (
 )
 from .pattern import PatternConfig, PatternPart
 from .person import PersonalAdjustments
-from .style import STYLE_HEM, STYLE_STITCH
+from .pleat import Pleat
+from .style import STYLE_STITCH
 from .units import CM
 
 if TYPE_CHECKING:
@@ -337,56 +345,6 @@ class TopBlock:
 
 
 # ---------------------------------------------------------------------------
-# WideSleeveBlock helpers
-# ---------------------------------------------------------------------------
-
-
-def _cap_ref_points(
-    corner: Point,
-    crown: Point,
-) -> tuple[Point, Point, Point]:
-    """Return three reference points along the straight cap slope.
-
-    The points are placed at parameter values ``t = 0.25``, ``0.50``, ``0.75``
-    on the :class:`Segment` from *corner* (cap-line end) to *crown* (apex).
-    They serve as the *ref* argument to :func:`fit_cubic_bezier` so that the
-    fitted Bézier stays close to the straight construction line.
-
-    Args:
-        corner: Start of the cap slope (cap-line end point).
-        crown:  End of the cap slope (apex / crown point).
-
-    Returns:
-        A 3-tuple of :class:`Point` at 25 %, 50 %, 75 % along the slope.
-    """
-    slope = Segment(corner, crown)
-    return (slope.point_at_t(0.25), slope.point_at_t(0.50), slope.point_at_t(0.75))
-
-
-def _fit_cap_bezier(
-    corner: Point,
-    crown: Point,
-    ref: tuple[Point, Point, Point],
-) -> CubicBezier:
-    """Fit a sleeve-cap Bézier from *corner* to *crown* through *ref*.
-
-    Thin wrapper around :func:`fit_cubic_bezier` using the default
-    ``t_params = (0.25, 0.50, 0.75)``.  The curve arrives at *crown* with a
-    horizontal tangent (``p2.y = crown.y``), matching the flat-tangent
-    constraint at the sleeve cap apex.
-
-    Args:
-        corner: Start point (cap-line corner, ``p0``).
-        crown:  End point (cap apex, ``p3``).
-        ref:    Three reference points the curve passes near.
-
-    Returns:
-        A :class:`CubicBezier` from *corner* to *crown*.
-    """
-    return fit_cubic_bezier(corner, crown, ref)
-
-
-# ---------------------------------------------------------------------------
 # WideSleeveBlock
 # ---------------------------------------------------------------------------
 
@@ -406,7 +364,7 @@ class WideSleeveBlock:
     * One **hem** edge: horizontal line at the hem fold / allowance start
       (= ``grid.hem_line``).
 
-    A separate **sleeve length line** (``STYLE_HEM``) marks the actual cutting
+    A separate **sleeve length line** (construction) marks the actual cutting
     edge 1 cm below the hem fold line.  A **grainline** runs vertically along
     the centre fold.
 
@@ -422,7 +380,13 @@ class WideSleeveBlock:
         hem_right: Bottom-right corner.
         cap_left_slope: Segment from ``cap_crown`` down to ``cap_left``.
         left_side: Segment from ``cap_left`` down to ``hem_left``.
-        hem: Segment from ``hem_left`` across to ``hem_right`` (fold line).
+        hem: Segment from ``hem_left`` across to ``hem_right`` (straight construction reference).
+        hem_left_curve: Left-half Bézier from ``hem_left`` to the midpoint reference.
+        hem_right_curve: Right-half Bézier from the midpoint reference to ``hem_right``.
+        slit: Slit marker at the 4/6 position of the hem, running parallel to
+            the centre line; ``None`` when no slit is configured.
+        pleats: Tuple of :class:`~sewpat.pleat.Pleat` objects already rendered
+            onto :attr:`part`; empty when no pleats are configured.
         right_side: Segment from ``hem_right`` up to ``cap_right``.
         cap_right_slope: Segment from ``cap_right`` up to ``cap_crown``.
     """
@@ -447,7 +411,11 @@ class WideSleeveBlock:
 
     # ── Rectangle body outline ────────────────────────────────────────────────
     left_side: Segment  # cap_left → hem_left  (left side seam)
-    hem: Segment  # hem_left → hem_right  (hem fold edge)
+    hem: Segment  # hem_left → hem_right  (straight construction reference)
+    hem_left_curve: CubicBezier  # hem_left → mid_hem  (left half of shaped stitch line)
+    hem_right_curve: CubicBezier  # mid_hem  → hem_right (right half of shaped stitch line)
+    slit: Segment | None  # slit at 4/6 of hem, parallel to centre line; None = no slit
+    pleats: tuple[Pleat, ...]  # pleat markings already rendered onto part; () = none
     right_side: Segment  # hem_right → cap_right  (right side seam)
 
     @classmethod
@@ -474,107 +442,28 @@ class WideSleeveBlock:
             :class:`WideSleeveBlock` with all geometry and the pattern part assembled.
         """
         grid = WideSleeveGrid.from_armhole(armhole, sleeve_config, layout=layout)
+        geom = _build_wide_sleeve_geometry(grid, sleeve_config)
 
-        # ── Key intersection points ───────────────────────────────────────────
-        cap_left = intersect(grid.left_sleeve, grid.cap_line)[0]
-        cap_right = intersect(grid.right_sleeve, grid.cap_line)[0]
-        hem_left = intersect(grid.left_sleeve, grid.hem_line)[0]
-        hem_right = intersect(grid.right_sleeve, grid.hem_line)[0]
-
-        # Crown (tip): centre x, anchored above the cap line by cap_height
-        crown_y = grid.cap_line.p1.y - grid.cap_height
-        cap_crown = Point(grid.center_sleeve.p1.x, crown_y, "Cap Crown")
-
-        # ── Auxiliary construction lines (straight triangle legs) ─────────────
-        seg_cap_left = Segment(cap_crown, cap_left, "Cap Left Slope")
-        seg_cap_right = Segment(cap_right, cap_crown, "Cap Right Slope")
-
-        # ── Precision points on the cap-left slope ───────────────────────────
-        # Indexed along seg_cap_left (cap_crown → cap_left, t = 0..1).
-        # The reversed t-values (0.75, 0.50, 0.25) align with the Bézier's
-        # t_params (0.25, 0.50, 0.75), because the Bézier travels in the
-        # opposite direction (cap_left → cap_crown).
-        _CAP_LEFT_NOTCH_PARAMS: list[tuple[float, float]] = [
-            (0.75, -0.8 * CM),
-            (0.50, 0.5 * CM),
-            (0.25, 1.5 * CM),
-        ]
-        cap_left_notch_pts = [
-            seg_cap_left.point_perpendicular(offset, t=t) for t, offset in _CAP_LEFT_NOTCH_PARAMS
-        ]
-
-        # ── Sleeve cap stitch-line Béziers ────────────────────────────────────
-        # Each curve runs from the cap-line corner to the crown with a
-        # horizontal tangent at the crown (p2.y = crown_y).
-        # The left cap Bézier is fitted directly to the precision points so the
-        # curve passes through them; cap_left_notch_pts is already ordered for
-        # t_params = (0.25, 0.50, 0.75) of the cap_left → cap_crown direction.
-        ref_left: tuple[Point, Point, Point] = (
-            cap_left_notch_pts[0],
-            cap_left_notch_pts[1],
-            cap_left_notch_pts[2],
-        )
-        cap_left_curve = _fit_cap_bezier(cap_left, cap_crown, ref_left).set_name("Cap Left Curve")
-        ref_right = _cap_ref_points(cap_right, cap_crown)
-        cap_right_curve = _fit_cap_bezier(cap_right, cap_crown, ref_right).set_name(
-            "Cap Right Curve"
-        )
-
-        # ── Rectangle body segments ───────────────────────────────────────────
-        seg_left_side = Segment(cap_left, hem_left, "Left Side")
-        seg_hem = Segment(hem_left, hem_right, "Hem")
-        seg_right_side = Segment(hem_right, cap_right, "Right Side")
-
-        # ── Cut line: sleeve length line 1 cm below hem (STYLE_HEM) ──────────
-        cut_left = intersect(grid.left_sleeve, grid.sleeve_length_line)[0]
-        cut_right = intersect(grid.right_sleeve, grid.sleeve_length_line)[0]
-        cut_seg = Segment(cut_left, cut_right, "Sleeve Length")
-
-        # ── Assemble part ─────────────────────────────────────────────────────
         part = PatternPart(name=part_name)
-
-        # Straight triangle legs — construction reference, not the stitch line
-        part.add_construction_line(seg_cap_left)
-        part.add_construction_line(seg_cap_right)
-
-        # Sleeve cap Bézier stitch curves
-        part.append(cap_left_curve, style=STYLE_STITCH, is_outline=True, role="cap")
-        part.append(cap_right_curve, style=STYLE_STITCH, is_outline=True, role="cap")
-
-        # Notches on the cap-left slope (points computed above with the Bézier ref)
-        part.add_precision_points(*cap_left_notch_pts)
-
-        # Rectangle body
-        part.append(seg_left_side, style=STYLE_STITCH, is_outline=True, role="side")
-        part.append(seg_hem, style=STYLE_STITCH, is_outline=True, role="hem")
-        part.append(seg_right_side, style=STYLE_STITCH, is_outline=True, role="side")
-        part.append(cut_seg, style=STYLE_HEM)
-
-        # Grainline and info box
-        part.add_grainline(
-            Point(grid.center_sleeve.p1.x, cap_left.y + 2.0 * CM),
-            Point(grid.center_sleeve.p1.x, hem_left.y - 2.0 * CM),
-        )
-        part.add_info_box(
-            notes=[
-                f"Ärmelbreite / sleeve width: {grid.sleeve_width / 10:.1f} cm",
-                f"Ärmelkopfhöhe / cap height: {grid.cap_height / 10:.1f} cm",
-            ]
-        )
+        _assemble_wide_sleeve_part(part, geom, grid, sleeve_config)
 
         return cls(
             part=part,
             grid=grid,
-            cap_crown=cap_crown,
-            cap_left=cap_left,
-            cap_right=cap_right,
-            hem_left=hem_left,
-            hem_right=hem_right,
-            cap_left_slope=seg_cap_left,
-            cap_right_slope=seg_cap_right,
-            cap_left_curve=cap_left_curve,
-            cap_right_curve=cap_right_curve,
-            left_side=seg_left_side,
-            hem=seg_hem,
-            right_side=seg_right_side,
+            cap_crown=geom.cap_crown,
+            cap_left=geom.cap_left,
+            cap_right=geom.cap_right,
+            hem_left=geom.hem_left,
+            hem_right=geom.hem_right,
+            cap_left_slope=geom.cap_left_slope,
+            cap_right_slope=geom.cap_right_slope,
+            cap_left_curve=geom.cap_left_curve,
+            cap_right_curve=geom.cap_right_curve,
+            left_side=geom.left_side,
+            hem=geom.hem,
+            hem_left_curve=geom.hem_left_curve,
+            hem_right_curve=geom.hem_right_curve,
+            slit=geom.slit,
+            pleats=geom.pleats,
+            right_side=geom.right_side,
         )

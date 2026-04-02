@@ -4,12 +4,25 @@ All names here are private (prefixed ``_``).  External code should only ever
 import from :mod:`sewpat.blocks`.
 """
 
-from ._blocks_geometry import _BackGeometry, _Darts, _FrontGeometry, _SideSeams
+from typing import TYPE_CHECKING
+
+from ._blocks_geometry import _BackGeometry, _Darts, _FrontGeometry, _SideSeams, _WideSleeveGeometry
 from .geometry import Dart, Point, Segment, intersect
-from .grids import TopGrid
+from .grids import TopGrid, WideSleeveGrid
 from .pattern import PatternPart
 from .pattern._notches import RoleMap
-from .style import STYLE_CENTER_LINE, STYLE_HEM, STYLE_STITCH, STYLE_STITCH_BEVEL
+from .style import (
+    STYLE_CENTER_LINE,
+    STYLE_DEBUG_RED,
+    STYLE_HEM,
+    STYLE_SLIT,
+    STYLE_STITCH,
+    STYLE_STITCH_BEVEL,
+)
+from .units import CM
+
+if TYPE_CHECKING:
+    from .sleeve import SleeveConfig
 
 #: Notch rules for the **back** pattern piece of a top/blouse block.
 TOP_BLOCK_BACK_ROLE_MAP: RoleMap = {
@@ -144,3 +157,69 @@ def _assemble_front_part(
         part.add_seam_allowance(seam_allowance)
     part.add_notches(front.armscye_control, seam_edge=front.armscye_front_lower)
     part.add_grid_notches(grid.part, role_map=TOP_BLOCK_FRONT_ROLE_MAP)
+
+
+# ---------------------------------------------------------------------------
+# Wide-sleeve assembly
+# ---------------------------------------------------------------------------
+
+
+def _assemble_wide_sleeve_part(
+    part: PatternPart,
+    geom: _WideSleeveGeometry,
+    grid: WideSleeveGrid,
+    sleeve_config: SleeveConfig,
+) -> None:
+    """Add all wide sleeve elements to *part* in drawing order.
+
+    Args:
+        part:          Empty :class:`~sewpat.pattern.PatternPart` to populate.
+        geom:          Pre-computed sleeve geometry (pure data, no side effects).
+        grid:          Wide sleeve construction grid (sleeve_width, cap_height, etc.).
+        sleeve_config: Garment config — used only for the info-box note text
+                       (slit height, pleat count/depth).
+    """
+    # ── Auxiliary construction lines (straight triangle legs) ────────────────
+    part.add_construction_line(geom.cap_left_slope)
+    part.add_construction_line(geom.cap_right_slope)
+
+    # ── Sleeve cap Bézier stitch curves ──────────────────────────────────────
+    part.append(geom.cap_left_curve, style=STYLE_STITCH, is_outline=True, role="cap")
+    part.append(geom.cap_right_curve, style=STYLE_STITCH, is_outline=True, role="cap")
+
+    # ── Construction reference points ────────────────────────────────────────
+    for pt in (*geom.cap_left_notch_pts, *geom.cap_right_notch_pts, *geom.hem_ref_pts):
+        part.append(pt, style=STYLE_DEBUG_RED, is_construction=True)
+
+    # ── Rectangle body ────────────────────────────────────────────────────────
+    part.append(geom.left_side, style=STYLE_STITCH, is_outline=True, role="side")
+    part.add_construction_line(geom.hem)
+    part.append(geom.hem_left_curve, style=STYLE_STITCH, is_outline=True, role="hem")
+    part.append(geom.hem_right_curve, style=STYLE_STITCH, is_outline=True, role="hem")
+    if geom.slit is not None:
+        part.append(geom.slit, style=STYLE_SLIT)
+    for pleat in geom.pleats:
+        pleat.apply_to(part)
+    part.append(geom.right_side, style=STYLE_STITCH, is_outline=True, role="side")
+    part.add_construction_line(geom.cut_seg)
+
+    # ── Grainline — vertical along the centre fold ────────────────────────────
+    part.add_grainline(
+        Point(grid.center_sleeve.p1.x, geom.cap_left.y + 2.0 * CM),
+        Point(grid.center_sleeve.p1.x, geom.hem_left.y - 2.0 * CM),
+    )
+
+    # ── Info box ──────────────────────────────────────────────────────────────
+    sleeve_hem_width = grid.construction_measures.sleeve_hem_width
+    notes = [
+        f"Ärmelbreite / sleeve width: {grid.sleeve_width / 10:.1f} cm",
+        f"Ärmelkopfhöhe / cap height: {grid.cap_height / 10:.1f} cm",
+    ]
+    if sleeve_hem_width is not None:
+        notes.append(f"Bündchenweite / cuff width: {sleeve_hem_width / 10:.1f} cm")
+    if geom.slit is not None and sleeve_config.slit_height is not None:
+        notes.append(f"Schlitzhöhe / slit height: {sleeve_config.slit_height / 10:.1f} cm")
+    if geom.pleats and sleeve_config.pleat_config is not None:
+        _pc = sleeve_config.pleat_config
+        notes.append(f"Falten / pleats: {_pc.num_pleats} × {_pc.depth / 10:.1f} cm")
+    part.add_info_box(notes=notes)
