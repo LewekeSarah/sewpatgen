@@ -35,7 +35,7 @@ from .units import CM
 if TYPE_CHECKING:
     from .blocks import BlockConfig
     from .pattern import PatternElement
-    from .sleeve import SleeveConfig
+    from .sleeve import SleeveArmhole, SleeveConfig
 
 
 # ---------------------------------------------------------------------------
@@ -387,9 +387,14 @@ def _split_neckline_and_armscye(
     CubicBezier,
 ]:
     """Split neckline and armscye at their intersections with the shoulder seam."""
+    # p1 is offset slightly LEFT of p0 (horizontal tangent at the CF end) so the
+    # neckline meets the vertical center-front at a right angle.  The original
+    # p1 = p0 was degenerate (zero tangent) which caused the SA algorithm to
+    # arrive at the CF corner diagonally.  10 % of neck_size is enough to define
+    # the direction without meaningfully shifting the neckline/shoulder split point.
     neckline_front_full = CubicBezier(
         neckline_front_start,
-        neckline_front_start,
+        neckline_front_start.translate(-meas.neck_size * 0.1, 0),
         center_front_shoulder_line.translate(-meas.neck_size, meas.neck_size),
         shoulder_front_neckline_pt,
     )
@@ -850,11 +855,11 @@ class _WideSleeveGeometry:
     cap_right_curve: CubicBezier
 
     # ── Rectangle body outline ────────────────────────────────────────────────
-    left_side: Segment
+    left_side: CubicBezier
     hem: Segment
     hem_left_curve: CubicBezier
     hem_right_curve: CubicBezier
-    right_side: Segment
+    right_side: CubicBezier
 
     # ── Cut line (construction reference only) ────────────────────────────────
     cut_seg: Segment
@@ -868,33 +873,224 @@ class _WideSleeveGeometry:
     cap_right_notch_pts: tuple[Point, ...]
     hem_ref_pts: tuple[Point, ...]
 
+    # ── Cap notch points (set when armhole is supplied) ───────────────────────
+    front_armscye_notch_on_cap: Point | None  # front armscye notch on left cap curve
+    shoulder_on_cap: Point | None  # shoulder alignment notch on left cap curve
+    back_armscye_notch_on_cap: Point | None  # back armscye notch on right cap curve
 
-def _fit_cap_bezier(
-    corner: Point,
-    crown: Point,
-    ref: tuple[Point, ...],
-) -> CubicBezier:
-    """Fit a sleeve-cap Bézier from *corner* to *crown* through *ref*.
 
-    Thin wrapper around :func:`fit_cubic_bezier` with the default
-    ``t_params = (0.25, 0.50, 0.75)``.  The curve arrives at *crown* with a
-    horizontal tangent (``p2.y = crown.y``), matching the flat-tangent
-    constraint at the sleeve cap apex.
+# ---------------------------------------------------------------------------
+# Cuff geometry
+# ---------------------------------------------------------------------------
 
-    Args:
-        corner: Start point (cap-line corner, ``p0``).
-        crown:  End point (cap apex, ``p3``).
-        ref:    Three reference points the curve passes near.
+_BUTTON_MIN_MARGIN: float = 10.0  # mm — min distance from top edge / fold line (1 cm)
+_BUTTON_MIN_SIDE: float = 5.0  # mm — min distance from section boundaries (0.5 cm)
+
+
+@dataclass(frozen=True)
+class _CuffButtonRow:
+    """Geometry for one button/buttonhole pair on the outer cuff face.
+
+    For the two-button case (``num_buttons=2`` with underlap) *button2* holds the
+    second button circle.  Both buttons share a single buttonhole mark and are
+    placed at the same Y height.
+    """
+
+    button: Point  # centre of the first (or only) button circle
+    button_radius: float  # circle radius in mm
+    hole_start: Point  # left end of the buttonhole mark
+    hole_end: Point  # right end of the buttonhole mark
+    button2: Point | None = None  # second button (side-by-side); None for single-button rows
+
+
+@dataclass(frozen=True)
+class _CuffGeometry:
+    """All computed geometry for the cuff pattern piece, prior to assembly."""
+
+    # ── Dimensions ────────────────────────────────────────────────────────────
+    cuff_length: float  # Bündchenlänge — flat circumference (mm)
+    cuff_height: float  # single (folded) height — full cut height is 2× (mm)
+    underlap: float  # width of left extension, 0 when absent (mm)
+    overlap: float  # width of right extension, 0 when absent (mm)
+
+    # ── Key outline points ────────────────────────────────────────────────────
+    top_left: Point
+    top_right: Point
+    bottom_right: Point
+    bottom_left: Point
+
+    # ── Fold line ─────────────────────────────────────────────────────────────
+    fold_left: Point
+    fold_right: Point
+
+    # ── Division line x-coordinates ──────────────────────────────────────────
+    # main_left_x: x of the underlap|main boundary (= anchor.x + underlap)
+    # main_right_x: x of the main|overlap boundary (= anchor.x + underlap + cuff_length)
+    main_left_x: float
+    main_right_x: float
+
+    # ── Button / buttonhole rows (empty tuple when none configured) ───────────
+    button_rows: tuple[_CuffButtonRow, ...]
+
+
+def _build_button_rows(
+    num_buttons: int,
+    button_diameter: float,
+    buttonhole_ease: float,
+    margin: float,
+    ax: float,
+    ay: float,
+    cuff_height: float,
+    cuff_length: float,
+    underlap: float,
+    overlap: float,
+) -> tuple[_CuffButtonRow, ...]:
+    """Compute button and buttonhole positions for the outer cuff face.
+
+    Always returns at most one _CuffButtonRow. Both button(s) and the single
+    buttonhole are placed at the vertical midpoint of the cuff.
+
+    For num_buttons=2 with an underlap wide enough for button_diameter, a second
+    button is placed side-by-side (different X, same Y) via button2. Both
+    buttons share a single buttonhole. Falls back to single-button layout when
+    no adequate underlap is present.
+
+    Placement rules:
+      Only overlap:    button at main_right_x - overlap/2; buttonhole centred in overlap.
+      Only underlap:   button AT main_left_x; buttonhole in cuff starting at main_left_x.
+      Both laps:       button AT main_left_x; buttonhole AT main_right_x.
+      No extensions:   both centred in main cuff body.
+      num_buttons=2 + underlap: first button at centre of underlap, second at same
+                                distance into cuff; single buttonhole per overlap rule.
 
     Returns:
-        A :class:`CubicBezier` from *corner* to *crown*.
+        Tuple with a single _CuffButtonRow, or empty when height band is too small.
     """
-    return fit_cubic_bezier(corner, crown, ref)
+    if num_buttons == 0:
+        return ()
+
+    # ── Y-position: always the single vertical midpoint ───────────────────────
+    valid_min = ay + margin
+    valid_max = ay + cuff_height - margin
+    if valid_min >= valid_max:
+        return ()
+
+    y_mid = (valid_min + valid_max) / 2.0
+
+    # ── Derived boundaries ────────────────────────────────────────────────────
+    main_left_x = ax + underlap
+    main_right_x = main_left_x + cuff_length
+    buttonhole_length = button_diameter + buttonhole_ease
+    half_hole = buttonhole_length / 2.0
+    half_btn = button_diameter / 2.0
+    has_underlap = underlap > 0
+    has_overlap = overlap > 0
+
+    # A cuff without any lap extension closes with elastic — no button closure
+    # marks are needed or meaningful.
+    if not has_underlap and not has_overlap:
+        return ()
+
+    # ── Button X position(s) ──────────────────────────────────────────────────
+    button2: Point | None = None
+    if num_buttons == 2 and underlap >= button_diameter:
+        d = underlap / 2.0
+        btn_x = ax + d  # centre of underlap
+        button2 = Point(main_left_x + d, y_mid, "Button")  # same distance into cuff
+    elif has_underlap:
+        btn_x = main_left_x  # at the closure line
+    else:  # has_overlap only
+        # Button near LEFT edge so it aligns with the buttonhole when the
+        # overlap folds closed (symmetric: both overlap/2 from their edge).
+        btn_x = ax + overlap / 2.0
+
+    # ── Buttonhole X position (always exactly one) ────────────────────────────
+    if has_overlap and has_underlap:
+        hole_center_x = main_right_x  # at the main|overlap closure line
+    elif has_overlap:
+        hole_center_x = main_right_x + overlap / 2.0  # centred in overlap
+    else:  # has_underlap only
+        # Buttonhole near RIGHT edge, one full underlap-width inward.
+        hole_center_x = main_right_x - underlap
+
+    return (
+        _CuffButtonRow(
+            button=Point(btn_x, y_mid, "Button"),
+            button_radius=half_btn,
+            hole_start=Point(hole_center_x - half_hole, y_mid, "Buttonhole Start"),
+            hole_end=Point(hole_center_x + half_hole, y_mid, "Buttonhole End"),
+            button2=button2,
+        ),
+    )
+
+
+def _build_cuff_geometry(
+    sleeve_config: SleeveConfig,
+    anchor: Point,
+) -> _CuffGeometry | None:
+    """Compute the key points for the cuff pattern piece.
+
+    Returns ``None`` when *sleeve_config* has no :attr:`~SleeveConfig.cuff_config`.
+
+    Args:
+        sleeve_config: Reads :attr:`~SleeveConfig.cuff_config`.
+        anchor:        Top-left origin of the whole piece.
+
+    Returns:
+        Fully populated :class:`_CuffGeometry`, or ``None``.
+    """
+    cc = sleeve_config.cuff_config
+    if cc is None:
+        return None
+
+    cuff_length = cc.length
+    cuff_height = cc.width  # single (folded) height; full cut = 2×
+    underlap = cc.underlap
+    overlap = cc.overlap
+    total_width = underlap + cuff_length + overlap
+    total_height = 2.0 * cuff_height
+
+    ax, ay = anchor.x, anchor.y
+
+    # ── Button rows ───────────────────────────────────────────────────────────
+    bc = cc.button_config
+    if bc is not None and bc.num_buttons > 0:
+        button_rows = _build_button_rows(
+            num_buttons=bc.num_buttons,
+            button_diameter=bc.button_diameter,
+            buttonhole_ease=bc.buttonhole_ease,
+            margin=bc.margin,
+            ax=ax,
+            ay=ay,
+            cuff_height=cuff_height,
+            cuff_length=cuff_length,
+            underlap=underlap,
+            overlap=overlap,
+        )
+    else:
+        button_rows = ()
+
+    return _CuffGeometry(
+        cuff_length=cuff_length,
+        cuff_height=cuff_height,
+        underlap=underlap,
+        overlap=overlap,
+        top_left=Point(ax, ay, "Cuff TL"),
+        top_right=Point(ax + total_width, ay, "Cuff TR"),
+        bottom_right=Point(ax + total_width, ay + total_height, "Cuff BR"),
+        bottom_left=Point(ax, ay + total_height, "Cuff BL"),
+        fold_left=Point(ax, ay + cuff_height, "Fold Left"),
+        fold_right=Point(ax + total_width, ay + cuff_height, "Fold Right"),
+        main_left_x=ax + underlap,
+        main_right_x=ax + underlap + cuff_length,
+        button_rows=button_rows,
+    )
 
 
 def _build_wide_sleeve_geometry(
     grid: WideSleeveGrid,
     sleeve_config: SleeveConfig,
+    armhole: SleeveArmhole | None = None,
 ) -> _WideSleeveGeometry:
     """Build all geometric elements for the wide sleeve block.
 
@@ -905,6 +1101,7 @@ def _build_wide_sleeve_geometry(
     Args:
         grid:          Constructed wide sleeve grid with all construction lines.
         sleeve_config: Garment config — slit height, pleat config, cuff dims.
+        armhole:       Optional armhole seam data used to fit the cap curve.
 
     Returns:
         Fully populated :class:`_WideSleeveGeometry`.
@@ -943,17 +1140,29 @@ def _build_wide_sleeve_geometry(
     )
 
     # ── Sleeve cap Bézier stitch curves ───────────────────────────────────────
-    cap_left_curve = _fit_cap_bezier(cap_left, cap_crown, cap_left_notch_pts).set_name(
+    cap_left_curve = fit_cubic_bezier(cap_left, cap_crown, cap_left_notch_pts).set_name(
         "Cap Left Curve"
     )
-    cap_right_curve = _fit_cap_bezier(cap_right, cap_crown, cap_right_notch_pts).set_name(
+    cap_right_curve = fit_cubic_bezier(cap_right, cap_crown, cap_right_notch_pts).set_name(
         "Cap Right Curve"
     )
 
     # ── Rectangle body ────────────────────────────────────────────────────────
-    left_side = Segment(cap_left, hem_left, "Left Side")
+    # Side seams: gently curved 1 cm inward at mid-height.
+    # A temporary straight segment is used to find the perpendicular reference
+    # point; unit_normal is the left-hand normal, so negative distance moves
+    # inward (toward the sleeve centre) for both sides.
+    _left_straight = Segment(cap_left, hem_left)
+    _left_mid = _left_straight.point_perpendicular(distance=-1.0 * CM, t=0.5)
+    left_side = fit_cubic_bezier_free(cap_left, hem_left, [_left_mid], [0.5]).set_name("Left Side")
+
     hem = Segment(hem_left, hem_right, "Hem")
-    right_side = Segment(hem_right, cap_right, "Right Side")
+
+    _right_straight = Segment(hem_right, cap_right)
+    _right_mid = _right_straight.point_perpendicular(distance=-1.0 * CM, t=0.5)
+    right_side = fit_cubic_bezier_free(hem_right, cap_right, [_right_mid], [0.5]).set_name(
+        "Right Side"
+    )
 
     # ── Shaped hem Bézier — split at midpoint (ref 3) for exact fit ───────────
     # Each half is fitted with its two interior refs at t=1/3 and t=2/3,
@@ -1016,6 +1225,38 @@ def _build_wide_sleeve_geometry(
     cut_right = intersect(grid.right_sleeve, grid.sleeve_length_line)[0]
     cut_seg = Segment(cut_left, cut_right, "Sleeve Length")
 
+    # ── Cap notch points (requires armhole geometry) ──────────────────────────
+    # Each distance is measured from the side-seam corner of the respective
+    # cap curve (cap_left for front / left, cap_right for back / right).
+    # Sleeve ease is split ¼ front + ¼ back; the remaining ½ stays at the crown.
+    front_armscye_notch_on_cap: Point | None = None
+    shoulder_on_cap: Point | None = None
+    back_armscye_notch_on_cap: Point | None = None
+
+    if armhole is not None:
+        _cap_seam = seam_length([cap_left_curve, cap_right_curve])
+        _sleeve_ease = _cap_seam - grid.construction_measures.armscye_circumference
+        _ease_q = 0.25 * _sleeve_ease  # ¼ of ease distributed to each side
+
+        # Front armscye notch: same arc distance from cap_left as front_armscye_notch
+        # has from the side-seam end of front_armscye.
+        _d_front = armhole.front_armscye.arc_length_from_end(armhole.front_armscye_notch)
+        if 0.0 < _d_front < cap_left_curve.length:
+            _p = cap_left_curve.point_at_length(_d_front)
+            front_armscye_notch_on_cap = Point(_p.x, _p.y, "Front Armscye Notch")
+
+        # Shoulder notch — front armscye full length + ¼ ease from cap_left.
+        _d_shoulder = armhole.front_armscye.length + _ease_q
+        if 0.0 < _d_shoulder < cap_left_curve.length:
+            _p = cap_left_curve.point_at_length(_d_shoulder)
+            shoulder_on_cap = Point(_p.x, _p.y, "Shoulder Notch")
+
+        # Back armscye notch: back_armscye_lower.length + ¼ ease from cap_right.
+        _d_back = armhole.back_armscye_lower.length + _ease_q
+        if 0.0 < _d_back < cap_right_curve.length:
+            _p = cap_right_curve.point_at_length(_d_back)
+            back_armscye_notch_on_cap = Point(_p.x, _p.y, "Back Armscye Notch")
+
     return _WideSleeveGeometry(
         cap_crown=cap_crown,
         cap_left=cap_left,
@@ -1037,4 +1278,7 @@ def _build_wide_sleeve_geometry(
         cap_left_notch_pts=cap_left_notch_pts,
         cap_right_notch_pts=cap_right_notch_pts,
         hem_ref_pts=hem_ref_pts,
+        front_armscye_notch_on_cap=front_armscye_notch_on_cap,
+        shoulder_on_cap=shoulder_on_cap,
+        back_armscye_notch_on_cap=back_armscye_notch_on_cap,
     )

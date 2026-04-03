@@ -1,6 +1,6 @@
 """Sewpat — a Python library for generating sewing patterns."""
 
-from .blocks import BlockConfig, TopBlock, TopBlockBack, TopBlockFront, WideSleeveBlock
+from .blocks import BlockConfig, CuffBlock, TopBlock, TopBlockBack, TopBlockFront, WideSleeveBlock
 from .element import GeometryType, PatternElement, PrecisionPoint
 from .fitclass import FitClass
 from .geometry import (
@@ -66,6 +66,8 @@ from .person import (
 )
 from .pleat import Pleat
 from .sleeve import (
+    ButtonConfig,
+    CuffConfig,
     SleeveArmhole,
     SleeveBlockConfig,
     SleeveConfig,
@@ -77,6 +79,8 @@ from .sleeve import (
 from .style import (
     DEFAULT_STROKE_WIDTH,
     DEFAULT_STROKE_WIDTH_GRAIN,
+    STYLE_BUTTON,
+    STYLE_BUTTONHOLE,
     STYLE_CENTER_LINE,
     STYLE_CONSTRUCTION_GRID,
     STYLE_CUT,
@@ -131,6 +135,7 @@ __all__ = [
     "TopBlockBack",
     "TopBlockFront",
     "WideSleeveBlock",
+    "CuffBlock",
     "WideSleeveGrid",
     # Pleat
     "Pleat",
@@ -139,6 +144,8 @@ __all__ = [
     "SleeveMode",
     "SleeveBlockConfig",
     "SleeveConfig",
+    "ButtonConfig",
+    "CuffConfig",
     "SleeveMeasurements",
     "SleeveArmhole",
     "SleeveConstructionMeasures",
@@ -205,4 +212,6 @@ __all__ = [
     "STYLE_DART_STITCH",
     "STYLE_DART_FOLD",
     "STYLE_PRECISION_POINT",
+    "STYLE_BUTTON",
+    "STYLE_BUTTONHOLE",
 ]

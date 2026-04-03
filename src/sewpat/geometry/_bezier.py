@@ -391,6 +391,25 @@ class CubicBezier:
         pos = float(svg.length(t1=t0))
         return self.point_at_length(pos + arc_length)
 
+    def arc_length_from_end(self, point: Point) -> float:
+        """Return the arc distance from the closest on-curve location to *point* to the end (p3).
+
+        Snaps *point* to the nearest location on the curve, then returns
+        ``self.length − arc_distance_from_p0``.  Useful when you know a notch
+        position relative to one end of a curve and need to mirror it onto a
+        second curve measured from the *other* end.
+
+        Args:
+            point: Reference point (need not lie exactly on the curve).
+
+        Returns:
+            Arc distance in mm from the snapped location to :attr:`p3`.
+        """
+        svg = self._svg()
+        t0 = _bezier_closest_t(svg, complex(point.x, point.y))
+        arc_from_start = float(svg.length(t1=t0))
+        return self.length - arc_from_start
+
     def split(self, t: float) -> tuple[CubicBezier, CubicBezier]:
         """Split the curve at *t* ∈ (0, 1) and return ``(left, right)``.
 

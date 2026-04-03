@@ -549,14 +549,14 @@ def test_sleeve_armhole_front_is_cubic_bezier(sleeve_armhole: SleeveArmhole) -> 
     assert isinstance(sleeve_armhole.front_armscye, CubicBezier)
 
 
-def test_sleeve_armhole_hAeP_is_point(sleeve_armhole: SleeveArmhole) -> None:
-    """hÄP (back armscye notch) is a Point."""
-    assert isinstance(sleeve_armhole.hAeP, Point)
+def test_sleeve_armhole_back_armscye_notch_is_point(sleeve_armhole: SleeveArmhole) -> None:
+    """back_armscye_notch (hÄP) is a Point."""
+    assert isinstance(sleeve_armhole.back_armscye_notch, Point)
 
 
-def test_sleeve_armhole_vAeP_is_point(sleeve_armhole: SleeveArmhole) -> None:
-    """vÄP (front armscye notch) is a Point."""
-    assert isinstance(sleeve_armhole.vAeP, Point)
+def test_sleeve_armhole_front_armscye_notch_is_point(sleeve_armhole: SleeveArmhole) -> None:
+    """front_armscye_notch (vÄP) is a Point."""
+    assert isinstance(sleeve_armhole.front_armscye_notch, Point)
 
 
 def test_sleeve_armhole_height_is_positive(sleeve_armhole: SleeveArmhole) -> None:

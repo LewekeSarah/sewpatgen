@@ -379,6 +379,134 @@ SleeveBlockConfig.NARROW_JACKET = SleeveBlockConfig._make_narrow_jacket()
 
 
 # ---------------------------------------------------------------------------
+# ButtonConfig
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ButtonConfig:
+    """Button and buttonhole placement for a cuff pattern piece.
+
+    Up to two horizontal rows are supported.  Each row produces one button
+    mark (a circle) and one buttonhole mark (a short horizontal line).
+
+    **Placement rules** — depend on which lap extensions are present:
+
+    *Only overlap* (``cuff_overlap > 0``, no underlap):
+        Button in the main cuff body at ``overlap/2`` from the main|overlap
+        boundary, so that when the overlap is folded closed the button appears
+        centred in the overlap.  Buttonhole centred in the overlap section.
+
+    *Only underlap* (``cuff_underlap > 0``, no overlap):
+        Button AT the underlap|main closure line.
+        Buttonhole in the main cuff body, starting at the closure line and
+        extending inward (fully inside the cuff).
+
+    *Both underlap and overlap*:
+        Button AT the underlap|main closure line.
+        Buttonhole AT the main|overlap closure line.
+
+    *No extensions*:
+        Both marks centred in the main cuff body.
+
+    *Two buttons* (``num_buttons = 2``) with an underlap wide enough for
+    ``button_diameter``:
+        Row 1 button at the centre of the underlap; Row 2 button in the cuff
+        at the same distance from the closure line (symmetric around the
+        underlap|main boundary).  Both rows share the same buttonhole
+        X position.  Falls back to single-column placement when no underlap
+        is present.
+
+    A row is skipped only when the cuff height band is too small for the
+    *margin* constraint.
+
+    Attributes:
+        num_buttons:     Number of buttons — 0, 1, or 2.
+        button_diameter: Diameter of the button mark circle in mm.
+                         Typical cuff buttons are 10–15 mm.
+        margin:          Minimum distance from the top edge (Cuff Opening) and
+                         from the fold line in mm.  Rows are distributed within
+                         the band ``[margin, cuff_height − margin]``.
+                         Default 10 mm (1 cm).
+        buttonhole_ease: Extra length added to *button_diameter* to obtain the
+                         buttonhole line length in mm (standard allowance for
+                         the knot bar at each end).  Default 2 mm.
+    """
+
+    num_buttons: int = 1  # 0, 1, or 2
+    button_diameter: float = 10.0  # mm — typical cuff button diameter
+    margin: float = 10.0  # mm — min distance from top edge / fold line
+    buttonhole_ease: float = 2.0  # mm — added to button_diameter for buttonhole line length
+
+    def __post_init__(self) -> None:
+        """Validate fields.
+
+        Raises:
+            ValueError: When *num_buttons* is not 0, 1, or 2, or when any
+                        dimension field violates its constraint.
+        """
+        if self.num_buttons not in (0, 1, 2):
+            raise ValueError(f"num_buttons must be 0, 1, or 2; got {self.num_buttons}.")
+        if self.button_diameter <= 0:
+            raise ValueError(f"button_diameter must be positive; got {self.button_diameter} mm.")
+        if self.margin < 10:
+            raise ValueError(f"margin must be grater then 10 mm; got {self.margin} mm.")
+        if self.buttonhole_ease < 0:
+            raise ValueError(
+                f"buttonhole_ease must be non-negative; got {self.buttonhole_ease} mm."
+            )
+
+
+# ---------------------------------------------------------------------------
+# CuffConfig
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CuffConfig:
+    """Dimensions and closure configuration for the cuff pattern piece.
+
+    Groups all cuff-specific settings: the physical dimensions of the band,
+    the optional lap extensions for the button closure, and the button/buttonhole
+    placement.  Pass a ``CuffConfig`` instance to
+    :attr:`SleeveConfig.cuff_config` to activate cuff-piece generation.
+
+    Attributes:
+        length:        Bündchenlänge — flat circumference of the main cuff body
+                       (mm).  Used to shorten the sleeve hem.
+        width:         Bündchenbreite — height of one layer of the folded cuff
+                       band (mm).  Full cut height is ``2 × width``.
+        overlap:       Überschlag — width of the overlap extension (mm).
+                       Default 0 (no overlap).
+        underlap:      Unterschlag — width of the underlap extension (mm).
+                       Default 0 (no underlap).
+        button_config: Button and buttonhole placement.
+                       ``None`` → no button marks are drawn.
+    """
+
+    length: float  # Bündchenlänge
+    width: float  # Bündchenbreite (single height; cut = 2×)
+    overlap: float = 0.0  # Überschlag
+    underlap: float = 0.0  # Unterschlag
+    button_config: ButtonConfig | None = None
+
+    def __post_init__(self) -> None:
+        """Validate all fields.
+
+        Raises:
+            ValueError: When any dimension is out of range.
+        """
+        if self.length <= 0:
+            raise ValueError(f"length must be positive; got {self.length / CM:.2f} cm.")
+        if self.width <= 0:
+            raise ValueError(f"width must be positive; got {self.width / CM:.2f} cm.")
+        if self.overlap < 0:
+            raise ValueError(f"overlap must be non-negative; got {self.overlap / CM:.2f} cm.")
+        if self.underlap < 0:
+            raise ValueError(f"underlap must be non-negative; got {self.underlap / CM:.2f} cm.")
+
+
+# ---------------------------------------------------------------------------
 # SleeveConfig
 # ---------------------------------------------------------------------------
 
@@ -388,55 +516,42 @@ class SleeveConfig:
     """Garment-design choices for a sleeve — independent of body measurements.
 
     ``sleeve_length`` applies to all sleeve styles.  ``cap_offset`` and
-    ``ease`` are consumed only by :class:`~sewpat.grids.WideSleeveGrid` when
-    building the wide sleeve construction grid; for other sleeve styles they
-    are simply ignored.  ``cuff_length`` and ``pleat_config``
-    apply only to the wide sleeve hem.
+    ``ease`` are consumed only by :class:`~sewpat.grids.WideSleeveGrid`; they
+    are ignored for other styles.
 
-    +--------------+-------------------+--------------------------------------+
-    | Field        | Used by           | Effect                               |
-    +==============+===================+======================================+
-    | sleeve_length| all styles        | finished sleeve length (mm)          |
-    +--------------+-------------------+--------------------------------------+
-    | cap_offset   | wide sleeve grid  | [0, 2] cm; 0 → highest/narrowest cap;|
-    |              |                   | 2 cm → lowest/widest cap             |
-    +--------------+-------------------+--------------------------------------+
-    | ease         | wide sleeve grid  | [0, 1] cm; larger → narrower sleeve  |
-    +--------------+-------------------+--------------------------------------+
-    | cuff_length  | wide sleeve hem   | finished cuff/hem circumference;     |
-    |              |                   | ``None`` → no hem shortening         |
-    +--------------+-------------------+--------------------------------------+
-    | cuff_width   | wide sleeve hem   | cuff band height; hem raised by      |
-    |              |                   | ``cuff_width / 2``; ``None`` = skip  |
-    +--------------+-------------------+--------------------------------------+
-    | slit_height  | wide sleeve slit  | height of the slit (8–10 cm);        |
-    |              |                   | ``None`` = no slit                   |
-    +--------------+-------------------+--------------------------------------+
-    | pleat_config | wide sleeve hem   | pleat layout; ``None`` = no pleats   |
-    +--------------+-------------------+--------------------------------------+
+    +--------------+--------------------+-------------------------------------+
+    | Field        | Used by            | Effect                              |
+    +==============+====================+=====================================+
+    | sleeve_length| all styles         | finished sleeve length (mm)         |
+    +--------------+--------------------+-------------------------------------+
+    | cap_offset   | wide sleeve grid   | [0, 2] cm; 0 → highest/narrowest;  |
+    |              |                    | 2 cm → lowest/widest cap            |
+    +--------------+--------------------+-------------------------------------+
+    | ease         | wide sleeve grid   | [0, 1] cm; larger → narrower sleeve |
+    +--------------+--------------------+-------------------------------------+
+    | cuff_config  | wide sleeve hem    | cuff dimensions + closure config;   |
+    |              | + cuff piece       | ``None`` → no cuff piece            |
+    +--------------+--------------------+-------------------------------------+
+    | slit_height  | wide sleeve slit   | height of the slit (8–10 cm);       |
+    |              |                    | ``None`` = no slit                  |
+    +--------------+--------------------+-------------------------------------+
+    | pleat_config | wide sleeve hem    | pleat layout; ``None`` = no pleats  |
+    +--------------+--------------------+-------------------------------------+
 
     Attributes:
-        sleeve_length: ArL — Ärmellänge (finished sleeve length in mm,
-            measured from the shoulder point to the hem).
-        cap_offset: Reduction applied to ``armscye_height / 3`` to derive
-            the wide sleeve cap height.  0 cm → tallest/narrowest cap;
-            2 cm → shortest/widest cap.  Only used by :class:`~sewpat.grids.WideSleeveGrid`.
+        sleeve_length: ArL — Ärmellänge (finished sleeve length in mm).
+        cap_offset: Reduction applied to ``armscye_height / 3`` to derive the
+            wide sleeve cap height.  Only used by
+            :class:`~sewpat.grids.WideSleeveGrid`.
         ease: Circumference ease subtracted from ``armscye_circumference``
-            before computing the wide sleeve width.  Larger ease → narrower
-            sleeve.  Only used by :class:`~sewpat.grids.WideSleeveGrid`.
-        cuff_length: Bündchenlänge — finished cuff circumference (mm).  The
-            wide sleeve hem width is
-            ``cuff_length + pleat_config.depth * pleat_config.num_pleats``.
-            ``None`` means no hem shortening is applied.
-        cuff_width: Bündchenbreite — height of the cuff band (mm).  The sleeve
-            hem is raised by ``cuff_width / 2`` so the cuff sits correctly.
-            ``None`` means no hem raising is applied.
+            before computing the wide sleeve width.  Only used by
+            :class:`~sewpat.grids.WideSleeveGrid`.
+        cuff_config: All cuff dimensions and closure settings in one object.
+            ``None`` → no cuff pattern piece is generated and no hem shortening
+            is applied.
         slit_height: Schlitzhöhe — height of the sleeve slit in mm (typically
-            80–100 mm).  The slit is placed at the 4/6 position of the hem
-            and runs parallel to the sleeve centre line.
-            ``None`` means no slit is added.
-        pleat_config: Pleat layout — depth, count, spacing, and fold-line
-            height for the hem pleats.  ``None`` means no pleats are drawn.
+            80–100 mm).  ``None`` → no slit.
+        pleat_config: Pleat layout for the hem.  ``None`` → no pleats.
     """
 
     sleeve_length: float  # ArL — Ärmellänge
@@ -445,35 +560,22 @@ class SleeveConfig:
     cap_offset: float = 1.0 * CM  # [0, 2] cm — mid of range
     ease: float = 0.5 * CM  # [0, 1] cm — mid of range
 
-    # ── Wide sleeve hem constants ─────────────────────────────────────────────
-    cuff_length: float | None = None  # Bündchenlänge; None → no hem shortening
-    cuff_width: float | None = None  # Bündchenbreite; None → no hem raising
+    # ── Cuff piece + hem shortening ───────────────────────────────────────────
+    cuff_config: CuffConfig | None = None  # None → no cuff piece
+
+    # ── Slit & pleats ─────────────────────────────────────────────────────────
     slit_height: float | None = None  # Schlitzhöhe; None → no slit
     pleat_config: PleatConfig | None = None  # pleat layout; None → no pleats
 
     def __post_init__(self) -> None:
-        """Validate all fields against their allowed ranges.
-
-        Raises:
-            ValueError: When any field is outside its valid range.
-        """
+        """Validate fields against their allowed ranges."""
         if not (-1e-9 <= self.cap_offset <= 2.0 * CM + 1e-9):
-            raise ValueError(
-                f"cap_offset={self.cap_offset / CM:.2f} cm is outside the valid range "
-                "[0, 2] cm (0 cm → highest/narrowest cap; 2 cm → lowest/widest cap)."
-            )
+            raise ValueError(f"cap_offset={self.cap_offset / CM:.2f} cm is outside [0, 2] cm.")
         if not (-1e-9 <= self.ease <= 1.0 * CM + 1e-9):
-            raise ValueError(
-                f"ease={self.ease / CM:.2f} cm is outside the valid range "
-                "[0, 1] cm (larger ease → narrower sleeve width)."
-            )
-        if self.cuff_length is not None and self.cuff_length < -1e-9:
-            raise ValueError(f"cuff_length={self.cuff_length / CM:.2f} cm must be non-negative.")
-        if self.cuff_width is not None and self.cuff_width < -1e-9:
-            raise ValueError(f"cuff_width={self.cuff_width / CM:.2f} cm must be non-negative.")
+            raise ValueError(f"ease={self.ease / CM:.2f} cm is outside [0, 1] cm.")
         if self.slit_height is not None and self.slit_height < -1e-9:
             raise ValueError(f"slit_height={self.slit_height / CM:.2f} cm must be non-negative.")
-        # PleatConfig validates itself in its own __post_init__
+        # CuffConfig and PleatConfig validate themselves in their own __post_init__
 
 
 # ---------------------------------------------------------------------------
@@ -558,9 +660,9 @@ class SleeveArmhole:
         back_armscye_upper: Upper back armscye Bézier stitch line — from hÄP
             up to the shoulder endpoint.
         front_armscye:      Front armscye Bézier stitch line.
-        hAeP:               hÄP — Hinterer Ärmellochpunkt (back armscye notch
+        back_armscye_notch: hÄP — Hinterer Ärmellochpunkt (back armscye notch
             point, where the sleeve notch will be placed).
-        vAeP:               vÄP — Vorderer Ärmellochpunkt (front armscye notch
+        front_armscye_notch: vÄP — Vorderer Ärmellochpunkt (front armscye notch
             point).
         bust_line:          Brustlinie — horizontal chest/bust grid line, used
             to locate the deepest point of the armscye.
@@ -576,8 +678,8 @@ class SleeveArmhole:
     front_armscye: CubicBezier
 
     # ── Notch points ──────────────────────────────────────────────────────────
-    hAeP: Point  # hÄP — Hinterer Ärmellochpunkt
-    vAeP: Point  # vÄP — Vorderer Ärmellochpunkt
+    back_armscye_notch: Point  # hÄP — Hinterer Ärmellochpunkt
+    front_armscye_notch: Point  # vÄP — Vorderer Ärmellochpunkt
 
     # ── Grid lines ────────────────────────────────────────────────────────────
     bust_line: Segment  # Brustlinie
@@ -652,8 +754,8 @@ class SleeveArmhole:
             back_armscye_lower=block.back.armscye_lower,
             back_armscye_upper=block.back.armscye_upper,
             front_armscye=block.front.armscye,
-            hAeP=block.back.armscye_control,
-            vAeP=block.front.armscye_control,
+            back_armscye_notch=block.back.armscye_control,
+            front_armscye_notch=block.front.armscye_control,
             bust_line=grid.chest,
             armscye_back_line=grid.armscye_back,
             armscye_front_line=grid.armscye_front,
@@ -825,13 +927,13 @@ class SleeveConstructionMeasures:
         #   sleeve_hem_width = cuff_length + pleat_config.depth × pleat_config.num_pleats
         # Other modes: wrist circumference + hem ease from block config.
         sleeve_hem_width: float | None
-        if is_wide and config.cuff_length is not None:
+        if is_wide and config.cuff_config is not None:
             pleat_total = (
                 config.pleat_config.depth * config.pleat_config.num_pleats
                 if config.pleat_config is not None
                 else 0.0
             )
-            sleeve_hem_width = config.cuff_length + pleat_total
+            sleeve_hem_width = config.cuff_config.length + pleat_total
         elif not is_wide and meas is not None and block_config.hem_ease is not None:
             sleeve_hem_width = meas.wrist + block_config.hem_ease
         else:

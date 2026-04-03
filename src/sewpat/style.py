@@ -250,3 +250,20 @@ STYLE_PLEAT_ARROW = StyleOptions(
     seam_allowance=0.0,
     no_notch=True,
 )
+
+#: Button mark — outlined circle, no seam allowance, no notch.
+STYLE_BUTTON = StyleOptions(
+    stroke_color="black",
+    stroke_width=DEFAULT_STROKE_WIDTH,
+    fill_color="none",
+    seam_allowance=0.0,
+    no_notch=True,
+)
+
+#: Buttonhole mark — solid thin line, no seam allowance, no notch.
+STYLE_BUTTONHOLE = StyleOptions(
+    stroke_color="black",
+    stroke_width=DEFAULT_STROKE_WIDTH,
+    seam_allowance=0.0,
+    no_notch=True,
+)

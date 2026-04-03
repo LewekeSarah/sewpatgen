@@ -19,7 +19,7 @@ from sewpat.person import (
 )
 from sewpat.pleat import PleatConfig
 from sewpat.render import export_pattern_svg_mm
-from sewpat.sleeve import SleeveArmhole, SleeveConfig
+from sewpat.sleeve import ButtonConfig, CuffConfig, SleeveArmhole, SleeveConfig
 from sewpat.units import CM
 
 
@@ -31,6 +31,7 @@ class Part(GarmentPart):
     BLOCK_FRONT = "Block Front"
     WIDE_SLEEVE_GRID = "Wide Sleeve Grid"
     WIDE_SLEEVE = "Wide Sleeve"
+    CUFF = "Cuff"
 
 
 def create_block(
@@ -162,9 +163,12 @@ def create_block(
             sleeve_config,
             layout=sleeve_layout,
             part_name=Part.WIDE_SLEEVE,
+            cuff_part_name=Part.CUFF,
         )
         pattern.add_part(wide_sleeve.grid.part)
         pattern.add_part(wide_sleeve.part)
+        if wide_sleeve.cuff is not None:
+            pattern.add_part(wide_sleeve.cuff.part)
 
     return pattern
 
@@ -180,9 +184,14 @@ if __name__ == "__main__":
     sleeve_config = SleeveConfig(
         sleeve_length=62 * CM,
         cap_offset=1 * CM,
-        ease=0.5 * CM,
-        cuff_length=20 * CM,
-        cuff_width=4 * CM,
+        ease=0.0 * CM,
+        cuff_config=CuffConfig(
+            length=20 * CM,
+            width=4 * CM,
+            underlap=2 * CM,
+            overlap=3 * CM,
+            button_config=ButtonConfig(num_buttons=2),
+        ),
         slit_height=8 * CM,
         pleat_config=PleatConfig(depth=3 * CM, num_pleats=3, spacing=1.5 * CM),
     )
@@ -193,7 +202,7 @@ if __name__ == "__main__":
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
     grid_parts = [Part.GRID]
-    sleeve_parts = [Part.WIDE_SLEEVE]
+    sleeve_parts = [Part.WIDE_SLEEVE, Part.CUFF]
     sleeve_grid_parts = [Part.WIDE_SLEEVE_GRID]
 
     # With construction grid visible (for building / drafting)
