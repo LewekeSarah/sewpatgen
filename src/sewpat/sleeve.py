@@ -387,8 +387,11 @@ SleeveBlockConfig.NARROW_JACKET = SleeveBlockConfig._make_narrow_jacket()
 class ButtonConfig:
     """Button and buttonhole placement for a cuff pattern piece.
 
-    Up to two horizontal rows are supported.  Each row produces one button
-    mark (a circle) and one buttonhole mark (a short horizontal line).
+    One or two button marks (circles) and matching buttonhole marks (short
+    horizontal lines) are placed at the height band of the cuff.  When
+    ``num_buttons = 2`` and an underlap is wide enough, a second column is
+    placed symmetrically across the underlap/main boundary; otherwise a
+    single-column layout is used.
 
     **Placement rules** — depend on which lap extensions are present:
 
@@ -450,7 +453,9 @@ class ButtonConfig:
         if self.button_diameter <= 0:
             raise ValueError(f"button_diameter must be positive; got {self.button_diameter} mm.")
         if self.margin < 10:
-            raise ValueError(f"margin must be grater then 10 mm; got {self.margin} mm.")
+            raise ValueError(
+                f"margin must be greater than or equal to 10 mm; got {self.margin} mm."
+            )
         if self.buttonhole_ease < 0:
             raise ValueError(
                 f"buttonhole_ease must be non-negative; got {self.buttonhole_ease} mm."

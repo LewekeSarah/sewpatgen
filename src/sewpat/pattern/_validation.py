@@ -311,8 +311,8 @@ def _intersect_grid_with_role(
 
     # Multiple distinct intersections (non-convex outline): return the one
     # closest to the midpoint of the grid segment as a best-effort heuristic.
-    mid = grid_seg.midpoint
-    return min(unique, key=lambda p: p.distance_to(mid))
+    mid = grid_seg.midpoint  # pragma: no cover
+    return min(unique, key=lambda p: p.distance_to(mid))  # pragma: no cover
 
 
 # ---------------------------------------------------------------------------

@@ -15,15 +15,18 @@ from typing import Any
 
 import pytest
 
-from sewpat.blocks import BlockConfig, TopBlock
+from sewpat.blocks import BlockConfig, CuffBlock, TopBlock, WideSleeveBlock
 from sewpat.fitclass import FitClass
 from sewpat.geometry import Point, Rect, Segment
 from sewpat.grids import GridConfig, TopGrid, WideSleeveGrid
 from sewpat.measurements import BlouseMeasurements, GarmentConfig
 from sewpat.pattern import Pattern, PatternPart
 from sewpat.person import BalancedPerson, Person, PersonAnalyser
+from sewpat.pleat import PleatConfig
 from sewpat.render import _build_svg
 from sewpat.sleeve import (
+    ButtonConfig,
+    CuffConfig,
     SleeveArmhole,
     SleeveBlockConfig,
     SleeveConfig,
@@ -434,3 +437,49 @@ def default_wide_grid(
 ) -> WideSleeveGrid:
     """WideSleeveGrid built from the standard armhole with default SleeveConfig."""
     return WideSleeveGrid.from_armhole(sleeve_armhole, sleeve_config)
+
+
+# ---------------------------------------------------------------------------
+# Sleeve config with cuff + pleat
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sleeve_config_with_cuff() -> SleeveConfig:
+    """SleeveConfig with a CuffConfig, slit and pleats — exercises the full feature set."""
+    return SleeveConfig(
+        sleeve_length=62 * CM,
+        cap_offset=1 * CM,
+        ease=0.0 * CM,
+        cuff_config=CuffConfig(
+            length=20 * CM,
+            width=4 * CM,
+            underlap=2 * CM,
+            overlap=3 * CM,
+            button_config=ButtonConfig(num_buttons=2),
+        ),
+        slit_height=8 * CM,
+        pleat_config=PleatConfig(depth=3 * CM, num_pleats=3, spacing=1.5 * CM),
+    )
+
+
+# ---------------------------------------------------------------------------
+# WideSleeveBlock + CuffBlock fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def wide_sleeve_block(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_config_with_cuff: SleeveConfig,
+) -> WideSleeveBlock:
+    """WideSleeveBlock assembled from the standard armhole with cuff + pleat config."""
+    return WideSleeveBlock.from_armhole(sleeve_armhole, sleeve_config_with_cuff)
+
+
+@pytest.fixture
+def cuff_block(sleeve_config_with_cuff: SleeveConfig) -> CuffBlock:
+    """CuffBlock built from the standard sleeve config with cuff dimensions."""
+    result = CuffBlock.from_sleeve_config(sleeve_config_with_cuff)
+    assert result is not None, "CuffBlock.from_sleeve_config returned None unexpectedly"
+    return result

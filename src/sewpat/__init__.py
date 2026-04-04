@@ -64,7 +64,7 @@ from .person import (
     PersonAnalyser,
     load_person,
 )
-from .pleat import Pleat
+from .pleat import Pleat, PleatConfig
 from .sleeve import (
     ButtonConfig,
     CuffConfig,
@@ -139,6 +139,7 @@ __all__ = [
     "WideSleeveGrid",
     # Pleat
     "Pleat",
+    "PleatConfig",
     # Sleeve
     "SleeveType",
     "SleeveMode",

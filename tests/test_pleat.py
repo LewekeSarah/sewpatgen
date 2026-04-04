@@ -390,3 +390,21 @@ def test_apply_to_roof1_apex_on_center_fold_line() -> None:
     elements = _apply()
     apex_x = elements[4].geometry.p2.x  # left half p2 = apex
     assert apex_x == pytest.approx(5.0)
+
+
+def test_apply_to_degenerate_zero_fold_height_returns_early() -> None:
+    """apply_to adds fold lines + arrow but skips roof markers when fold height is zero."""
+    p = Point(5.0, 100.0)
+    degenerate = Pleat(
+        bottom_left=Point(0.0, 100.0),
+        bottom_center=p,
+        bottom_right=Point(10.0, 100.0),
+        top_left=Point(0.0, 100.0),  # same y as bottom → fold_h = 0
+        top_center=p,  # identical to bottom_center → distance = 0
+        top_right=Point(10.0, 100.0),
+        fold_left=False,
+    )
+    part = PatternPart(name="degenerate_test")
+    degenerate.apply_to(part)
+    # Only 3 fold lines + 1 arrow should be added; no roof markers
+    assert len(part.elements) == 4

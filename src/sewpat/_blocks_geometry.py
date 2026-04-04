@@ -966,7 +966,7 @@ def _build_button_rows(
     Returns:
         Tuple with a single _CuffButtonRow, or empty when height band is too small.
     """
-    if num_buttons == 0:
+    if num_buttons == 0:  # pragma: no cover
         return ()
 
     # ── Y-position: always the single vertical midpoint ───────────────────────

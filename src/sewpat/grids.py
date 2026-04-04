@@ -395,7 +395,11 @@ class WideSleeveGrid:
 
         The full sleeve spans ``2 × sleeve_width``.
         """
-        assert self.construction_measures.sleeve_width is not None
+        if self.construction_measures.sleeve_width is None:
+            raise ValueError(
+                "sleeve_width is None — wide sleeve construction measures are incomplete. "
+                "Verify that SleeveConfig.cap_offset and ease produce a feasible geometry."
+            )
         return self.construction_measures.sleeve_width
 
     @classmethod
@@ -415,7 +419,7 @@ class WideSleeveGrid:
             pattern.add_part(wide_grid.part)
 
         Internally delegates the cap height and sleeve width computation to
-        :meth:`~sewpat.sleeve.SleeveConstructionMeasures.from_wide_armhole`
+        :meth:`~sewpat.sleeve.SleeveConstructionMeasures.from_armhole`
         so that the full audit trail is available on ``grid.construction_measures``.
 
         Args:

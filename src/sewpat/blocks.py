@@ -351,11 +351,6 @@ class TopBlock:
 
 
 # ---------------------------------------------------------------------------
-# WideSleeveBlock
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
 # CuffBlock
 # ---------------------------------------------------------------------------
 
@@ -409,12 +404,13 @@ class CuffBlock:
     ) -> CuffBlock | None:
         """Build a cuff pattern piece from the wide sleeve garment config.
 
-        Returns ``None`` when *sleeve_config* has no ``cuff_length`` or
-        ``cuff_width`` — the sleeve has no cuff and no piece should be drawn.
+        Returns ``None`` when *sleeve_config* has no ``cuff_config`` set —
+        the sleeve has no cuff and no piece should be drawn.
 
         Args:
-            sleeve_config: Garment config — reads ``cuff_length``, ``cuff_width``,
-                           ``cuff_underlap``, and ``cuff_overlap``.
+            sleeve_config: Garment config — reads ``cuff_config.length``,
+                           ``cuff_config.width``, ``cuff_config.underlap``,
+                           and ``cuff_config.overlap``.
             anchor:        Top-left origin for the piece.  Defaults to
                            ``Point(5 cm, 5 cm)``.
             part_name:     Name of the produced :class:`~sewpat.pattern.PatternPart`.
@@ -444,6 +440,11 @@ class CuffBlock:
             fold_left=geom.fold_left,
             fold_right=geom.fold_right,
         )
+
+
+# ---------------------------------------------------------------------------
+# WideSleeveBlock
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -557,7 +558,7 @@ class WideSleeveBlock:
         # ── Cuff — placed directly below the sleeve length line ───────────────
         cuff_anchor = Point(
             grid.left_sleeve.p1.x,
-            grid.sleeve_length_line.p1.y + 2.0 * CM,
+            grid.sleeve_length_line.p1.y + _layout.margin,
             "Cuff Anchor",
         )
         cuff = CuffBlock.from_sleeve_config(
