@@ -35,10 +35,12 @@ from ._blocks_assembly import (
 )
 from ._blocks_geometry import (
     _build_back_geometry,
-    _build_cuff_geometry,
     _build_darts,
     _build_front_geometry,
     _build_side_seams,
+)
+from ._wide_sleeve_geometry import (
+    _build_cuff_geometry,
     _build_wide_sleeve_geometry,
 )
 from .geometry import (

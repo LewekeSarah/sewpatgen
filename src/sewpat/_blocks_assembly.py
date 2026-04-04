@@ -8,10 +8,12 @@ from typing import TYPE_CHECKING
 
 from ._blocks_geometry import (
     _BackGeometry,
-    _CuffGeometry,
     _Darts,
     _FrontGeometry,
     _SideSeams,
+)
+from ._wide_sleeve_geometry import (
+    _CuffGeometry,
     _WideSleeveGeometry,
 )
 from .geometry import Circle, Dart, Point, Segment, intersect, seam_length

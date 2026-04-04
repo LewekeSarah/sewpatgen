@@ -3,7 +3,7 @@
 
 from pathlib import Path
 
-from sewpat import GarmentPart, SeamValidationResult, WidthValidationResult
+from sewpat import GarmentPart, PleatConfig, SeamValidationResult, WidthValidationResult
 from sewpat.blocks import BlockConfig, TopBlock, WideSleeveBlock
 from sewpat.fitclass import FitClass
 from sewpat.grids import GridConfig, TopGrid
@@ -17,7 +17,6 @@ from sewpat.person import (
     PersonAnalyser,
     load_person,
 )
-from sewpat.pleat import PleatConfig
 from sewpat.render import export_pattern_svg_mm
 from sewpat.sleeve import ButtonConfig, CuffConfig, SleeveArmhole, SleeveConfig
 from sewpat.units import CM
