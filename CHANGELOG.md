@@ -11,6 +11,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] — 2026-04-07
+
+### Added
+
+- **`WideSleeveBlock`** — complete wide sleeve pattern block assembled from armhole geometry.
+  Exposes key points (`cap_crown`, `cap_left`, `cap_right`, `hem_left`, `hem_right`),
+  construction geometry (`cap_left_slope`, `cap_right_slope`, `cap_left_curve`,
+  `cap_right_curve`, `left_side`, `right_side`, `hem`, `hem_left_curve`,
+  `hem_right_curve`), and optional features (`slit`, `pleats`, `cuff`).
+  Built via `WideSleeveBlock.from_armhole(armhole, config, seam_allowance=…)`.
+
+- **`CuffBlock`** — rectangular cuff pattern piece with fold line, optional underlap /
+  overlap extensions, and button / buttonhole marks.
+  Built via `CuffBlock.from_sleeve_config(config, seam_allowance=…)`;
+  returns `None` when no `CuffConfig` is present.
+
+- **`WideSleeveGrid`** — construction grid for the wide sleeve (cap line, hem line,
+  sleeve-length line, left / right / centre verticals).
+  Built via `WideSleeveGrid.from_armhole(armhole, config)`.
+
+- **`SleeveArmhole`** — derives back / front armscye heights and total circumference
+  from a finished `TopBlock`.
+  Built via `SleeveArmhole.from_block(block)`.
+
+- **`SleeveConfig`** — garment-design choices independent of body measurements:
+  `sleeve_length`, `ease`, `cap_offset`, `slit_height`, `pleat_config`,
+  `cuff_config`.  Validates `slit_height ≥ 0`.
+
+- **`SleeveConstructionMeasures`** — complete set of derived construction measures
+  (`cap_height`, `sleeve_width`, `sleeve_hem_width`, …).
+  `from_armhole()` supports WIDE and NARROW types;
+  raises `ValueError` when geometry is infeasible or required measurements are absent.
+
+- **`SleeveBlockConfig`** — construction constants for cap and width formulas,
+  with four named presets: `WIDE`, `NARROW_BLOUSE`, `NARROW_JACKET`, `STRETCH`.
+
+- **`SleeveType`** / **`SleeveMode`** — enums that classify the sleeve construction
+  variant (wide vs. narrow) and the precise construction mode.
+
+- **`ButtonConfig`** — button and buttonhole placement: `num_buttons` (0–2),
+  `button_diameter`, `margin`, `buttonhole_ease`.  Full validation with
+  descriptive error messages.
+
+- **`CuffConfig`** — cuff dimensions: `length`, `width`, `underlap`, `overlap`,
+  optional `button_config`.  Validates all fields ≥ 0 and `length` / `width` > 0.
+
+- **`SleeveMeasurements`** — body measurements required for narrow sleeve
+  construction (`upper_arm_circumference`, …).
+
+- **`CuffBlockConfig`** / **`WideSleeveBlockConfig`** — construction constants
+  for the cuff and wide sleeve blocks respectively; each ships a `STANDARD` /
+  `WIDE` named preset.
+
+- **`PleatConfig`** — configuration for hem pleats: `depth`, `num_pleats`, `spacing`.
+
+- **`Pleat`** — geometry of a single rendered pleat on the hem line,
+  including fold lines, roof markers, and arrow marks.  Applied to a `PatternPart`
+  via `Pleat.apply_to(part)`.
+
+- **New `CubicBezier` helpers** — `arc_length_from_end(point)` computes the arc
+  length from an arbitrary point to the end of the curve.
+
+- **New geometry functions** — `fit_cubic_bezier(…)` and `fit_cubic_bezier_free(…)`
+  fit cubic Bézier curves to a set of sample points; `split_bezier_seam_fn(…)`
+  splits a curve at a given seam length.
+
+- **New style constants** — `STYLE_SLIT`, `STYLE_PLEAT_FOLD`, `STYLE_PLEAT_ARROW`,
+  `STYLE_BUTTON`, `STYLE_BUTTONHOLE` added to `sewpat.style` and exported from
+  the top-level `sewpat` namespace (`STYLE_BUTTON`, `STYLE_BUTTONHOLE`).
+
+- **Updated example** — `examples/women/top_casual.py` extended with a full
+  wide sleeve and cuff construction demonstrating the new API.
+
+---
+
 ## [0.5.0] — 2026-03-21
 
 ### Added
