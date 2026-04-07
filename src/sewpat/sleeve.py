@@ -584,6 +584,158 @@ class SleeveConfig:
 
 
 # ---------------------------------------------------------------------------
+# CuffBlockConfig
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CuffBlockConfig:
+    """Construction constants for the cuff pattern piece.
+
+    These are purely internal construction choices — the physical cuff
+    dimensions and design options live in :class:`CuffConfig`.
+
+    Use the pre-built class-level preset instead of constructing manually:
+
+    * ``CuffBlockConfig.STANDARD`` — standard cuff construction.
+
+    Attributes:
+        grainline_fraction: Position of the grainline as a fraction of the
+            main cuff-body width, measured from the underlap|body boundary.
+            Default ``0.25`` (¼ of the way into the body — clears the
+            fold-line label that is centred at ``0.5``).
+        grainline_margin:   Distance from the top and bottom edges to the
+            grainline arrow endpoints (mm).  Default 5 mm (0.5 cm).
+    """
+
+    # ── Presets ───────────────────────────────────────────────────────────────
+    STANDARD: ClassVar[CuffBlockConfig]
+
+    # ── Fields ────────────────────────────────────────────────────────────────
+    grainline_fraction: float = 0.25
+    grainline_margin: float = 0.5 * CM
+
+    @classmethod
+    def _make_standard(cls) -> CuffBlockConfig:
+        return cls()
+
+
+CuffBlockConfig.STANDARD = CuffBlockConfig._make_standard()
+
+
+# ---------------------------------------------------------------------------
+# WideSleeveBlockConfig
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class WideSleeveBlockConfig:
+    """Construction constants for the wide sleeve block.
+
+    Mirrors the role of :class:`~sewpat.blocks.BlockConfig` for the bodice:
+    all Bézier reference-point offsets, curvature constants, and layout
+    margins that shape the sleeve cap and hem curves live here, so they can
+    be adjusted without touching internal geometry functions.
+
+    Use the pre-built class-level preset instead of constructing manually:
+
+    * ``WideSleeveBlockConfig.WIDE`` — standard wide-sleeve construction.
+
+    Attributes:
+        side_seam_curve_inward: How far the side seams curve inward at
+            mid-height (mm).  Positive = inward (towards sleeve centre).
+            Default 1 cm.
+        cap_left_notch_params:  Three ``(t, offset_mm)`` pairs that define
+            the Bézier reference points on the **left (front)** cap slope.
+            ``t`` is the parameter along the slope segment (0 = crown,
+            1 = cap_left); ``offset_mm`` is the perpendicular displacement
+            (positive = away from the sleeve interior).
+            Passed to :func:`~sewpat.geometry.fit_cubic_bezier` together
+            with t_params ``(0.25, 0.50, 0.75)``; must have ≥ 3 entries.
+        cap_right_notch_params: Three ``(t, offset_mm)`` pairs for the
+            **right (back)** cap slope.  Same convention as
+            ``cap_left_notch_params``.
+        hem_notch_params:       Five ``(t, offset_mm)`` pairs along the
+            straight hem baseline.  **Index 2** (t = 3/6) is the
+            split/junction point shared by both Bézier halves and is used
+            as the ``end`` / ``start`` argument of the two
+            :func:`~sewpat.geometry.fit_cubic_bezier_free` calls.
+            Indices 0–1 are the reference points for the left half;
+            indices 3–4 for the right half.  Must have exactly 5 entries.
+        grainline_cap_margin:   Vertical gap from ``cap_left.y`` to the top
+            arrow of the grainline (mm).  Default 2 cm.
+        grainline_hem_margin:   Vertical gap from ``hem_left.y`` to the
+            bottom arrow of the grainline (mm).  Default 2 cm.
+    """
+
+    # ── Presets ───────────────────────────────────────────────────────────────
+    WIDE: ClassVar[WideSleeveBlockConfig]
+
+    # ── Side seam ─────────────────────────────────────────────────────────────
+    side_seam_curve_inward: float = 1.0 * CM
+
+    # ── Cap left slope reference points (≥ 3) ─────────────────────────────────
+    cap_left_notch_params: tuple[tuple[float, float], ...] = (
+        (0.75, -0.8 * CM),
+        (0.50, 0.5 * CM),
+        (0.25, 1.5 * CM),
+    )
+
+    # ── Cap right slope reference points (≥ 3) ────────────────────────────────
+    cap_right_notch_params: tuple[tuple[float, float], ...] = (
+        (0.25, 0.0 * CM),
+        (0.50, 1.5 * CM),
+        (0.75, 2.0 * CM),
+    )
+
+    # ── Hem reference points (exactly 5; index 2 = split point) ───────────────
+    hem_notch_params: tuple[tuple[float, float], ...] = (
+        (1 / 6, -0.5 * CM),
+        (2 / 6, 0.0 * CM),
+        (3 / 6, 1.0 * CM),  # split point — shared by both Bézier halves
+        (4 / 6, 1.5 * CM),
+        (5 / 6, 0.8 * CM),
+    )
+
+    # ── Grainline placement ───────────────────────────────────────────────────
+    grainline_cap_margin: float = 2.0 * CM
+    grainline_hem_margin: float = 2.0 * CM
+
+    def __post_init__(self) -> None:
+        """Validate reference-point counts.
+
+        Raises:
+            ValueError: When ``cap_left_notch_params`` or
+                ``cap_right_notch_params`` have fewer than 3 entries, or
+                ``hem_notch_params`` does not have exactly 5 entries.
+        """
+        if len(self.cap_left_notch_params) < 3:
+            raise ValueError(
+                f"cap_left_notch_params must have at least 3 reference points "
+                f"(fit_cubic_bezier requires ≥ 3); got {len(self.cap_left_notch_params)}."
+            )
+        if len(self.cap_right_notch_params) < 3:
+            raise ValueError(
+                f"cap_right_notch_params must have at least 3 reference points; "
+                f"got {len(self.cap_right_notch_params)}."
+            )
+        if len(self.hem_notch_params) != 5:
+            raise ValueError(
+                f"hem_notch_params must have exactly 5 entries (indices 0,1 = left "
+                f"Bézier half; 2 = split point; 3,4 = right Bézier half); "
+                f"got {len(self.hem_notch_params)}."
+            )
+
+    @classmethod
+    def _make_wide(cls) -> WideSleeveBlockConfig:
+        """Return the standard wide-sleeve preset (all defaults)."""
+        return cls()
+
+
+WideSleeveBlockConfig.WIDE = WideSleeveBlockConfig._make_wide()
+
+
+# ---------------------------------------------------------------------------
 # SleeveMeasurements
 # ---------------------------------------------------------------------------
 

@@ -61,6 +61,7 @@ from .measurements import (
 from .pattern import PatternConfig, PatternPart
 from .person import PersonalAdjustments
 from .pleat import Pleat
+from .sleeve import CuffBlockConfig, WideSleeveBlockConfig
 from .style import STYLE_STITCH
 from .units import CM
 
@@ -403,6 +404,8 @@ class CuffBlock:
         sleeve_config: SleeveConfig,
         anchor: Point | None = None,
         part_name: str = "Cuff",
+        seam_allowance: float = 0.0,
+        cuff_block_config: CuffBlockConfig | None = None,
     ) -> CuffBlock | None:
         """Build a cuff pattern piece from the wide sleeve garment config.
 
@@ -410,12 +413,16 @@ class CuffBlock:
         the sleeve has no cuff and no piece should be drawn.
 
         Args:
-            sleeve_config: Garment config — reads ``cuff_config.length``,
-                           ``cuff_config.width``, ``cuff_config.underlap``,
-                           and ``cuff_config.overlap``.
-            anchor:        Top-left origin for the piece.  Defaults to
-                           ``Point(5 cm, 5 cm)``.
-            part_name:     Name of the produced :class:`~sewpat.pattern.PatternPart`.
+            sleeve_config:      Garment config — reads ``cuff_config.length``,
+                                ``cuff_config.width``, ``cuff_config.underlap``,
+                                and ``cuff_config.overlap``.
+            anchor:             Top-left origin for the piece.  Defaults to
+                                ``Point(5 cm, 5 cm)``.
+            part_name:          Name of the produced :class:`~sewpat.pattern.PatternPart`.
+            seam_allowance:     Nahtzugabe — seam allowance width (mm) added to all
+                                seam edges of the cuff piece.  ``0`` → no SA layer.
+            cuff_block_config:  Construction constants — grainline placement.
+                                Defaults to :attr:`~sewpat.sleeve.CuffBlockConfig.STANDARD`.
 
         Returns:
             Fully assembled :class:`CuffBlock`, or ``None``.
@@ -427,7 +434,12 @@ class CuffBlock:
             return None
 
         part = PatternPart(name=part_name)
-        _assemble_cuff_part(part, geom)
+        _assemble_cuff_part(
+            part,
+            geom,
+            seam_allowance=seam_allowance,
+            cuff_block_config=cuff_block_config,
+        )
 
         return cls(
             part=part,
@@ -532,6 +544,9 @@ class WideSleeveBlock:
         layout: PatternConfig | None = None,
         part_name: str = "Wide Sleeve",
         cuff_part_name: str = "Cuff",
+        seam_allowance: float = 0.0,
+        block_config: WideSleeveBlockConfig | None = None,
+        cuff_block_config: CuffBlockConfig | None = None,
     ) -> WideSleeveBlock:
         """Build the wide sleeve block from armhole geometry.
 
@@ -539,12 +554,21 @@ class WideSleeveBlock:
         and then derives all key points and outline segments.
 
         Args:
-            armhole:        Armhole geometry from a finished bodice block.
-            sleeve_config:  Garment config — ``sleeve_length``, ``cap_offset``,
-                            ``ease`` (see :class:`~sewpat.sleeve.SleeveConfig`).
-            layout:         Pattern layout configuration (anchor position).
-            part_name:      Name of the sleeve :class:`~sewpat.pattern.PatternPart`.
-            cuff_part_name: Name of the cuff :class:`~sewpat.pattern.PatternPart`.
+            armhole:           Armhole geometry from a finished bodice block.
+            sleeve_config:     Garment config — ``sleeve_length``, ``cap_offset``,
+                               ``ease`` (see :class:`~sewpat.sleeve.SleeveConfig`).
+            layout:            Pattern layout configuration (anchor position).
+            part_name:         Name of the sleeve :class:`~sewpat.pattern.PatternPart`.
+            cuff_part_name:    Name of the cuff :class:`~sewpat.pattern.PatternPart`.
+            seam_allowance:    Nahtzugabe — seam allowance width in mm added to all
+                               seam edges of the sleeve piece.  ``0`` → no SA layer.
+            block_config:      Construction constants for the sleeve block (Bézier
+                               shaping, side-seam curvature, grainline margins).
+                               Defaults to
+                               :attr:`~sewpat.sleeve.WideSleeveBlockConfig.WIDE`.
+            cuff_block_config: Construction constants for the cuff piece (grainline
+                               placement).  Defaults to
+                               :attr:`~sewpat.sleeve.CuffBlockConfig.STANDARD`.
 
         Returns:
             :class:`WideSleeveBlock` with all geometry and the pattern part assembled.
@@ -552,19 +576,36 @@ class WideSleeveBlock:
         """
         _layout = layout or PatternConfig()
         grid = WideSleeveGrid.from_armhole(armhole, sleeve_config, layout=_layout)
-        geom = _build_wide_sleeve_geometry(grid, sleeve_config, armhole=armhole)
+        geom = _build_wide_sleeve_geometry(
+            grid, sleeve_config, armhole=armhole, block_config=block_config
+        )
 
         part = PatternPart(name=part_name)
-        _assemble_wide_sleeve_part(part, geom, grid, sleeve_config)
+        _assemble_wide_sleeve_part(
+            part,
+            geom,
+            grid,
+            sleeve_config,
+            seam_allowance=seam_allowance,
+            block_config=block_config,
+        )
 
-        # ── Cuff — placed directly below the sleeve length line ───────────────
+        # ── Cuff — placed 1 cm below the sleeve hem SA cut edge ──────────────
+        # Reference: hem_line (the fold/stitch line) + seam_allowance (SA
+        # extends outward from the stitch curves) + 1 cm visual gap.
+        # Using _layout.margin (15 cm) as the gap would push the cuff off the
+        # page; a tight 1 cm clearance keeps everything within DIN A1.
         cuff_anchor = Point(
             grid.left_sleeve.p1.x,
-            grid.sleeve_length_line.p1.y + _layout.margin,
+            grid.hem_line.p1.y + seam_allowance + _layout.margin / 2,
             "Cuff Anchor",
         )
         cuff = CuffBlock.from_sleeve_config(
-            sleeve_config, anchor=cuff_anchor, part_name=cuff_part_name
+            sleeve_config,
+            anchor=cuff_anchor,
+            part_name=cuff_part_name,
+            seam_allowance=seam_allowance,
+            cuff_block_config=cuff_block_config,
         )
 
         return cls(

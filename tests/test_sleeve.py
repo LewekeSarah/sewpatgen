@@ -835,3 +835,44 @@ def test_sleeve_cm_narrow_blouse_armscye_width_stored(
 ) -> None:
     """armscye_width is taken directly from SleeveMeasurements.armscye_width."""
     assert cm_narrow_blouse.armscye_width == pytest.approx(sleeve_meas.armscye_width)
+
+
+# ---------------------------------------------------------------------------
+# WideSleeveBlockConfig — validation
+# ---------------------------------------------------------------------------
+
+
+def test_wide_sleeve_block_config_valid_defaults() -> None:
+    """WideSleeveBlockConfig with all defaults constructs without error."""
+    from sewpat.sleeve import WideSleeveBlockConfig
+
+    cfg = WideSleeveBlockConfig()
+    assert len(cfg.cap_left_notch_params) == 3
+    assert len(cfg.cap_right_notch_params) == 3
+    assert len(cfg.hem_notch_params) == 5
+
+
+def test_wide_sleeve_block_config_rejects_short_cap_left_notch_params() -> None:
+    """WideSleeveBlockConfig rejects cap_left_notch_params with fewer than 3 entries."""
+    from sewpat.sleeve import WideSleeveBlockConfig
+
+    with pytest.raises(ValueError, match="cap_left_notch_params"):
+        WideSleeveBlockConfig(cap_left_notch_params=((0.25, 1.0), (0.75, 2.0)))
+
+
+def test_wide_sleeve_block_config_rejects_short_cap_right_notch_params() -> None:
+    """WideSleeveBlockConfig rejects cap_right_notch_params with fewer than 3 entries."""
+    from sewpat.sleeve import WideSleeveBlockConfig
+
+    with pytest.raises(ValueError, match="cap_right_notch_params"):
+        WideSleeveBlockConfig(cap_right_notch_params=((0.5, 0.0),))
+
+
+def test_wide_sleeve_block_config_rejects_wrong_hem_notch_param_count() -> None:
+    """WideSleeveBlockConfig rejects hem_notch_params that do not have exactly 5 entries."""
+    from sewpat.sleeve import WideSleeveBlockConfig
+
+    with pytest.raises(ValueError, match="hem_notch_params"):
+        WideSleeveBlockConfig(
+            hem_notch_params=tuple((i / 3, 0.0) for i in range(3))  # 3 entries, needs 5
+        )

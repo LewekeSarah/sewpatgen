@@ -32,39 +32,10 @@ from .geometry import (
 )
 from .grids import WideSleeveGrid
 from .pleat import Pleat
-from .units import CM
+from .sleeve import WideSleeveBlockConfig
 
 if TYPE_CHECKING:
     from .sleeve import SleeveArmhole, SleeveConfig
-
-
-# ---------------------------------------------------------------------------
-# Cap and hem reference-point offsets
-# ---------------------------------------------------------------------------
-
-# Notch offsets for the sleeve cap slopes (t along slope, perpendicular offset in mm).
-# cap-LEFT slope travels crown→cap_left; Bézier t-params are 0.25/0.50/0.75 in the
-# opposite direction, so slope-t 0.75/0.50/0.25 maps to Bézier t 0.25/0.50/0.75.
-_CAP_LEFT_NOTCH_PARAMS: tuple[tuple[float, float], ...] = (
-    (0.75, -0.8 * CM),
-    (0.50, 0.5 * CM),
-    (0.25, 1.5 * CM),
-)
-# cap-RIGHT slope travels cap_right→crown (same direction as the Bézier).
-_CAP_RIGHT_NOTCH_PARAMS: tuple[tuple[float, float], ...] = (
-    (0.25, 0.0 * CM),
-    (0.50, 1.5 * CM),
-    (0.75, 2.0 * CM),
-)
-# Hem reference points: (t along straight hem, perpendicular offset in mm).
-# ref 3 (t=0.5) is the split / junction midpoint shared by both Bézier halves.
-_HEM_NOTCH_PARAMS: tuple[tuple[float, float], ...] = (
-    (1 / 6, -0.5 * CM),
-    (2 / 6, 0.0 * CM),
-    (3 / 6, 1.0 * CM),  # split point
-    (4 / 6, 1.5 * CM),
-    (5 / 6, 0.8 * CM),
-)
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +314,7 @@ def _build_wide_sleeve_geometry(
     grid: WideSleeveGrid,
     sleeve_config: SleeveConfig,
     armhole: SleeveArmhole | None = None,
+    block_config: WideSleeveBlockConfig | None = None,
 ) -> _WideSleeveGeometry:
     """Build all geometric elements for the wide sleeve block.
 
@@ -354,10 +326,14 @@ def _build_wide_sleeve_geometry(
         grid:          Constructed wide sleeve grid with all construction lines.
         sleeve_config: Garment config — slit height, pleat config, cuff dims.
         armhole:       Optional armhole seam data used to fit the cap curve.
+        block_config:  Construction constants for Bézier shaping and side-seam
+                       curvature.  Defaults to
+                       :attr:`~sewpat.sleeve.WideSleeveBlockConfig.WIDE`.
 
     Returns:
         Fully populated :class:`_WideSleeveGeometry`.
     """
+    bc = block_config if block_config is not None else WideSleeveBlockConfig.WIDE
     # ── Key intersection points ───────────────────────────────────────────────
     cap_left = intersect(grid.left_sleeve, grid.cap_line)[0]
     cap_right = intersect(grid.right_sleeve, grid.cap_line)[0]
@@ -385,10 +361,10 @@ def _build_wide_sleeve_geometry(
 
     # ── Precision reference points along the cap slopes ───────────────────────
     cap_left_notch_pts = tuple(
-        cap_left_slope.point_perpendicular(off, t=t) for t, off in _CAP_LEFT_NOTCH_PARAMS
+        cap_left_slope.point_perpendicular(off, t=t) for t, off in bc.cap_left_notch_params
     )
     cap_right_notch_pts = tuple(
-        cap_right_slope.point_perpendicular(off, t=t) for t, off in _CAP_RIGHT_NOTCH_PARAMS
+        cap_right_slope.point_perpendicular(off, t=t) for t, off in bc.cap_right_notch_params
     )
 
     # ── Sleeve cap Bézier stitch curves ───────────────────────────────────────
@@ -400,21 +376,21 @@ def _build_wide_sleeve_geometry(
     )
 
     # ── Rectangle body ────────────────────────────────────────────────────────
-    # Side seams: gently curved 1 cm inward at mid-height.
+    # Side seams: gently curved inward at mid-height.
     _left_straight = Segment(cap_left, hem_left)
-    _left_mid = _left_straight.point_perpendicular(distance=-1.0 * CM, t=0.5)
+    _left_mid = _left_straight.point_perpendicular(distance=-bc.side_seam_curve_inward, t=0.5)
     left_side = fit_cubic_bezier_free(cap_left, hem_left, [_left_mid], [0.5]).set_name("Left Side")
 
     hem = Segment(hem_left, hem_right, "Hem")
 
     _right_straight = Segment(hem_right, cap_right)
-    _right_mid = _right_straight.point_perpendicular(distance=-1.0 * CM, t=0.5)
+    _right_mid = _right_straight.point_perpendicular(distance=-bc.side_seam_curve_inward, t=0.5)
     right_side = fit_cubic_bezier_free(hem_right, cap_right, [_right_mid], [0.5]).set_name(
         "Right Side"
     )
 
     # ── Shaped hem Bézier — split at midpoint (ref 3) for exact fit ───────────
-    hem_ref_pts = tuple(hem.point_perpendicular(off, t=t) for t, off in _HEM_NOTCH_PARAMS)
+    hem_ref_pts = tuple(hem.point_perpendicular(off, t=t) for t, off in bc.hem_notch_params)
     mid_hem = hem_ref_pts[2]
     hem_left_curve = fit_cubic_bezier_free(
         hem_left,

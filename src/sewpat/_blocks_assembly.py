@@ -20,6 +20,7 @@ from .geometry import Circle, Dart, Point, Segment, intersect, seam_length
 from .grids import TopGrid, WideSleeveGrid
 from .pattern import PatternPart
 from .pattern._notches import RoleMap
+from .sleeve import CuffBlockConfig, WideSleeveBlockConfig
 from .style import (
     STYLE_BUTTON,
     STYLE_BUTTONHOLE,
@@ -211,16 +212,22 @@ def _assemble_wide_sleeve_part(
     geom: _WideSleeveGeometry,
     grid: WideSleeveGrid,
     sleeve_config: SleeveConfig,
+    seam_allowance: float = 0.0,
+    block_config: WideSleeveBlockConfig | None = None,
 ) -> None:
     """Add all wide sleeve elements to *part* in drawing order.
 
     Args:
-        part:          Empty :class:`~sewpat.pattern.PatternPart` to populate.
-        geom:          Pre-computed sleeve geometry (pure data, no side effects).
-        grid:          Wide sleeve construction grid (sleeve_width, cap_height, etc.).
-        sleeve_config: Garment config — used only for the info-box note text
-                       (slit height, pleat count/depth).
+        part:            Empty :class:`~sewpat.pattern.PatternPart` to populate.
+        geom:            Pre-computed sleeve geometry (pure data, no side effects).
+        grid:            Wide sleeve construction grid (sleeve_width, cap_height, etc.).
+        sleeve_config:   Garment config — used only for the info-box note text
+                         (slit height, pleat count/depth).
+        seam_allowance:  Nahtzugabe — seam allowance width (mm).  ``0`` → no SA layer.
+        block_config:    Construction constants — grainline margins.  Defaults to
+                         :attr:`~sewpat.sleeve.WideSleeveBlockConfig.WIDE`.
     """
+    bc = block_config if block_config is not None else WideSleeveBlockConfig.WIDE
     # ── Auxiliary construction lines (straight triangle legs) ────────────────
     part.add_construction_line(geom.cap_left_slope)
     part.add_construction_line(geom.cap_right_slope)
@@ -258,10 +265,13 @@ def _assemble_wide_sleeve_part(
     part.append(geom.right_side, style=STYLE_STITCH, is_outline=True, role="side")
     part.add_construction_line(geom.cut_seg)
 
+    if seam_allowance > 0:
+        part.add_seam_allowance(seam_allowance)
+
     # ── Grainline — vertical along the centre fold ────────────────────────────
     part.add_grainline(
-        Point(grid.center_sleeve.p1.x, geom.cap_left.y + 2.0 * CM),
-        Point(grid.center_sleeve.p1.x, geom.hem_left.y - 2.0 * CM),
+        Point(grid.center_sleeve.p1.x, geom.cap_left.y + bc.grainline_cap_margin),
+        Point(grid.center_sleeve.p1.x, geom.hem_left.y - bc.grainline_hem_margin),
     )
 
     # ── Info box ──────────────────────────────────────────────────────────────
@@ -283,6 +293,8 @@ def _assemble_wide_sleeve_part(
     if geom.pleats and sleeve_config.pleat_config is not None:
         _pc = sleeve_config.pleat_config
         notes.append(f"Falten / pleats: {_pc.num_pleats} × {_pc.depth / 10:.1f} cm")
+    if seam_allowance > 0:
+        notes.append(f"Nahtzugabe / S.A.: {seam_allowance / 10:.1f} cm")
     # Shift the info box left of the centre grainline to avoid overlap.
     part.add_info_box(notes=notes, offset=(-grid.sleeve_width / 2.0, 3.0 * CM))
 
@@ -295,13 +307,19 @@ def _assemble_wide_sleeve_part(
 def _assemble_cuff_part(
     part: PatternPart,
     geom: _CuffGeometry,
+    seam_allowance: float = 0.0,
+    cuff_block_config: CuffBlockConfig | None = None,
 ) -> None:
     """Add all cuff elements to *part* in drawing order.
 
     Args:
-        part: Empty :class:`~sewpat.pattern.PatternPart` to populate.
-        geom: Pre-computed cuff geometry (pure data, no side effects).
+        part:              Empty :class:`~sewpat.pattern.PatternPart` to populate.
+        geom:              Pre-computed cuff geometry (pure data, no side effects).
+        seam_allowance:    Nahtzugabe — seam allowance width (mm).  ``0`` → no SA layer.
+        cuff_block_config: Construction constants — grainline placement.  Defaults to
+                           :attr:`~sewpat.sleeve.CuffBlockConfig.STANDARD`.
     """
+    cbc = cuff_block_config if cuff_block_config is not None else CuffBlockConfig.STANDARD
     ay = geom.top_left.y
     total_height = 2.0 * geom.cuff_height
 
@@ -350,13 +368,16 @@ def _assemble_cuff_part(
             style=STYLE_CENTER_LINE,
         )
 
-    # ── Grainline — placed at ¼ of main body width to clear fold-line label ───
-    grain_x = geom.main_left_x + geom.cuff_length / 4.0
+    # ── Grainline — placed at fraction of main body width to clear fold-line label ──
+    grain_x = geom.main_left_x + geom.cuff_length * cbc.grainline_fraction
     part.add_grainline(
-        Point(grain_x, ay + 0.5 * CM),
-        Point(grain_x, ay + total_height - 0.5 * CM),
+        Point(grain_x, ay + cbc.grainline_margin),
+        Point(grain_x, ay + total_height - cbc.grainline_margin),
         name="Cuff Grain",
     )
+
+    if seam_allowance > 0:
+        part.add_seam_allowance(seam_allowance)
 
     # ── Buttons and buttonholes ────────────────────────────────────────────────
     for row in geom.button_rows:
@@ -383,5 +404,7 @@ def _assemble_cuff_part(
         notes.append(f"Unterschlag / underlap: {geom.underlap / 10:.1f} cm")
     if geom.overlap > 0.0:
         notes.append(f"Überschlag / overlap: {geom.overlap / 10:.1f} cm")
+    if seam_allowance > 0:
+        notes.append(f"Nahtzugabe / S.A.: {seam_allowance / 10:.1f} cm")
     # Centre the info block inside the lower cuff half (fold → bottom edge).
     part.add_info_box(notes=notes, offset=(0.0, geom.cuff_height / 2.0))

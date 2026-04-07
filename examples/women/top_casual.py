@@ -163,6 +163,7 @@ def create_block(
             layout=sleeve_layout,
             part_name=Part.WIDE_SLEEVE,
             cuff_part_name=Part.CUFF,
+            seam_allowance=config.seam_allowance,
         )
         pattern.add_part(wide_sleeve.grid.part)
         pattern.add_part(wide_sleeve.part)
@@ -226,7 +227,7 @@ if __name__ == "__main__":
         parts=sleeve_grid_parts + sleeve_parts,
         show_bezier_control_points=False,
         show_construction=True,
-        show_seam_allowance=False,
+        show_seam_allowance=True,
         dark_mode=False,
     )
 

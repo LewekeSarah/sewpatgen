@@ -638,3 +638,37 @@ def test_cuff_block_margin_too_large_skips_marks() -> None:
         )
     )
     assert isinstance(block, CuffBlock)
+
+
+# ---------------------------------------------------------------------------
+# seam_allowance > 0 — coverage for _assemble_sleeve_part and _assemble_cuff_part
+# ---------------------------------------------------------------------------
+
+
+def test_wide_sleeve_block_with_seam_allowance_does_not_raise(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_config_with_cuff: SleeveConfig,
+) -> None:
+    """WideSleeveBlock built with seam_allowance > 0 assembles without error."""
+    block = WideSleeveBlock.from_armhole(
+        sleeve_armhole, sleeve_config_with_cuff, seam_allowance=1.0 * CM
+    )
+    assert isinstance(block, WideSleeveBlock)
+    assert block.part is not None
+
+
+def test_cuff_block_with_seam_allowance_does_not_raise() -> None:
+    """CuffBlock built with seam_allowance > 0 assembles without error."""
+    cfg = SleeveConfig(
+        sleeve_length=60 * CM,
+        cuff_config=CuffConfig(
+            length=20 * CM,
+            width=4 * CM,
+            underlap=2 * CM,
+            overlap=3 * CM,
+            button_config=ButtonConfig(num_buttons=2),
+        ),
+    )
+    result = CuffBlock.from_sleeve_config(cfg, seam_allowance=1.0 * CM)
+    assert result is not None
+    assert isinstance(result, CuffBlock)
