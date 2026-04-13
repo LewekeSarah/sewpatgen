@@ -51,6 +51,9 @@ nav:
       - Patterns & Pattern Parts: api/pattern.md
       - Measurements & Fit Classes: api/measurements.md
       - Person: api/person.md
+      - Blocks: api/blocks.md
+      - Grids & Pleat: api/grids.md
+      - Sleeve: api/sleeve.md
       - Style & Rendering: api/style.md
       - Pages & Units: api/pages.md
 

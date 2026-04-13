@@ -381,9 +381,14 @@ def _split_neckline_and_armscye(
     CubicBezier,
 ]:
     """Split neckline and armscye at their intersections with the shoulder seam."""
+    # p1 is offset slightly LEFT of p0 (horizontal tangent at the CF end) so the
+    # neckline meets the vertical center-front at a right angle.  The original
+    # p1 = p0 was degenerate (zero tangent) which caused the SA algorithm to
+    # arrive at the CF corner diagonally.  10 % of neck_size is enough to define
+    # the direction without meaningfully shifting the neckline/shoulder split point.
     neckline_front_full = CubicBezier(
         neckline_front_start,
-        neckline_front_start,
+        neckline_front_start.translate(-meas.neck_size * 0.1, 0),
         center_front_shoulder_line.translate(-meas.neck_size, meas.neck_size),
         shoulder_front_neckline_pt,
     )

@@ -11,36 +11,6 @@ from sewpat.pattern import PatternConfig, PatternPart
 from sewpat.person import PersonalAdjustments
 from sewpat.units import CM
 
-
-@pytest.fixture
-def top_grid(standard_blouse_measurements: BlouseMeasurements, standard_fitclass: FitClass):
-    """Shared WAISTED_DART grid for block tests."""
-    config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
-    return TopGrid.from_measurements(
-        meas=standard_blouse_measurements,
-        fit_class=standard_fitclass,
-        config=config,
-        grid_config=GridConfig.WAISTED_DART,
-    )
-
-
-@pytest.fixture
-def top_block(
-    standard_blouse_measurements: BlouseMeasurements,
-    standard_fitclass: FitClass,
-    top_grid: TopGrid,
-):
-    """Top block without seam allowance."""
-    config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
-    return TopBlock.from_measurements(
-        meas=standard_blouse_measurements,
-        config=config,
-        grid=top_grid,
-        block_config=BlockConfig.WAISTED_DART,  # type: ignore[attr-defined]
-        fit_class=standard_fitclass,
-    )
-
-
 # ---------------------------------------------------------------------------
 # TopBlock construction
 # ---------------------------------------------------------------------------

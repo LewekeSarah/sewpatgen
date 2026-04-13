@@ -15,12 +15,25 @@ from typing import Any
 
 import pytest
 
+from sewpat.blocks import BlockConfig, CuffBlock, TopBlock, WideSleeveBlock
 from sewpat.fitclass import FitClass
 from sewpat.geometry import Point, Rect, Segment
-from sewpat.measurements import BlouseMeasurements
+from sewpat.grids import GridConfig, TopGrid, WideSleeveGrid
+from sewpat.measurements import BlouseMeasurements, GarmentConfig
 from sewpat.pattern import Pattern, PatternPart
 from sewpat.person import BalancedPerson, Person, PersonAnalyser
+from sewpat.pleat import PleatConfig
 from sewpat.render import _build_svg
+from sewpat.sleeve import (
+    ButtonConfig,
+    CuffConfig,
+    SleeveArmhole,
+    SleeveBlockConfig,
+    SleeveConfig,
+    SleeveConstructionMeasures,
+    SleeveMeasurements,
+    SleeveType,
+)
 from sewpat.units import CM
 
 # ---------------------------------------------------------------------------
@@ -168,6 +181,55 @@ def standard_fitclass() -> FitClass:
     return make_standard_fitclass()
 
 
+@pytest.fixture
+def top_grid(
+    standard_blouse_measurements: BlouseMeasurements, standard_fitclass: FitClass
+) -> TopGrid:
+    """WAISTED_DART construction grid for the standard PK 4 measurements."""
+    config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
+    return TopGrid.from_measurements(
+        meas=standard_blouse_measurements,
+        fit_class=standard_fitclass,
+        config=config,
+        grid_config=GridConfig.WAISTED_DART,
+    )
+
+
+@pytest.fixture
+def top_block(
+    standard_blouse_measurements: BlouseMeasurements,
+    standard_fitclass: FitClass,
+    top_grid: TopGrid,
+) -> TopBlock:
+    """Assembled WAISTED_DART block without seam allowance."""
+    config = GarmentConfig(length=70 * CM, seam_allowance=0.0)
+    return TopBlock.from_measurements(
+        meas=standard_blouse_measurements,
+        config=config,
+        grid=top_grid,
+        block_config=BlockConfig.WAISTED_DART,  # type: ignore[attr-defined]
+        fit_class=standard_fitclass,
+    )
+
+
+@pytest.fixture
+def sleeve_armhole(top_block: TopBlock, top_grid: TopGrid) -> SleeveArmhole:
+    """SleeveArmhole extracted from the standard WAISTED_DART block."""
+    return SleeveArmhole.from_block(top_block, top_grid)
+
+
+@pytest.fixture
+def sleeve_meas() -> SleeveMeasurements:
+    """Standard sleeve body measurements: armscye_width=9 cm, upper_arm=28 cm, wrist=16 cm."""
+    return SleeveMeasurements(armscye_width=9 * CM, upper_arm=28 * CM, wrist=16 * CM)
+
+
+@pytest.fixture
+def sleeve_config() -> SleeveConfig:
+    """Standard sleeve garment config: 60 cm sleeve length."""
+    return SleeveConfig(sleeve_length=60 * CM)
+
+
 # ---------------------------------------------------------------------------
 # Render factory functions
 # ---------------------------------------------------------------------------
@@ -300,3 +362,124 @@ def svg_for_geometry() -> Callable[[Any], str]:
             assert "<line " in svg
     """
     return build_svg_for_geometry
+
+
+# ---------------------------------------------------------------------------
+# SleeveConstructionMeasures fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def cm_stretch(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_meas: SleeveMeasurements,
+    sleeve_config: SleeveConfig,
+) -> SleeveConstructionMeasures:
+    """SleeveConstructionMeasures built with the STRETCH preset."""
+    return SleeveConstructionMeasures.from_armhole(
+        sleeve_armhole, sleeve_meas, sleeve_config, SleeveBlockConfig.STRETCH, SleeveType.STRETCH
+    )
+
+
+@pytest.fixture
+def cm_wide(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_meas: SleeveMeasurements,
+    sleeve_config: SleeveConfig,
+) -> SleeveConstructionMeasures:
+    """SleeveConstructionMeasures built with the WIDE preset."""
+    return SleeveConstructionMeasures.from_armhole(
+        sleeve_armhole, sleeve_meas, sleeve_config, SleeveBlockConfig.WIDE, SleeveType.WIDE
+    )
+
+
+@pytest.fixture
+def cm_narrow_blouse(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_meas: SleeveMeasurements,
+    sleeve_config: SleeveConfig,
+) -> SleeveConstructionMeasures:
+    """SleeveConstructionMeasures built with the NARROW_BLOUSE preset."""
+    return SleeveConstructionMeasures.from_armhole(
+        sleeve_armhole,
+        sleeve_meas,
+        sleeve_config,
+        SleeveBlockConfig.NARROW_BLOUSE,
+        SleeveType.NARROW,
+    )
+
+
+@pytest.fixture
+def cm_narrow_jacket(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_meas: SleeveMeasurements,
+    sleeve_config: SleeveConfig,
+) -> SleeveConstructionMeasures:
+    """SleeveConstructionMeasures built with the NARROW_JACKET preset."""
+    return SleeveConstructionMeasures.from_armhole(
+        sleeve_armhole,
+        sleeve_meas,
+        sleeve_config,
+        SleeveBlockConfig.NARROW_JACKET,
+        SleeveType.NARROW,
+    )
+
+
+# ---------------------------------------------------------------------------
+# WideSleeveGrid fixture
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def default_wide_grid(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_config: SleeveConfig,
+) -> WideSleeveGrid:
+    """WideSleeveGrid built from the standard armhole with default SleeveConfig."""
+    return WideSleeveGrid.from_armhole(sleeve_armhole, sleeve_config)
+
+
+# ---------------------------------------------------------------------------
+# Sleeve config with cuff + pleat
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sleeve_config_with_cuff() -> SleeveConfig:
+    """SleeveConfig with a CuffConfig, slit and pleats — exercises the full feature set."""
+    return SleeveConfig(
+        sleeve_length=62 * CM,
+        cap_offset=1 * CM,
+        ease=0.0 * CM,
+        cuff_config=CuffConfig(
+            length=20 * CM,
+            width=4 * CM,
+            underlap=2 * CM,
+            overlap=3 * CM,
+            button_config=ButtonConfig(num_buttons=2),
+        ),
+        slit_height=8 * CM,
+        pleat_config=PleatConfig(depth=3 * CM, num_pleats=3, spacing=1.5 * CM),
+    )
+
+
+# ---------------------------------------------------------------------------
+# WideSleeveBlock + CuffBlock fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def wide_sleeve_block(
+    sleeve_armhole: SleeveArmhole,
+    sleeve_config_with_cuff: SleeveConfig,
+) -> WideSleeveBlock:
+    """WideSleeveBlock assembled from the standard armhole with cuff + pleat config."""
+    return WideSleeveBlock.from_armhole(sleeve_armhole, sleeve_config_with_cuff)
+
+
+@pytest.fixture
+def cuff_block(sleeve_config_with_cuff: SleeveConfig) -> CuffBlock:
+    """CuffBlock built from the standard sleeve config with cuff dimensions."""
+    result = CuffBlock.from_sleeve_config(sleeve_config_with_cuff)
+    assert result is not None, "CuffBlock.from_sleeve_config returned None unexpectedly"
+    return result

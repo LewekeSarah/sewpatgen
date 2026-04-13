@@ -4,16 +4,27 @@ Each grid is a class whose attributes are the named construction lines, so
 callers never have to use fragile ``get_element("…")`` string lookups.
 The corresponding :class:`~sewpat.pattern.ConstructionGridPart` is available
 as ``.part`` for adding to a :class:`~sewpat.pattern.Pattern`.
+
+Grids provided:
+
+* :class:`TopGrid`      — orthogonal construction grid for a sleeveless top / blouse block.
+* :class:`WideSleeveGrid` — orthogonal construction grid for the wide sleeve block.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from .fitclass import FitClass
 from .geometry import Segment
 from .measurements import BlouseMeasurements, GarmentConfig
 from .pattern import ConstructionGrid, ConstructionGridPart, PatternConfig
+from .sleeve import SleeveBlockConfig, SleeveConstructionMeasures, SleeveMode, SleeveType
 from .units import CM
+
+if TYPE_CHECKING:
+    from .sleeve import SleeveArmhole, SleeveConfig
 
 
 @dataclass(frozen=True)
@@ -301,4 +312,185 @@ def _check_chest_width(grid: TopGrid, expected_half_width: float) -> None:
         raise ValueError(
             f"Chest-width control failed: hip_adj→side_back + side_front→center_front "
             f"= {actual:.4f} but expected {expected_half_width:.4f}."
+        )
+
+
+# ---------------------------------------------------------------------------
+# WideSleeveGrid
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class WideSleeveGrid:
+    """Orthogonal construction grid for the wide sleeve block.
+
+    Build via :meth:`from_armhole`; then add ``.part`` to your pattern and
+    use the typed segment attributes directly — no string lookups.
+
+    The grid is anchored at the top-left corner of the sleeve bounding box:
+
+    * **Horizontal lines** — measured downward from the anchor (y increases ↓):
+
+      - ``cap_line``           — at ``cap_height`` below the anchor; marks the
+        bottom of the sleeve cap (cap crown is at the anchor level).
+      - ``sleeve_length_line`` — at ``sleeve_length`` below the anchor; the
+        hem edge.
+      - ``hem_line``           — 1 cm above ``sleeve_length_line``; marks the
+        start of the hem fold / allowance.
+
+    * **Vertical lines** — measured rightward from the anchor (x increases →):
+
+      - ``left_sleeve``   — at the left edge  (``x = anchor.x``).
+      - ``center_sleeve`` — at the sleeve fold / center line
+        (``x = anchor.x + sleeve_width``).
+      - ``right_sleeve``  — at the right edge
+        (``x = anchor.x + 2 * sleeve_width``).
+
+    The cap height and sleeve width are derived from the armhole geometry and
+    the two wide-sleeve constants stored in :class:`~sewpat.sleeve.SleeveConfig`::
+
+        cap_height   = armscye_height / 3 − cap_offset
+        sleeve_width = sqrt((armscye_circumference / 2 − ease)² − cap_height²)
+
+    ``sleeve_width`` is the **half-width** (centre fold → side seam); the full
+    sleeve spans ``2 × sleeve_width``.
+
+    Attributes:
+        part: The :class:`~sewpat.pattern.ConstructionGridPart` ready to add
+            to a :class:`~sewpat.pattern.Pattern`.
+        cap_line: Horizontal guide at the bottom of the sleeve cap.
+        sleeve_length_line: Horizontal guide at the sleeve hem edge.
+        hem_line: Horizontal guide 1 cm above ``sleeve_length_line``.
+        left_sleeve: Vertical guide at the left sleeve-width edge.
+        center_sleeve: Vertical guide along the sleeve centre / fold line.
+        right_sleeve: Vertical guide at the right sleeve-width edge.
+        cap_height: Ärmelkopfhöhe — sleeve cap height in mm (derived).
+        sleeve_width: Ärmelbreite — full sleeve width in mm (derived).
+    """
+
+    part: ConstructionGridPart
+
+    # ── Construction measures (single source of truth for derived values) ──────
+    construction_measures: SleeveConstructionMeasures
+
+    # ── Horizontals ───────────────────────────────────────────────────────────
+    cap_line: Segment
+    sleeve_length_line: Segment
+    hem_line: Segment
+
+    # ── Verticals ─────────────────────────────────────────────────────────────
+    left_sleeve: Segment
+    center_sleeve: Segment
+    right_sleeve: Segment
+
+    # ── Convenience accessors (mirror construction_measures) ──────────────────
+    @property
+    def cap_height(self) -> float:
+        """Ärmelkopfhöhe — sleeve cap height in mm (from construction measures)."""
+        return self.construction_measures.cap_height
+
+    @property
+    def sleeve_width(self) -> float:
+        """Ärmelbreite — half sleeve width in mm (centre fold → side seam).
+
+        The full sleeve spans ``2 × sleeve_width``.
+        """
+        if self.construction_measures.sleeve_width is None:
+            raise ValueError(
+                "sleeve_width is None — wide sleeve construction measures are incomplete. "
+                "Verify that SleeveConfig.cap_offset and ease produce a feasible geometry."
+            )
+        return self.construction_measures.sleeve_width
+
+    @classmethod
+    def from_armhole(
+        cls,
+        armhole: SleeveArmhole,
+        sleeve_config: SleeveConfig,
+        layout: PatternConfig | None = None,
+    ) -> WideSleeveGrid:
+        """Build the wide sleeve construction grid from armhole geometry.
+
+        The ``cap_offset`` and ``ease`` values are taken directly from
+        *sleeve_config*, so no separate wide-sleeve config class is needed::
+
+            config    = SleeveConfig(sleeve_length=60 * CM, cap_offset=1 * CM, ease=0.5 * CM)
+            wide_grid = WideSleeveGrid.from_armhole(armhole, config)
+            pattern.add_part(wide_grid.part)
+
+        Internally delegates the cap height and sleeve width computation to
+        :meth:`~sewpat.sleeve.SleeveConstructionMeasures.from_armhole`
+        so that the full audit trail is available on ``grid.construction_measures``.
+
+        Args:
+            armhole:      Armhole geometry — provides ``armscye_height`` and
+                          ``armscye_circumference``.
+            sleeve_config: Garment config — provides ``sleeve_length``,
+                          ``cap_offset``, and ``ease``.
+            layout:       Pattern layout configuration (anchor position).
+                          Defaults to :class:`~sewpat.pattern.PatternConfig`.
+
+        Returns:
+            :class:`WideSleeveGrid` with all lines and derived measures populated.
+
+        Raises:
+            ValueError: propagated from
+                :meth:`~sewpat.sleeve.SleeveConstructionMeasures.from_wide_armhole`
+                when the geometry is infeasible.
+        """
+        layout = layout or PatternConfig()
+
+        # ── All formula work delegated to SleeveConstructionMeasures ─────────
+        # sleeve_config.cap_offset is [0, 2] cm (user-facing: positive = shorter cap).
+        # SleeveBlockConfig.cap_offset is [−2, 0] cm (formula convention: additive).
+        # Convert the sign so the original uniform formula handles WIDE without
+        # any special-casing.
+        cm = SleeveConstructionMeasures.from_armhole(
+            armhole,
+            None,
+            sleeve_config,
+            SleeveBlockConfig(
+                mode=SleeveMode.WIDE,
+                cap_offset=-sleeve_config.cap_offset,  # [0, 2] → [−2, 0] cm
+                upper_arm_ease=None,
+                hem_ease=None,
+            ),
+            SleeveType.WIDE,
+        )
+
+        assert cm.sleeve_width is not None, "WIDE sleeve_width must be a float after from_armhole"
+        _cuff_width = (
+            sleeve_config.cuff_config.width if sleeve_config.cuff_config is not None else 0.0
+        )
+        hem_offset = 1.0 * CM + _cuff_width / 2
+        cg = ConstructionGrid(
+            anchor=layout.anchor,
+            horizontals=[
+                ("Cap Line", cm.cap_height),
+                ("Sleeve Length", sleeve_config.sleeve_length),
+                ("Hem Line", sleeve_config.sleeve_length - hem_offset),
+            ],
+            verticals=[
+                ("Left Sleeve", 0.0),
+                ("Center Sleeve", cm.sleeve_width),
+                ("Right Sleeve", cm.sleeve_width * 2),
+            ],
+            part_name="Wide Sleeve Grid",
+        )
+        built = cg.build()
+
+        def seg(name: str) -> Segment:
+            geom = built.get_element(name).geometry
+            assert isinstance(geom, Segment), f"Grid element {name!r} must be a Segment"
+            return geom
+
+        return cls(
+            part=built,
+            construction_measures=cm,
+            cap_line=seg("Cap Line"),
+            sleeve_length_line=seg("Sleeve Length"),
+            hem_line=seg("Hem Line"),
+            left_sleeve=seg("Left Sleeve"),
+            center_sleeve=seg("Center Sleeve"),
+            right_sleeve=seg("Right Sleeve"),
         )

@@ -6,11 +6,33 @@ Bézier–Bézier intersection).  The numerically-intensive offset subsystem liv
 in :mod:`sewpat.geometry._bezier_offset`.
 """
 
+from collections.abc import Callable, Sequence
+
 import numpy as np
 import shapely.geometry as _sg
 from svgpathtools import CubicBezier as _SvgCubicBezier
 
 from ._primitives import Point, _split_at_ts
+
+
+def _bernstein_basis(t: float) -> tuple[float, float, float, float]:
+    """Return the four cubic Bernstein basis values at parameter *t* ∈ [0, 1].
+
+    The standard cubic Bernstein polynomials are::
+
+        b0 = (1-t)³
+        b1 = 3·t·(1-t)²
+        b2 = 3·t²·(1-t)
+        b3 = t³
+
+    so that ``b0+b1+b2+b3 = 1`` for every *t*.  Used by both
+    :meth:`CubicBezier.point_at_t` and :func:`fit_cubic_bezier`.
+
+    Returns:
+        ``(b0, b1, b2, b3)`` as a 4-tuple of :class:`float`.
+    """
+    mt = 1.0 - t
+    return mt**3, 3.0 * t * mt**2, 3.0 * t**2 * mt, t**3
 
 
 def _bezier_closest_t(svg_bezier: _SvgCubicBezier, pt_c: complex) -> float:
@@ -63,6 +85,120 @@ def _intersect_bezier_bezier(a: CubicBezier, b: CubicBezier, tol: float = 1e-12)
         if not any(pt.distance_to(ex) < tol for ex in intersections):
             intersections.append(pt)
     return intersections
+
+
+def fit_cubic_bezier(
+    start: Point,
+    end: Point,
+    ref: Sequence[Point],
+    t_params: Sequence[float] = (0.25, 0.50, 0.75),
+) -> CubicBezier:
+    """Fit a cubic Bézier from *start* to *end* passing near N reference points.
+
+    The curve is constrained to have a **horizontal tangent at** *end* —
+    i.e. ``p2.y = end.y`` — so it arrives level at the endpoint.  This
+    matches the requirement for a sleeve cap curve that must be horizontal
+    at the crown.
+
+    The two free control points ``p1`` and ``p2`` are found by least-squares
+    minimisation over the N parameter values given in *t_params*:
+
+    * **y component** — N equations / 1 unknown (``p1.y``):
+      solved as a weighted dot product using :func:`_bernstein_basis`.
+    * **x component** — N equations / 2 unknowns (``p1.x``, ``p2.x``):
+      solved via :func:`numpy.linalg.lstsq`.
+
+    *ref* and *t_params* must have the same length (≥ 3).
+
+    Args:
+        start:    Start point of the curve (``p0``).
+        end:      End point of the curve (``p3``).  The curve arrives here
+                  with a horizontal tangent (``p2.y = end.y``).
+        ref:      Reference points the curve should pass near, at the
+                  parameters given by *t_params*.
+        t_params: Parameter values at which *ref* is evaluated.
+                  Defaults to ``(0.25, 0.50, 0.75)``.
+
+    Returns:
+        A :class:`CubicBezier` with ``p0=start``, ``p3=end``, and
+        ``p2.y = end.y``.
+    """
+    crown_y = end.y
+
+    b1_col: list[float] = []
+    rhs_y: list[float] = []
+    b1x_col: list[float] = []
+    b2x_col: list[float] = []
+    rhs_x: list[float] = []
+
+    for t, r in zip(t_params, ref, strict=True):
+        b0, b1, b2, b3 = _bernstein_basis(t)
+        # Y: p2.y = p3.y = crown_y, so (b2+b3) is the combined known coefficient.
+        rhs_y.append(r.y - b0 * start.y - (b2 + b3) * crown_y)
+        b1_col.append(b1)
+        # X: p1.x and p2.x are both free unknowns.
+        rhs_x.append(r.x - b0 * start.x - b3 * end.x)
+        b1x_col.append(b1)
+        b2x_col.append(b2)
+
+    # ── Y component: 1 unknown — closed-form least-squares (normal equation) ─
+    b1_arr = np.array(b1_col)
+    p1_y = float(np.dot(b1_arr, rhs_y) / np.dot(b1_arr, b1_arr))
+
+    # ── X component: 2 unknowns — least-squares via numpy ────────────────────
+    A = np.column_stack([b1x_col, b2x_col])
+    p1_x, p2_x = np.linalg.lstsq(A, rhs_x, rcond=None)[0]
+
+    return CubicBezier(start, Point(float(p1_x), p1_y), Point(float(p2_x), crown_y), end)
+
+
+def fit_cubic_bezier_free(
+    start: Point,
+    end: Point,
+    ref: Sequence[Point],
+    t_params: Sequence[float],
+) -> CubicBezier:
+    """Fit a cubic Bézier from *start* to *end* with both control points free.
+
+    Unlike :func:`fit_cubic_bezier`, there is **no** horizontal-tangent
+    constraint at *end*: all four coordinates of ``p1`` and ``p2`` are
+    determined simultaneously by least-squares over *ref* / *t_params*.
+
+    When ``len(ref) == 2`` (exactly two reference points for two unknowns per
+    dimension) the system is square and the curve passes **exactly** through
+    both points.
+
+    Args:
+        start:    Start point (``p0``).
+        end:      End point (``p3``).
+        ref:      Reference points the curve should pass near (≥ 2).
+        t_params: Parameter values matching each entry of *ref*.
+
+    Returns:
+        A :class:`CubicBezier` from *start* to *end*.
+    """
+    b1_col: list[float] = []
+    b2_col: list[float] = []
+    rhs_x: list[float] = []
+    rhs_y: list[float] = []
+
+    for t, r in zip(t_params, ref, strict=True):
+        b0, b1, b2, b3 = _bernstein_basis(t)
+        rhs_x.append(r.x - b0 * start.x - b3 * end.x)
+        rhs_y.append(r.y - b0 * start.y - b3 * end.y)
+        b1_col.append(b1)
+        b2_col.append(b2)
+
+    A = np.column_stack([b1_col, b2_col])
+    p1_x, p2_x = np.linalg.lstsq(A, rhs_x, rcond=None)[0]
+    p1_y, p2_y = np.linalg.lstsq(A, rhs_y, rcond=None)[0]
+
+    return CubicBezier(
+        start,
+        Point(float(p1_x), float(p1_y)),
+        Point(float(p2_x), float(p2_y)),
+        end,
+    )
 
 
 class CubicBezier:
@@ -142,18 +278,13 @@ class CubicBezier:
     def point_at_t(self, t: float) -> Point:
         """Evaluate the curve at parameter *t* ∈ [0, 1].
 
-        Computed directly from the Bernstein basis — no library call.
-        ``t=0`` returns :attr:`p0`; ``t=1`` returns :attr:`p3`.
+        Computed directly from the Bernstein basis via :func:`_bernstein_basis`
+        — no library call.  ``t=0`` returns :attr:`p0`; ``t=1`` returns
+        :attr:`p3`.
         """
-        t2 = t * t
-        t3 = t2 * t
-        mt = 1.0 - t
-        mt2 = mt * mt
-        mt3 = mt2 * mt
-
-        x = mt3 * self.p0.x + 3 * mt2 * t * self.p1.x + 3 * mt * t2 * self.p2.x + t3 * self.p3.x
-        y = mt3 * self.p0.y + 3 * mt2 * t * self.p1.y + 3 * mt * t2 * self.p2.y + t3 * self.p3.y
-
+        b0, b1, b2, b3 = _bernstein_basis(t)
+        x = b0 * self.p0.x + b1 * self.p1.x + b2 * self.p2.x + b3 * self.p3.x
+        y = b0 * self.p0.y + b1 * self.p1.y + b2 * self.p2.y + b3 * self.p3.y
         return Point(x, y)
 
     def _svg(self) -> _SvgCubicBezier:
@@ -259,6 +390,25 @@ class CubicBezier:
         t0 = _bezier_closest_t(svg, complex(point.x, point.y))
         pos = float(svg.length(t1=t0))
         return self.point_at_length(pos + arc_length)
+
+    def arc_length_from_end(self, point: Point) -> float:
+        """Return the arc distance from the closest on-curve location to *point* to the end (p3).
+
+        Snaps *point* to the nearest location on the curve, then returns
+        ``self.length − arc_distance_from_p0``.  Useful when you know a notch
+        position relative to one end of a curve and need to mirror it onto a
+        second curve measured from the *other* end.
+
+        Args:
+            point: Reference point (need not lie exactly on the curve).
+
+        Returns:
+            Arc distance in mm from the snapped location to :attr:`p3`.
+        """
+        svg = self._svg()
+        t0 = _bezier_closest_t(svg, complex(point.x, point.y))
+        arc_from_start = float(svg.length(t1=t0))
+        return self.length - arc_from_start
 
     def split(self, t: float) -> tuple[CubicBezier, CubicBezier]:
         """Split the curve at *t* ∈ (0, 1) and return ``(left, right)``.
@@ -439,3 +589,45 @@ class CubicBezier:
             _depth=_depth,
             _max_depth=_max_depth,
         )
+
+
+# ---------------------------------------------------------------------------
+# Split-Bézier seam helper
+# ---------------------------------------------------------------------------
+
+
+def split_bezier_seam_fn(
+    left_curve: CubicBezier,
+    right_curve: CubicBezier,
+    total_length: float,
+) -> Callable[[float], Point]:
+    """Return a callable that maps a straight-seam projection onto a split-Bézier seam.
+
+    The two sub-curves together span a straight reference segment of
+    *total_length* mm.  The resulting callable converts a linear arc-length
+    projection along that straight segment to the corresponding point on the
+    shaped Bézier seam, splitting at the midpoint (``t = 0.5``):
+
+    * ``proj ∈ [0, total_length / 2]``  →  ``left_curve.point_at_t(2·t)``
+    * ``proj ∈ (total_length / 2, …]``  →  ``right_curve.point_at_t(2·t − 1)``
+
+    This mapping is exact when each sub-curve was fitted with its two interior
+    reference points placed at ``t = 1/3`` and ``t = 2/3``
+    (as produced by :func:`fit_cubic_bezier_free` with
+    ``t_params=(1/3, 2/3)``).  The returned callable is suitable for passing
+    as *curved_seam_fn* to :meth:`~sewpat.pleat.Pleat.build_along_seam`.
+
+    Args:
+        left_curve:   Left-half Bézier (seam-left endpoint → split midpoint).
+        right_curve:  Right-half Bézier (split midpoint → seam-right endpoint).
+        total_length: Arc-length of the straight reference segment in mm.
+
+    Returns:
+        A callable ``fn(proj: float) -> Point``.
+    """
+
+    def _fn(proj: float) -> Point:
+        t = max(0.0, min(1.0, proj / total_length))
+        return left_curve.point_at_t(2.0 * t) if t <= 0.5 else right_curve.point_at_t(2.0 * t - 1.0)
+
+    return _fn

@@ -30,6 +30,8 @@ _FLOAT_COLS = (
     "armscye_depth",
     "armscye_width",
     "chest_width",
+    "upper_arm",
+    "wrist",
 )
 
 
@@ -131,6 +133,8 @@ class Person:
     armscye_depth: float | None = None  # AlT — Armlochtiefe
     armscye_width: float | None = None  # ArD — Armdurchmesser
     chest_width: float | None = None  # BrB — Brustbreite
+    upper_arm: float | None = None  # OaU — Oberarmumfang (upper arm circumference)
+    wrist: float | None = None  # HgU — Handgelenksumfang (wrist circumference)
     height: float | None = None  # KöH — Körperhöhe
     gender: Gender = Gender.FEMALE  # Geschlecht
 

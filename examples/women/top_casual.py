@@ -3,12 +3,12 @@
 
 from pathlib import Path
 
-from sewpat import GarmentPart, SeamValidationResult, WidthValidationResult
-from sewpat.blocks import BlockConfig, TopBlock
+from sewpat import GarmentPart, PleatConfig, SeamValidationResult, WidthValidationResult
+from sewpat.blocks import BlockConfig, TopBlock, WideSleeveBlock
 from sewpat.fitclass import FitClass
 from sewpat.grids import GridConfig, TopGrid
 from sewpat.measurements import GarmentConfig, make_top_measurements
-from sewpat.pages import DinA0
+from sewpat.pages import DinA0, DinA1
 from sewpat.pattern import Pattern, PatternConfig
 from sewpat.person import (
     BalanceAdjustments,
@@ -18,6 +18,7 @@ from sewpat.person import (
     load_person,
 )
 from sewpat.render import export_pattern_svg_mm
+from sewpat.sleeve import ButtonConfig, CuffConfig, SleeveArmhole, SleeveConfig
 from sewpat.units import CM
 
 
@@ -27,6 +28,9 @@ class Part(GarmentPart):
     GRID = "Grid"
     BLOCK_BACK = "Block Back"
     BLOCK_FRONT = "Block Front"
+    WIDE_SLEEVE_GRID = "Wide Sleeve Grid"
+    WIDE_SLEEVE = "Wide Sleeve"
+    CUFF = "Cuff"
 
 
 def create_block(
@@ -34,14 +38,18 @@ def create_block(
     fit_class: FitClass,
     adjustments: PersonalAdjustments,
     config: GarmentConfig,
+    sleeve_config: SleeveConfig | None = None,
 ) -> Pattern:
     """Creates block pattern for a waisted top with darts.
 
     Args:
-        person:     Balanced person — obtain via PersonAnalyser.get_balanced_person().
-        fit_class:  Fit class defining construction offsets.
-        adjustments: Personal adjustments (hip offset, balance).
-        config:     Garment configuration (length, seam allowance).
+        person:        Balanced person — obtain via PersonAnalyser.get_balanced_person().
+        fit_class:     Fit class defining construction offsets.
+        adjustments:   Personal adjustments (hip offset, balance).
+        config:        Garment configuration (length, seam allowance).
+        sleeve_config: Optional wide sleeve config.  When given, a
+                       :class:`~sewpat.blocks.WideSleeveBlock` is added to the
+                       pattern as ``Part.WIDE_SLEEVE`` / ``Part.WIDE_SLEEVE_GRID``.
 
     Returns:
         A Pattern object representing the waisted top with darts block.
@@ -145,6 +153,23 @@ def create_block(
     )
     print(width_check)
 
+    # ── Wide sleeve ───────────────────────────────────────────────────────────
+    if sleeve_config is not None:
+        armhole = SleeveArmhole.from_block(block, grid)
+        sleeve_layout = PatternConfig()  # own coordinate origin — exported separately
+        wide_sleeve = WideSleeveBlock.from_armhole(
+            armhole,
+            sleeve_config,
+            layout=sleeve_layout,
+            part_name=Part.WIDE_SLEEVE,
+            cuff_part_name=Part.CUFF,
+            seam_allowance=config.seam_allowance,
+        )
+        pattern.add_part(wide_sleeve.grid.part)
+        pattern.add_part(wide_sleeve.part)
+        if wide_sleeve.cuff is not None:
+            pattern.add_part(wide_sleeve.cuff.part)
+
     return pattern
 
 
@@ -156,13 +181,29 @@ if __name__ == "__main__":
         balance=BalanceAdjustments(front_length=-0.9 * CM),
     )
     config = GarmentConfig(length=75 * CM, shoulder_gather=1 * CM, side_seam_intake_max=1 * CM)
+    sleeve_config = SleeveConfig(
+        sleeve_length=62 * CM,
+        cap_offset=1 * CM,
+        ease=0.0 * CM,
+        cuff_config=CuffConfig(
+            length=20 * CM,
+            width=4 * CM,
+            underlap=2 * CM,
+            overlap=3 * CM,
+            button_config=ButtonConfig(num_buttons=2),
+        ),
+        slit_height=8 * CM,
+        pleat_config=PleatConfig(depth=3 * CM, num_pleats=3, spacing=1.5 * CM),
+    )
 
     person_balanced = PersonAnalyser(person, adjustments.balance).get_balanced_person()
 
-    pattern = create_block(person_balanced, fit_class, adjustments, config)
+    pattern = create_block(person_balanced, fit_class, adjustments, config, sleeve_config)
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
     grid_parts = [Part.GRID]
+    sleeve_parts = [Part.WIDE_SLEEVE, Part.CUFF]
+    sleeve_grid_parts = [Part.WIDE_SLEEVE_GRID]
 
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
@@ -172,6 +213,19 @@ if __name__ == "__main__":
         filename=str(Path(__file__).parent / "top_casual_grid.svg"),
         parts=grid_parts + pattern_parts,
         show_bezier_control_points=True,
+        show_construction=True,
+        show_seam_allowance=True,
+        dark_mode=False,
+    )
+
+    # Wide sleeve block with construction grid (separate page — fits DIN A1)
+    export_pattern_svg_mm(
+        pattern,
+        width_mm=DinA1.width,
+        height_mm=DinA1.height,
+        filename=str(Path(__file__).parent / "top_casual_wide_sleeve_grid.svg"),
+        parts=sleeve_grid_parts + sleeve_parts,
+        show_bezier_control_points=False,
         show_construction=True,
         show_seam_allowance=True,
         dark_mode=False,

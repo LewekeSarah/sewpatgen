@@ -27,15 +27,30 @@ Example::
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
 
-from ._blocks_assembly import _assemble_back_part, _assemble_front_part
+from ._blocks_assembly import (
+    _assemble_back_part,
+    _assemble_cuff_part,
+    _assemble_front_part,
+    _assemble_wide_sleeve_part,
+)
 from ._blocks_geometry import (
     _build_back_geometry,
     _build_darts,
     _build_front_geometry,
     _build_side_seams,
 )
-from .geometry import CubicBezier, Dart, Point, Segment, intersect
-from .grids import TopGrid
+from ._wide_sleeve_geometry import (
+    _build_cuff_geometry,
+    _build_wide_sleeve_geometry,
+)
+from .geometry import (
+    CubicBezier,
+    Dart,
+    Point,
+    Segment,
+    intersect,
+)
+from .grids import TopGrid, WideSleeveGrid
 from .measurements import (
     BlouseMeasurements,
     GarmentConfig,
@@ -45,11 +60,14 @@ from .measurements import (
 )
 from .pattern import PatternConfig, PatternPart
 from .person import PersonalAdjustments
+from .pleat import Pleat
+from .sleeve import CuffBlockConfig, WideSleeveBlockConfig
 from .style import STYLE_STITCH
 from .units import CM
 
 if TYPE_CHECKING:
     from .fitclass import FitClass
+    from .sleeve import SleeveArmhole, SleeveConfig
 
 
 @dataclass(frozen=True)
@@ -333,3 +351,281 @@ class TopBlock:
             bust_point=front_geom.bust_point,
         )
         return cls(back=back, front=front, waist_distribution=wd)
+
+
+# ---------------------------------------------------------------------------
+# CuffBlock
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CuffBlock:
+    """Cuff pattern piece for the wide sleeve.
+
+    The cuff is a flat rectangle that folds in half: ``cuff_length`` wide and
+    ``2 × cuff_height`` tall, divided by a horizontal fold line at the mid
+    point.  Optional **underlap** and **overlap** extensions of the same full
+    height are appended to the left and right respectively, separated from the
+    main body by a division line.
+
+    Build via :meth:`from_sleeve_config`; pass ``None`` for unused optional
+    fields.
+
+    Attributes:
+        part:         :class:`~sewpat.pattern.PatternPart` ready to add to a pattern.
+        cuff_length:  Bündchenlänge — circumference / flat width of the main body (mm).
+        cuff_height:  Bündchenbreite — single (folded) height; full cut height is
+                      ``2 × cuff_height`` (mm).
+        underlap:     Unterschlag — width of the underlap extension (0 if absent, mm).
+        overlap:      Überschlag — width of the overlap extension (0 if absent, mm).
+        top_left:     Top-left corner of the whole piece (incl. underlap).
+        top_right:    Top-right corner (incl. overlap).
+        bottom_left:  Bottom-left corner.
+        bottom_right: Bottom-right corner.
+        fold_left:    Left end of the fold line.
+        fold_right:   Right end of the fold line.
+    """
+
+    part: PatternPart
+    cuff_length: float
+    cuff_height: float
+    underlap: float
+    overlap: float
+    top_left: Point
+    top_right: Point
+    bottom_left: Point
+    bottom_right: Point
+    fold_left: Point
+    fold_right: Point
+
+    @classmethod
+    def from_sleeve_config(
+        cls,
+        sleeve_config: SleeveConfig,
+        anchor: Point | None = None,
+        part_name: str = "Cuff",
+        seam_allowance: float = 0.0,
+        cuff_block_config: CuffBlockConfig | None = None,
+    ) -> CuffBlock | None:
+        """Build a cuff pattern piece from the wide sleeve garment config.
+
+        Returns ``None`` when *sleeve_config* has no ``cuff_config`` set —
+        the sleeve has no cuff and no piece should be drawn.
+
+        Args:
+            sleeve_config:      Garment config — reads ``cuff_config.length``,
+                                ``cuff_config.width``, ``cuff_config.underlap``,
+                                and ``cuff_config.overlap``.
+            anchor:             Top-left origin for the piece.  Defaults to
+                                ``Point(5 cm, 5 cm)``.
+            part_name:          Name of the produced :class:`~sewpat.pattern.PatternPart`.
+            seam_allowance:     Nahtzugabe — seam allowance width (mm) added to all
+                                seam edges of the cuff piece.  ``0`` → no SA layer.
+            cuff_block_config:  Construction constants — grainline placement.
+                                Defaults to :attr:`~sewpat.sleeve.CuffBlockConfig.STANDARD`.
+
+        Returns:
+            Fully assembled :class:`CuffBlock`, or ``None``.
+        """
+        _anchor = anchor if anchor is not None else Point(5.0 * CM, 5.0 * CM, "Cuff Anchor")
+        # TODO add Aufschlag-Manschette mit Über- und Untertritt mit Aufschlagbreite (Trapez-Form)
+        geom = _build_cuff_geometry(sleeve_config, _anchor)
+        if geom is None:
+            return None
+
+        part = PatternPart(name=part_name)
+        _assemble_cuff_part(
+            part,
+            geom,
+            seam_allowance=seam_allowance,
+            cuff_block_config=cuff_block_config,
+        )
+
+        return cls(
+            part=part,
+            cuff_length=geom.cuff_length,
+            cuff_height=geom.cuff_height,
+            underlap=geom.underlap,
+            overlap=geom.overlap,
+            top_left=geom.top_left,
+            top_right=geom.top_right,
+            bottom_left=geom.bottom_left,
+            bottom_right=geom.bottom_right,
+            fold_left=geom.fold_left,
+            fold_right=geom.fold_right,
+        )
+
+
+# ---------------------------------------------------------------------------
+# WideSleeveBlock
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class WideSleeveBlock:
+    """Wide sleeve block — construction grid plus the drafted outline.
+
+    The outline is a closed pentagon:
+
+    * Two **cap slopes** (left and right): straight lines from the sleeve cap
+      crown (the topmost point, above the cap line) down to the left / right
+      ends of the cap line.  Together they form the triangular cap above the
+      rectangle body.
+    * Two **side seams** (left and right): vertical lines from the cap-line
+      corners down to the hem fold line.
+    * One **hem** edge: horizontal line at the hem fold / allowance start
+      (= ``grid.hem_line``).
+
+    A separate **sleeve length line** (construction) marks the actual cutting
+    edge 1 cm below the hem fold line.  A **grainline** runs vertically along
+    the centre fold.
+
+    Build via :meth:`from_armhole`.
+
+    Attributes:
+        part: The :class:`~sewpat.pattern.PatternPart` with the outlined sleeve shape.
+        grid: The :class:`~sewpat.grids.WideSleeveGrid` construction grid.
+        cap_crown: Apex of the sleeve cap (top-centre point above the cap line).
+        cap_left: Left end of the cap line (intersection of left sleeve / cap line).
+        cap_right: Right end of the cap line.
+        hem_left: Bottom-left corner of the rectangle body (left sleeve / hem line).
+        hem_right: Bottom-right corner.
+        cap_left_slope: Segment from ``cap_crown`` down to ``cap_left``.
+        left_side: Cubic Bézier from ``cap_left`` down to ``hem_left``, curving
+            1 cm inward at mid-height.
+        hem: Segment from ``hem_left`` across to ``hem_right`` (straight construction reference).
+        hem_left_curve: Left-half Bézier from ``hem_left`` to the midpoint reference.
+        hem_right_curve: Right-half Bézier from the midpoint reference to ``hem_right``.
+        slit: Slit marker at the 4/6 position of the hem, running parallel to
+            the centre line; ``None`` when no slit is configured.
+        pleats: Tuple of :class:`~sewpat.pleat.Pleat` objects already rendered
+            onto :attr:`part`; empty when no pleats are configured.
+        right_side: Cubic Bézier from ``hem_right`` up to ``cap_right``, curving
+            1 cm inward at mid-height.
+        cap_right_slope: Segment from ``cap_right`` up to ``cap_crown``.
+    """
+
+    part: PatternPart
+    grid: WideSleeveGrid
+
+    # ── Key points ────────────────────────────────────────────────────────────
+    cap_crown: Point  # apex of the sleeve cap
+    cap_left: Point  # left_sleeve ∩ cap_line
+    cap_right: Point  # right_sleeve ∩ cap_line
+    hem_left: Point  # left_sleeve ∩ hem_line
+    hem_right: Point  # right_sleeve ∩ hem_line
+
+    # ── Auxiliary construction lines (straight triangle legs) ─────────────────
+    cap_left_slope: Segment  # crown → cap_left  (construction reference)
+    cap_right_slope: Segment  # cap_right → crown  (construction reference)
+
+    # ── Stitch-line Bézier curves for the sleeve cap ──────────────────────────
+    cap_left_curve: CubicBezier  # cap_left → cap_crown  (S-curve, stitching)
+    cap_right_curve: CubicBezier  # cap_right → cap_crown  (S-curve, stitching)
+
+    # ── Rectangle body outline ────────────────────────────────────────────────
+    left_side: CubicBezier  # cap_left → hem_left  (gently inward-curved side seam)
+    hem: Segment  # hem_left → hem_right  (straight construction reference)
+    hem_left_curve: CubicBezier  # hem_left → mid_hem  (left half of shaped stitch line)
+    hem_right_curve: CubicBezier  # mid_hem  → hem_right (right half of shaped stitch line)
+    slit: Segment | None  # slit at 4/6 of hem, parallel to centre line; None = no slit
+    pleats: tuple[Pleat, ...]  # pleat markings already rendered onto part; () = none
+    right_side: CubicBezier  # hem_right → cap_right  (gently inward-curved side seam)
+
+    # ── Cuff pattern piece ────────────────────────────────────────────────────
+    cuff: CuffBlock | None
+    """Cuff pattern piece, or ``None`` when the sleeve config has no cuff dimensions."""
+
+    @classmethod
+    def from_armhole(
+        cls,
+        armhole: SleeveArmhole,
+        sleeve_config: SleeveConfig,
+        layout: PatternConfig | None = None,
+        part_name: str = "Wide Sleeve",
+        cuff_part_name: str = "Cuff",
+        seam_allowance: float = 0.0,
+        block_config: WideSleeveBlockConfig | None = None,
+        cuff_block_config: CuffBlockConfig | None = None,
+    ) -> WideSleeveBlock:
+        """Build the wide sleeve block from armhole geometry.
+
+        Internally calls :meth:`~sewpat.grids.WideSleeveGrid.from_armhole`
+        and then derives all key points and outline segments.
+
+        Args:
+            armhole:           Armhole geometry from a finished bodice block.
+            sleeve_config:     Garment config — ``sleeve_length``, ``cap_offset``,
+                               ``ease`` (see :class:`~sewpat.sleeve.SleeveConfig`).
+            layout:            Pattern layout configuration (anchor position).
+            part_name:         Name of the sleeve :class:`~sewpat.pattern.PatternPart`.
+            cuff_part_name:    Name of the cuff :class:`~sewpat.pattern.PatternPart`.
+            seam_allowance:    Nahtzugabe — seam allowance width in mm added to all
+                               seam edges of the sleeve piece.  ``0`` → no SA layer.
+            block_config:      Construction constants for the sleeve block (Bézier
+                               shaping, side-seam curvature, grainline margins).
+                               Defaults to
+                               :attr:`~sewpat.sleeve.WideSleeveBlockConfig.WIDE`.
+            cuff_block_config: Construction constants for the cuff piece (grainline
+                               placement).  Defaults to
+                               :attr:`~sewpat.sleeve.CuffBlockConfig.STANDARD`.
+
+        Returns:
+            :class:`WideSleeveBlock` with all geometry and the pattern part assembled.
+            :attr:`cuff` is ``None`` when no cuff dimensions are set in *sleeve_config*.
+        """
+        _layout = layout or PatternConfig()
+        grid = WideSleeveGrid.from_armhole(armhole, sleeve_config, layout=_layout)
+        geom = _build_wide_sleeve_geometry(
+            grid, sleeve_config, armhole=armhole, block_config=block_config
+        )
+
+        part = PatternPart(name=part_name)
+        _assemble_wide_sleeve_part(
+            part,
+            geom,
+            grid,
+            sleeve_config,
+            seam_allowance=seam_allowance,
+            block_config=block_config,
+        )
+
+        # ── Cuff — placed 1 cm below the sleeve hem SA cut edge ──────────────
+        # Reference: hem_line (the fold/stitch line) + seam_allowance (SA
+        # extends outward from the stitch curves) + 1 cm visual gap.
+        # Using _layout.margin (15 cm) as the gap would push the cuff off the
+        # page; a tight 1 cm clearance keeps everything within DIN A1.
+        cuff_anchor = Point(
+            grid.left_sleeve.p1.x,
+            grid.hem_line.p1.y + seam_allowance + _layout.margin / 2,
+            "Cuff Anchor",
+        )
+        cuff = CuffBlock.from_sleeve_config(
+            sleeve_config,
+            anchor=cuff_anchor,
+            part_name=cuff_part_name,
+            seam_allowance=seam_allowance,
+            cuff_block_config=cuff_block_config,
+        )
+
+        return cls(
+            part=part,
+            grid=grid,
+            cap_crown=geom.cap_crown,
+            cap_left=geom.cap_left,
+            cap_right=geom.cap_right,
+            hem_left=geom.hem_left,
+            hem_right=geom.hem_right,
+            cap_left_slope=geom.cap_left_slope,
+            cap_right_slope=geom.cap_right_slope,
+            cap_left_curve=geom.cap_left_curve,
+            cap_right_curve=geom.cap_right_curve,
+            left_side=geom.left_side,
+            hem=geom.hem,
+            hem_left_curve=geom.hem_left_curve,
+            hem_right_curve=geom.hem_right_curve,
+            slit=geom.slit,
+            pleats=geom.pleats,
+            right_side=geom.right_side,
+            cuff=cuff,
+        )
