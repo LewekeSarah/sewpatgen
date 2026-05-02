@@ -724,3 +724,31 @@ def offset_adaptive(
         geom.offset_adaptive(distance, center=center, eps=eps)
     )
     return result
+
+
+def angle_between(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> float:
+    """Calculate the signed angle between two geometric objects.
+
+    Args:
+        a: First geometric object. Must be one of :data:`GEOMETRIC_TYPE`.
+        b: Second geometric object. Must be one of :data:`GEOMETRIC_TYPE`.
+
+    Returns:
+        The signed angle in degrees between the two objects. The value is
+        obtained via ``degrees(atan2(cross, dot))`` and therefore lies in the
+        range ``(-180, 180]``. A positive value indicates a counter-clockwise
+        rotation from ``a`` to ``b``; a negative value indicates a
+        clockwise rotation. Returns ``0.0`` when the objects are parallel.
+
+    Raises:
+        TypeError: If the combination of types ``(a, b)`` is not supported.
+    """
+    if isinstance(a, _LinearGeom) and isinstance(b, _LinearGeom):
+        tangent_a = a.unit_direction
+        tangent_b = b.unit_direction
+        dot_product = float(np.dot(tangent_a, tangent_b))
+        cross_product = float(tangent_a[0] * tangent_b[1] - tangent_a[1] * tangent_b[0])
+        # np.degrees may return a numpy scalar; wrap in float() to satisfy strict typing
+        return float(np.degrees(math.atan2(cross_product, dot_product)))
+
+    raise TypeError(f"Angle calculation not implemented for {type(a)} and {type(b)}")

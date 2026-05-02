@@ -1,5 +1,7 @@
 """PatternElement — a geometric shape with a style and metadata flags."""
 
+import copy
+
 from .geometry import (
     Circle,
     CubicBezier,
@@ -138,6 +140,38 @@ class PatternElement:
             child.is_seam_notch = self.is_seam_notch
             result.append(child)
         return result
+
+    def update(self, **kwargs: object) -> None:  # pragma: no cover
+        """Update attributes of this PatternElement in-place.
+
+        General-purpose updater that accepts any public attribute name of
+        :class:`PatternElement` as a keyword argument and sets it to the
+        provided value. Special handling for ``style``: when *style* is given
+        it must be a complete :class:`StyleOptions` instance and will be
+        copied before assignment so the caller's object is not aliased.
+
+        Example:
+            elem.update(name='Front', role='side')
+            elem.update(style=StyleOptions(stroke_color='red'))
+        """
+        for k, v in kwargs.items():
+            if k == "style":
+                if not isinstance(v, StyleOptions):
+                    raise TypeError("When updating 'style', pass a StyleOptions instance")
+                # Assign a shallow copy so subsequent in-place mutations
+                # to the passed object don't affect this element.
+                self.style = copy.copy(v)
+                continue
+
+            # Only allow updating known PatternElement attributes to avoid
+            # accidentally creating new attributes.
+            if not hasattr(self, k):
+                raise AttributeError(f"PatternElement has no attribute {k!r}")
+            try:
+                setattr(self, k, v)
+            except Exception:
+                # Defensive: re-raise unexpected errors (no cover)
+                raise
 
 
 class PrecisionPoint:

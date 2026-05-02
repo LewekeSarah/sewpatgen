@@ -23,6 +23,7 @@ Notes:
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Self
 
 import numpy as np
 
@@ -190,6 +191,20 @@ class _LinearGeom(ABC):
        geometry (unbounded for :class:`Line`, forward-only for :class:`Ray`,
        ``[0, length]`` for :class:`Segment`).
     """
+
+    # Optional name carried by many concrete geometry types. Declared here so
+    # that static type checkers recognise the attribute on all subclasses and
+    # assignments of ``None`` are accepted.
+    name: str | None = None
+
+    def set_name(self, name: str) -> Self:
+        """Set the name of this segment and return ``self`` for fluent chaining.
+
+        Returns the concrete subclass (e.g. :class:`Segment`, :class:`Line`,
+        :class:`Ray`) so fluent calls preserve the input type.
+        """
+        self.name = name
+        return self
 
     @property
     @abstractmethod
@@ -380,11 +395,6 @@ class Segment(_LinearGeom):
     def __repr__(self) -> str:
         """Return the same as ``__str__``."""
         return self.__str__()
-
-    def set_name(self, name: str) -> Segment:
-        """Set the name of this segment and return ``self`` for fluent chaining."""
-        self.name = name
-        return self
 
     def translate(self, dx: float, dy: float) -> Segment:
         """Return a copy translated by (dx, dy)."""

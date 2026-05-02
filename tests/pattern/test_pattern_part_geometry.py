@@ -161,6 +161,29 @@ def test_bounding_box_bezier_outline_expands_bbox():
 
 
 # ---------------------------------------------------------------------------
+# PatternPart -- outline polygon (private helper)
+# ---------------------------------------------------------------------------
+
+
+def test_outline_polygon_returns_none_when_no_outline_elements():
+    part = PatternPart("empty")
+    assert part._outline_polygon() is None
+
+
+def test_outline_polygon_builds_polygon_from_segments():
+    part = PatternPart("triangle")
+    # triangle: (0,0) -> (10,0) -> (10,10)
+    part.append(Segment(Point(0, 0), Point(10, 0)), is_outline=True)
+    part.append(Segment(Point(10, 0), Point(10, 10)), is_outline=True)
+    part.append(Segment(Point(10, 10), Point(0, 0)), is_outline=True)
+
+    poly = part._outline_polygon()
+    assert poly is not None
+    # triangle area = 0.5 * base * height = 50 mm^2
+    assert float(poly.area) == pytest.approx(50.0)
+
+
+# ---------------------------------------------------------------------------
 # PatternPart -- add_grainline (basic)
 # ---------------------------------------------------------------------------
 
@@ -548,3 +571,45 @@ def test_append_split_at_dart_appends_children() -> None:
     children = part.append_split_at_dart(elem, dart)
     assert len(children) >= 1
     assert all(isinstance(c, PatternElement) for c in children)
+
+
+def test_add_cutline_splits_intersecting_elements_and_appends_cut_elem() -> None:
+    """add_cutline should append the cut line element and
+    replace intersecting elements with their split children.
+    """
+    part = PatternPart(name="CutTest")
+    # vertical edge crossing the X axis at (0,0)
+    edge = Segment(Point(0, -10), Point(0, 10), name="Edge")
+    part.append(edge, is_outline=True)
+
+    # horizontal cut line crossing the edge at (0,0)
+    cut = Segment(Point(-5, 0), Point(5, 0))
+    cut_elem = part.add_cutline(cut)
+
+    # returned element is present in the part and has the default name when none was set
+    assert cut_elem in part.elements
+    assert "cut line" in cut_elem.get_name().lower()
+
+    # the original edge must have been replaced by two children named 'Edge'
+    edge_children = [e for e in part.elements if e.get_name() == "Edge"]
+    assert len(edge_children) == 2
+
+    # their combined length equals the original
+    combined = sum(c.geometry.length for c in edge_children)
+    assert abs(combined - edge.length) < 1e-6
+
+
+def test_add_cutline_leaves_nonintersecting_elements_and_advances_loop() -> None:
+    """Non-intersecting elements are left unchanged and the
+    iterator advances (covers loop increment).
+    """
+    part = PatternPart(name="CutLoop")
+    far = Segment(Point(100, 100), Point(110, 100), name="Far")
+    part.append(far, is_outline=True)
+
+    cut = Segment(Point(-5, 0), Point(5, 0))
+    cut_elem = part.add_cutline(cut)
+
+    # original non-intersecting element still present unchanged
+    assert any(e.get_name() == "Far" for e in part.elements)
+    assert cut_elem in part.elements

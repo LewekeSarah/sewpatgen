@@ -136,6 +136,7 @@ def _add_roof_outline(part: PatternPart, dart: Dart) -> None:
             style=style,
             is_outline=True,
             role="dart_roof",
+            name=dart.name,
         )
         elem._sa_center = dart.tip
         part.elements.append(elem)
@@ -243,12 +244,14 @@ def _add_precision_tip(
     """
     for e in PrecisionPoint(tip, style=style).build_elements():
         e.role = "dart_tip"
+        e.name = dart.name
         part.elements.append(e)
     if dart.name and show_name:
         part.elements.append(
             PatternElement(
                 InfoBox(tip - Point(0, 14 * MM), header=dart.name),
                 role="dart_tip",
+                name=dart.name,
             )
         )
 
@@ -272,9 +275,15 @@ def _add_triangle_dart(
     *notches* is ``False``; the tip mark is skipped when *precision_tip* is
     ``False``.
     """
-    part.elements.append(PatternElement(dart.stitch_line_a, style=stitch_style, role="dart_stitch"))
-    part.elements.append(PatternElement(dart.stitch_line_b, style=stitch_style, role="dart_stitch"))
-    part.elements.append(PatternElement(dart.fold_line, style=fold_style, role="dart_fold"))
+    part.elements.append(
+        PatternElement(dart.stitch_line_a, style=stitch_style, role="dart_stitch", name=dart.name)
+    )
+    part.elements.append(
+        PatternElement(dart.stitch_line_b, style=stitch_style, role="dart_stitch", name=dart.name)
+    )
+    part.elements.append(
+        PatternElement(dart.fold_line, style=fold_style, role="dart_fold", name=dart.name)
+    )
 
     _add_roof_outline(part, dart)
 
@@ -310,10 +319,12 @@ def _add_rhombus_dart(
         (st, dart.leg_a),
     ):
         part.elements.append(
-            PatternElement(Segment(p1, p2), style=stitch_style, role="dart_stitch")
+            PatternElement(Segment(p1, p2), style=stitch_style, role="dart_stitch", name=dart.name)
         )
 
-    part.elements.append(PatternElement(dart.fold_line, style=fold_style, role="dart_fold"))
+    part.elements.append(
+        PatternElement(dart.fold_line, style=fold_style, role="dart_fold", name=dart.name)
+    )
 
     if precision_tip:
         _add_precision_tip(part, dart, precision_style, dart.tip, show_name=True)

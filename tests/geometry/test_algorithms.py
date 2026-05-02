@@ -27,6 +27,7 @@ from sewpat.geometry import (
 from sewpat.geometry._algorithms import (
     _bezier_tangent_from_control_points,
     _shapely_to_points,
+    angle_between,
     buffer_chain,
     geom_to_shapely,
     outline_polygon,
@@ -275,3 +276,82 @@ def test_bezier_tangent_from_control_points_near_start_p0_approx_p1() -> None:
     tangent = _bezier_tangent_from_control_points(bez, near_start=True)
     assert abs(np.linalg.norm(tangent) - 1.0) < 1e-9
     assert tangent[0] > 0
+
+
+# ---------------------------------------------------------------------------
+# angle_between — ensure behaviour: degrees, sign, numeric corners
+# ---------------------------------------------------------------------------
+
+
+def test_angle_between_parallel_same_direction_is_zero() -> None:
+    a = Segment(Point(0, 0), Point(10, 0))
+    b = Segment(Point(0, 0), Point(20, 0))
+    assert angle_between(a, b) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_angle_between_opposite_direction_is_180() -> None:
+    a = Segment(Point(0, 0), Point(10, 0))
+    b = Segment(Point(10, 0), Point(0, 0))  # opposite direction
+    assert angle_between(a, b) == pytest.approx(180.0, abs=1e-9)
+
+
+def test_angle_between_ccw_and_cw_90_degrees() -> None:
+    a = Segment(Point(0, 0), Point(10, 0))
+    b_ccw = Segment(Point(0, 0), Point(0, 10))
+    b_cw = Segment(Point(0, 0), Point(0, -10))
+
+    assert angle_between(a, b_ccw) == pytest.approx(90.0, abs=1e-9)
+    assert angle_between(a, b_cw) == pytest.approx(-90.0, abs=1e-9)
+
+
+def test_angle_between_with_ray_and_segment() -> None:
+    # Ray pointing right vs Segment pointing up should be +90
+    ray = Ray(Point(0, 0), np.array([1.0, 0.0]))
+    seg = Segment(Point(0, 0), Point(0, 10))
+    assert angle_between(ray, seg) == pytest.approx(90.0, abs=1e-9)
+
+
+def test_angle_between_small_angle_precision() -> None:
+    # Small angular offset: ~1e-6 radian -> degrees ~5.73e-5
+    a = Segment(Point(0, 0), Point(1, 0))
+    eps = 1e-6
+    b = Segment(Point(0, 0), Point(np.cos(eps), np.sin(eps)))
+    deg = np.degrees(eps)
+    assert angle_between(a, b) == pytest.approx(deg, rel=1e-6)
+
+
+def test_angle_between_raises_for_non_linear_types() -> None:
+    a = Segment(Point(0, 0), Point(10, 0))
+    bez = CubicBezier(Point(0, 0), Point(3, 0), Point(7, 0), Point(10, 0))
+    with pytest.raises(TypeError):
+        angle_between(a, bez)
+
+
+def test_angle_between_antisymmetric_and_range() -> None:
+    """angle_between(a, b) == -angle_between(b, a); result lies in (-180, 180]."""
+    from math import isfinite
+
+    a = Segment(Point(0, 0), Point(1, 0))
+    b = Segment(Point(0, 0), Point(-1, 0))
+    v_ab = angle_between(a, b)
+    v_ba = angle_between(b, a)
+    assert v_ab == pytest.approx(-v_ba, abs=1e-9)
+    assert v_ab <= 180.0 and v_ab > -180.0
+    assert isfinite(v_ab)
+
+
+def test_angle_between_random_vectors_matches_formula() -> None:
+    """Compare angle_between against explicit degrees(atan2(cross, dot)) for random vectors."""
+    rng = np.random.RandomState(12345)
+    for _ in range(50):
+        theta_a = rng.uniform(0.0, 2 * np.pi)
+        theta_b = rng.uniform(0.0, 2 * np.pi)
+        va = np.array([np.cos(theta_a), np.sin(theta_a)])
+        vb = np.array([np.cos(theta_b), np.sin(theta_b)])
+        a = Segment(Point(0, 0), Point(va[0], va[1]))
+        b = Segment(Point(0, 0), Point(vb[0], vb[1]))
+        cross = float(va[0] * vb[1] - va[1] * vb[0])
+        dot = float(np.dot(va, vb))
+        expected = float(np.degrees(np.arctan2(cross, dot)))
+        got = angle_between(a, b)
+        assert got == pytest.approx(expected, rel=1e-7, abs=1e-9)

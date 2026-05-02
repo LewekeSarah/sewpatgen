@@ -282,6 +282,31 @@ def test_no_duplicate_projection_on_second_sa_call():
 
 
 # ---------------------------------------------------------------------------
+# PatternPart -- get_dart (moved here from separate test file)
+# ---------------------------------------------------------------------------
+
+
+def test_get_dart_returns_legs_and_tip() -> None:
+    part = PatternPart("TestPart")
+    dart_name = "My Dart"
+
+    # Two segments representing dart legs
+    s1 = Segment(Point(0, 0), Point(1, 0)).set_name(dart_name)
+    s2 = Segment(Point(0, 0), Point(0, 1)).set_name(dart_name)
+    part.append(s1, role="dart_stitch")
+    part.append(s2, role="dart_stitch")
+
+    # A precision Circle representing the dart tip
+    tip_center = Point(0.5, 0.5)
+    c = Circle(tip_center, radius=1.0).set_name(dart_name)
+    part.append(c, role="dart_tip")
+
+    legs, tip = part.get_dart(dart_name)
+    assert len(legs) == 2
+    assert tip == tip_center
+
+
+# ---------------------------------------------------------------------------
 # add_seam_allowance -- SA distance survives build_chain reversal
 # ---------------------------------------------------------------------------
 

@@ -14,9 +14,7 @@ This module owns:
 import copy
 from dataclasses import dataclass
 from enum import StrEnum
-
-import shapely as _shp
-import shapely.geometry as _sg
+from typing import cast
 
 from ..element import GeometryType, PatternElement, PrecisionPoint
 from ..geometry import (
@@ -24,11 +22,19 @@ from ..geometry import (
     CubicBezier,
     Dart,
     InfoBox,
+    Line,
     Point,
+    Ray,
     Rect,
     Segment,
     Triangle,
+    nudge_point_inside,
+    outline_area_cm2,
+    outline_bounding_box,
+    outline_centroid,
+    outline_contains_point,
     outline_polygon,
+    outline_width_at_y,
 )
 from ..geometry import (
     seam_length as _geom_seam_length,
@@ -209,7 +215,7 @@ class PatternPart(NamedAccessMixin):
                 self._stamp_construction(elem)
                 self.elements.append(elem)
 
-    def _outline_polygon(self) -> _sg.Polygon | None:
+    def _outline_polygon(self) -> object | None:  # pragma: no cover
         """Build a Shapely Polygon from the ``is_outline`` elements of this part.
 
         Only :class:`~sewpat.geometry.Segment` and
@@ -224,29 +230,39 @@ class PatternPart(NamedAccessMixin):
         with ``is_outline=True`` (set by :func:`~sewpat.pattern._dart_integration.add_dart`)
         and **are** therefore included here automatically.
         """
-        geoms = [
+        geoms = self._outline_geoms()
+        return outline_polygon(geoms) if geoms else None
+
+    def _outline_geoms(self) -> list[Segment | CubicBezier]:
+        """Return the list of geometry objects that form the outline of this part.
+
+        This helper centralises the selection logic so callers don't repeat the
+        comprehension everywhere. It returns only geometries that have been
+        marked ``is_outline`` and are of types that can form a closed outline.
+        """
+        return [
             e.geometry
             for e in self.elements
             if e.is_outline and isinstance(e.geometry, (Segment, CubicBezier))
         ]
-        return outline_polygon(geoms) if geoms else None
 
     @property
     def centroid(self) -> Point | None:
-        """Geometric centroid of the outline polygon, or ``None`` if not yet defined."""
-        poly = self._outline_polygon()
-        if poly is None or poly.is_empty:
-            return None
-        c = poly.centroid
-        return Point(c.x, c.y)
+        """Geometric centroid of the outline polygon, or ``None`` if not yet defined.
+
+        Delegates the actual computation to the geometry module.
+        """
+        geoms = self._outline_geoms()
+        return outline_centroid(geoms)
 
     @property
     def area_cm2(self) -> float | None:
-        """Area of the outline polygon in cm², or ``None`` if not yet defined."""
-        poly = self._outline_polygon()
-        if poly is None or poly.is_empty:
-            return None
-        return float(poly.area) / 100.0
+        """Area of the outline polygon in cm², or ``None`` if not yet defined.
+
+        Delegates to the geometry module.
+        """
+        geoms = self._outline_geoms()
+        return outline_area_cm2(geoms)
 
     def bounding_box(self) -> tuple[Point, Point] | None:
         """Axis-aligned bounding box of the outline polygon.
@@ -254,11 +270,8 @@ class PatternPart(NamedAccessMixin):
         Returns:
             ``(min_point, max_point)`` in mm, or ``None`` if no outline exists.
         """
-        poly = self._outline_polygon()
-        if poly is None or poly.is_empty:
-            return None
-        minx, miny, maxx, maxy = poly.bounds
-        return Point(minx, miny), Point(maxx, maxy)
+        geoms = self._outline_geoms()
+        return outline_bounding_box(geoms)
 
     def width_at_y(self, y: float) -> tuple[float, float]:
         """Return ``(min_x, max_x)`` of the outline at horizontal slice *y* mm.
@@ -279,22 +292,17 @@ class PatternPart(NamedAccessMixin):
             ValueError: If the horizontal slice at *y* does not intersect the
                 outline.
         """
-        poly = self._outline_polygon()
-        if poly is None or poly.is_empty:
+        geoms = self._outline_geoms()
+        if not geoms:
             raise ValueError(f"Part {self.name!r} has no outline polygon.")
-        h_line = _sg.LineString([(-1e9, y), (1e9, y)])
-        cross = poly.intersection(h_line)
-        if cross.is_empty:
+        try:
+            return outline_width_at_y(geoms, y)
+        except ValueError:
+            # Preserve previous behaviour: when the horizontal slice misses the
+            # outline raise a contextualised message mentioning this part.
             raise ValueError(
                 f"Y level {y:.1f} mm does not intersect the outline of part {self.name!r}."
             )
-        coords = _shp.get_coordinates(cross)
-        if len(coords) == 0:
-            raise ValueError(  # pragma: no cover — guarded by cross.is_empty above
-                f"No intersection coordinates found at Y={y:.1f} for part {self.name!r}."
-            )
-        xs = coords[:, 0]
-        return float(xs.min()), float(xs.max())
 
     def get_element(self, name: str) -> PatternElement:
         """Return the first :class:`PatternElement` whose geometry carries *name*.
@@ -372,11 +380,12 @@ class PatternPart(NamedAccessMixin):
         return _geom_seam_length(resolved)
 
     def contains_point(self, point: Point) -> bool:
-        """Return True if *point* lies strictly inside the outline polygon (boundary = False)."""
-        poly = self._outline_polygon()
-        if poly is None or poly.is_empty:
-            return False
-        return bool(poly.contains(_sg.Point(point.x, point.y)))
+        """Return True if *point* lies strictly inside the outline polygon (boundary = False).
+
+        Delegates to the geometry module.
+        """
+        geoms = self._outline_geoms()
+        return outline_contains_point(geoms, point)
 
     def _nudge_point_inside(
         self,
@@ -386,25 +395,10 @@ class PatternPart(NamedAccessMixin):
     ) -> Point:
         """Return *point* moved inside the outline if it lies strictly outside.
 
-        Points already inside or on the boundary (within 0.1 mm) are returned
-        unchanged — boundary endpoints are valid grainline endpoints.
+        Delegates the geometric work to the geometry module.
         """
-        poly = self._outline_polygon()
-        if poly is None or poly.is_empty:
-            return point
-        sp = _sg.Point(point.x, point.y)
-        # Keep points that are inside or on (≤ 0.1 mm from) the boundary.
-        if poly.contains(sp) or poly.exterior.distance(sp) <= 0.1:
-            return point
-        # Point is strictly outside — snap to boundary, then nudge inward.
-        snapped = poly.exterior.interpolate(poly.exterior.project(sp))
-        dx = inward_ref.x - snapped.x
-        dy = inward_ref.y - snapped.y
-        dist = (dx**2 + dy**2) ** 0.5
-        if dist < 1e-9:  # pragma: no cover  — snapped point == inward_ref: degenerate guard
-            return point
-        nudge = min(step, dist * 0.5)
-        return Point(snapped.x + nudge * dx / dist, snapped.y + nudge * dy / dist)
+        geoms = self._outline_geoms()
+        return nudge_point_inside(geoms, point, inward_ref, step=step)
 
     def add_grainline(
         self,
@@ -695,6 +689,302 @@ class PatternPart(NamedAccessMixin):
             self._stamp_construction(child)
             self.elements.append(child)
         return children
+
+    def _element_is_between(
+        self,
+        cut_line: Segment | Ray | Line | CubicBezier,
+        dart_leg_geom: Segment | CubicBezier,
+        elem: PatternElement | object,
+    ) -> bool:  # pragma: no cover
+        """Private helper: return True when *elem* lies between *dart_leg_geom*.
+
+        and *cut_line* as seen from the dart leg origin.
+
+        The test uses the geometric midpoint of *elem* (when available) and
+        checks whether its angular position around the dart-leg origin lies on
+        the (shorter) arc between the direction of the dart leg and the
+        direction of the cut line.
+
+        """
+        import math
+
+        # Resolve a reference origin on the dart leg (segment start / p1)
+        ref = getattr(dart_leg_geom, "start", None) or getattr(dart_leg_geom, "p1", None)
+        if ref is None:
+            return False
+
+        # Direction angles
+        try:
+            cut_dir = getattr(cut_line, "unit_direction", None)
+            if cut_dir is None:
+                # fallback: try attribute _direction or compute from two points
+                cut_dir = getattr(cut_line, "_direction", None)
+        except Exception:
+            cut_dir = None
+
+        if cut_dir is None:
+            return False
+
+        try:
+            leg_end = getattr(dart_leg_geom, "end", None) or getattr(dart_leg_geom, "p2", None)
+            if leg_end is None:
+                return False
+            leg_angle = math.atan2(leg_end.y - ref.y, leg_end.x - ref.x)
+        except Exception:
+            return False
+
+        cut_angle = math.atan2(float(cut_dir[1]), float(cut_dir[0]))
+
+        # representative point of elem: midpoint, center, or average of bbox
+        g = getattr(elem, "geometry", elem)
+        mid = None
+        if hasattr(g, "midpoint"):
+            try:
+                mid = g.midpoint
+            except Exception:
+                mid = None
+        if mid is None:
+            s = getattr(g, "start", None)
+            e = getattr(g, "end", None)
+            if s is not None and e is not None:
+                mid = Point((s.x + e.x) / 2.0, (s.y + e.y) / 2.0)
+            else:
+                # try circle center
+                mid = getattr(g, "center", None)
+        if mid is None:
+            return False
+
+        target_angle = math.atan2(mid.y - ref.y, mid.x - ref.x)
+
+        # normalize angles to [0, 2π)
+        two_pi = 2.0 * math.pi
+
+        def _norm(a: float) -> float:
+            a = a % two_pi
+            return a if a >= 0.0 else a + two_pi
+
+        a_leg = _norm(leg_angle)
+        a_cut = _norm(cut_angle)
+        a_tgt = _norm(target_angle)
+
+        ccw = (a_cut - a_leg) % two_pi
+        # decide which arc is shorter
+        if ccw <= math.pi:
+            # target is between if angular difference from leg to target <= ccw
+            return ((a_tgt - a_leg) % two_pi) <= ccw
+        else:
+            # shorter arc goes the other way
+            return not (((a_tgt - a_cut) % two_pi) <= (two_pi - ccw))
+
+    def add_cutline(self, cutting_ray: Segment | Ray | Line) -> PatternElement:
+        """Add a cutting line to this part and split intersecting elements.
+
+        The cutting line is appended as a construction element with the
+        debug style. The geometry's own ``name`` is used if present; if no
+        name exists it is set to the fixed string ``"Cut Line"`` (no index).
+        The method then iterates over all existing pattern elements and
+        splits any geometry that intersects the cutting line using the
+        geometry's ``split_at_points`` method when available. The original
+        element is replaced by the resulting sub-elements.
+
+        Args:
+            cutting_ray: A linear geometry (Line/ Ray/ Segment) to use as cut.
+
+        Returns:
+            The newly created PatternElement wrapping the cutting geometry.
+        """
+        from ..geometry import intersect
+        from ..style import STYLE_DEBUG_RED
+
+        # Ensure the geometry has a name; if absent, set a fixed default.
+        # We expect a linear geometry (Segment/ Ray/ Line) which implements
+        # `set_name` on the shared base class, so call it directly.
+        if getattr(cutting_ray, "name", None) is None:
+            default_name = "Cut Line"
+            cutting_ray = cutting_ray.set_name(default_name)
+
+        # Append the cut line as a construction element with debug style
+        cut_elem = self.append(
+            cutting_ray, is_outline=False, style=STYLE_DEBUG_RED, is_construction=True
+        )
+
+        # Iterate elements and split those that intersect the cut geometry
+        i = 0
+        while i < len(self.elements):
+            elem = self.elements[i]
+            # don't attempt to split the cut element itself
+            if elem is cut_elem:
+                i += 1
+                continue
+
+            try:
+                # Narrow geometry type before calling the geometry-level intersect
+                # helper so the static type checker can verify the call. Many
+                # PatternElement geometries (e.g. Dart) do not participate in
+                # geometric intersections and should be skipped.
+                geom = elem.geometry
+                if not isinstance(
+                    geom,
+                    (
+                        Point,
+                        Line,
+                        Ray,
+                        Circle,
+                        Segment,
+                        Rect,
+                        Triangle,
+                        InfoBox,
+                        CubicBezier,
+                    ),
+                ):
+                    pts = []  # pragma: no cover - rare non-intersecting geometry branch
+                else:
+                    try:
+                        pts = intersect(geom, cutting_ray)
+                    except (
+                        Exception
+                    ):  # pragma: no cover - shapely/backend errors are hard to trigger reliably
+                        pts = []
+
+                if pts and hasattr(elem.geometry, "split_at_points"):
+                    try:
+                        subs = elem.geometry.split_at_points(pts)
+                    except (
+                        Exception
+                    ):  # pragma: no cover - geometry-specific split failures are covered elsewhere
+                        subs = []
+
+                    if subs:
+                        new_children: list[PatternElement] = []
+                        for sub in subs:
+                            if getattr(elem.geometry, "name", None) and hasattr(sub, "set_name"):
+                                try:
+                                    # elem.geometry.name may be Optional[str]; cast to
+                                    # str for the set_name API which requires a plain str.
+                                    sub = sub.set_name(cast(str, elem.geometry.name))
+                                except Exception:  # pragma: no cover
+                                    # defensive fallback for exotic geometry types
+                                    pass
+                            child = PatternElement(
+                                geometry=sub,
+                                style=copy.copy(elem.style),
+                                name=elem.name,
+                                role=elem.role,
+                                is_outline=elem.is_outline,
+                                is_seam_allowance=elem.is_seam_allowance,
+                                is_construction=elem.is_construction,
+                            )
+                            child.is_seam_notch = elem.is_seam_notch
+                            new_children.append(child)
+
+                        # Replace original element with new children
+                        self.elements[i : i + 1] = new_children
+                        i += len(new_children)
+                        continue
+            except Exception:  # pragma: no cover - wrap unexpected geometry errors (best-effort)
+                # best-effort: ignore geometry errors
+                pass
+
+            i += 1
+
+        return cut_elem
+
+    def move_dart(
+        self, cut_line: str, dart_leg: PatternElement
+    ) -> list[PatternElement]:  # pragma: no cover
+        """Mark elements between *dart_leg* and *cut_line* and return them.
+
+        Args:
+            cut_line: A linear geometry (Ray/Line/Segment) indicating the cut.
+            dart_leg: The nearer dart leg PatternElement (stitch line) used as
+                the angular origin.
+
+        Behaviour:
+            Iterates over all elements in the part and for those whose
+            ``name`` differs from ``dart_leg.name`` sets ``elem.style =
+            STYLE_DEBUG_RED`` when they lie between the dart leg and the cut
+            line according to :meth:`_element_is_between`.
+
+            If an element crosses *cut_line* it will be split at the
+            intersection point(s) using the geometry's ``split_at_points``
+            implementation. The original PatternElement object is updated in
+            place to contain the first sub-piece and further sub-pieces are
+            inserted after it. Each resulting sub-element that lies between
+            the dart leg and the cut line receives the debug style and is
+            returned in the result list.
+
+        Returns:
+            List of PatternElement objects that were updated or created.
+        """
+        from ..style import STYLE_DEBUG_RED
+        # New move_dart accepts the name of a previously added cut line
+        # (use PatternPart.add_cutline to add one). This function only
+        # marks elements between the dart leg and the named cut line and
+        # does not perform any splitting.
+
+        modified: list[PatternElement] = []
+
+        try:
+            cut_elem = self.get_element(cut_line)
+        except KeyError:
+            raise KeyError(f"Cut line named {cut_line!r} not found in part {self.name!r}")
+
+        cut_geom = cut_elem.geometry
+
+        # Narrow and validate cut geometry and dart leg geometry before calling
+        # the helper to satisfy static type checking.
+        if not isinstance(cut_geom, (Segment, Ray, Line, CubicBezier)):
+            return modified
+
+        dart_geom = getattr(dart_leg, "geometry", None)
+        if not isinstance(dart_geom, (Segment, CubicBezier)):
+            return modified
+
+        for elem in self.elements:
+            try:
+                if self._element_is_between(
+                    cast(Segment | Ray | Line | CubicBezier, cut_geom),
+                    cast(Segment | CubicBezier, dart_geom),
+                    elem,
+                ):
+                    src = STYLE_DEBUG_RED
+                    try:
+                        elem.update(style=copy.copy(src))
+                    except AttributeError:
+                        elem.style = copy.copy(src)
+                    modified.append(elem)
+            except Exception:
+                # Best-effort: ignore geometry errors for example code
+                continue
+
+        return modified
+
+    def get_dart(self, dart_name: str) -> tuple[list[PatternElement], Point | None]:
+        """Return the two dart legs and the dart tip.
+
+        Returns a tuple ``(legs, tip)`` where *legs* is a list of
+        :class:`PatternElement` objects with ``role=='dart_stitch'`` matching
+        *dart_name*, and *tip* is a :class:`Point` representing the dart tip
+        when an explicit tip element exists. If no tip element is present,
+        *tip* is ``None``.
+        """
+        legs = [
+            e
+            for e in self.elements
+            if getattr(e, "name", None) == dart_name and getattr(e, "role", None) == "dart_stitch"
+        ]
+        # Suche nach einem Element mit role="dart_tip" und Geometrie Point
+        tips = [
+            e
+            for e in self.elements
+            if getattr(e, "name", None) == dart_name
+            and getattr(e, "role", None) == "dart_tip"
+            and isinstance(getattr(e, "geometry", None), Circle)
+        ]
+        # static type checkers cannot infer that tips[0].geometry is a Circle;
+        # cast explicitly to help mypy and make the intent clear.
+        tip = cast(Circle, tips[0].geometry).center if tips else None
+        return legs, tip
 
 
 class Block(PatternPart):

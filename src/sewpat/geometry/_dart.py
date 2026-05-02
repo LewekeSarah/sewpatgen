@@ -249,7 +249,7 @@ def dart_from_edge_free_tip(
 
 
 class Dart:
-    """Immutable dart (Abnäher) geometry.
+    """Immutable dart geometry.
 
     Defined by four key points: *leg_a*, *leg_b* (mouth endpoints), *center*
     (mouth midpoint, base of the fold line) and *tip* (apex).  All secondary
@@ -411,7 +411,7 @@ class Dart:
 
     @property
     def roof(self) -> Point:
-        """Abnäherdach peak — corrected seam point on the fold line.
+        """Dart roof (peak) — corrected seam point on the fold line.
 
         The *roof* accounts for the fabric tuck: when the dart is folded and
         stitched, the seam at ``center`` must be shifted **outward** (away from
@@ -426,12 +426,7 @@ class Dart:
 
         The roof therefore lies on the infinite extension of the fold line on
         the far side of ``center`` from ``tip`` for typical darts, but its
-        exact position depends on the dart's proportions and edge curvature:
-
-        * For typical darts it lies **beyond** ``center`` (outward past the seam).
-        * For very wide or shallow darts ``roof_height`` can become very large.
-        * On curved edges the normal may not point directly away from the mouth,
-          so ``tip`` itself can be offset, shifting where ``roof`` falls.
+        exact position depends on the dart's proportions and edge curvature.
         """
         roof_height = math.tan(self.intake_angle) * (self.width / 2.0)
         fold_dir = self.fold_line.unit_direction  # center → tip

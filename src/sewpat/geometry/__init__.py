@@ -40,6 +40,14 @@ from ._dart import (
     dart_from_tip_and_legs,
     dart_from_tip_center_width,
 )
+from ._outline import (
+    nudge_point_inside,
+    outline_area_cm2,
+    outline_bounding_box,
+    outline_centroid,
+    outline_contains_point,
+    outline_width_at_y,
+)
 from ._primitives import (
     Circle,
     InfoBox,
@@ -89,6 +97,12 @@ __all__ = [
     "round_corner",
     "buffer_chain",
     "outline_polygon",
+    "outline_centroid",
+    "outline_area_cm2",
+    "outline_bounding_box",
+    "outline_width_at_y",
+    "outline_contains_point",
+    "nudge_point_inside",
     "seam_length",
     "project_onto_edge",
     "offset_adaptive",

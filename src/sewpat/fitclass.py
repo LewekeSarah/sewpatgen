@@ -1,4 +1,4 @@
-"""Fit class (Passformklasse) — single source of truth for garment ease.
+"""Fit class — single source of truth for garment ease.
 
 The :class:`FitClass` wraps a single integer ``pk`` in the range 0–12 that
 encodes how tightly a garment fits the body.  All ease values are read from
