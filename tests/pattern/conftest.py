@@ -4,8 +4,15 @@ All functions are plain factory functions (not fixtures) so they can be
 called directly from any test file without injecting them as parameters.
 """
 
+import pytest
+
 from sewpat.geometry import Dart, Point, Segment
-from sewpat.pattern import OverlayPart, Pattern, PatternPart
+from sewpat.pattern import Pattern, PatternPart
+
+
+@pytest.fixture
+def square_part() -> PatternPart:
+    return _square_part(100)
 
 
 def _square_part(side: float = 100.0) -> PatternPart:
@@ -28,6 +35,21 @@ def _rect_part(x0, y0, x1, y1) -> PatternPart:
     return part
 
 
+@pytest.fixture(name="_rect_part")
+def _rect_part_fixture():
+    """Fixture wrapper that returns the `_rect_part` factory function.
+
+    Tests may either import `_rect_part` directly from this module, or accept
+    a fixture parameter named `_rect_part` which yields the same callable.
+    """
+    return _rect_part
+
+
+@pytest.fixture
+def square_part_with_sa() -> PatternPart:
+    return _square_part_with_sa(10)
+
+
 def _square_part_with_sa(sa_dist: float = 10.0) -> PatternPart:
     """100x100 mm square with seam allowance already added."""
     part = _square_part(100.0)
@@ -35,7 +57,8 @@ def _square_part_with_sa(sa_dist: float = 10.0) -> PatternPart:
     return part
 
 
-def _square_part_with_dart() -> PatternPart:
+@pytest.fixture
+def square_part_with_dart() -> PatternPart:
     """100x100 mm square with a triangle dart on the left edge, SA not yet added."""
     part = PatternPart(name="DartSquare")
     dart_edge = Segment(Point(0, 100), Point(0, 0))
@@ -53,25 +76,9 @@ def _square_part_with_dart() -> PatternPart:
     return part
 
 
-def _front_part() -> PatternPart:
-    """A simple 100 x 150 mm front piece."""
-    part = PatternPart(name="Vorderteil")
-    part.append(Segment(Point(0, 0), Point(100, 0)), is_outline=True)
-    part.append(Segment(Point(100, 0), Point(100, 150)), is_outline=True)
-    part.append(Segment(Point(100, 150), Point(0, 150)), is_outline=True)
-    part.append(Segment(Point(0, 150), Point(0, 0)), is_outline=True)
-    return part
-
-
-def _pocket_overlay() -> tuple[PatternPart, OverlayPart]:
-    """30x30 mm pocket overlay on a front piece."""
-    front = _front_part()
-    pocket = OverlayPart(name="Tasche", parent=front)
-    pocket.append(Segment(Point(10, 10), Point(40, 10)), is_outline=True)
-    pocket.append(Segment(Point(40, 10), Point(40, 40)), is_outline=True)
-    pocket.append(Segment(Point(40, 40), Point(10, 40)), is_outline=True)
-    pocket.append(Segment(Point(10, 40), Point(10, 10)), is_outline=True)
-    return front, pocket
+@pytest.fixture
+def pattern_with_square_part() -> tuple[Pattern, PatternPart]:
+    return _pattern_with_square_part(200)
 
 
 def _pattern_with_square_part(size: float = 200.0) -> tuple[Pattern, PatternPart]:

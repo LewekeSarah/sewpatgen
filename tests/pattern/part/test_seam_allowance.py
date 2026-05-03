@@ -15,8 +15,6 @@ from sewpat.pattern._sa import (
 )
 from sewpat.style import StyleOptions
 
-from .conftest import _square_part
-
 # ---------------------------------------------------------------------------
 # _closest_sa_edge
 # ---------------------------------------------------------------------------
@@ -99,30 +97,30 @@ def test_is_double_notch_non_triangle_geometry_returns_false():
 # ---------------------------------------------------------------------------
 
 
-def test_add_seam_allowance_invalid_corner_join_raises():
+def test_add_seam_allowance_invalid_corner_join_raises(square_part: PatternPart):
     """Invalid corner_join value raises ValueError (line 455)."""
-    part = _square_part()
+    part = square_part
     with pytest.raises(ValueError, match="corner_join"):
         add_seam_allowance(part, 10.0, corner_join="invalid")
 
 
-def test_add_seam_allowance_non_positive_distance_raises():
+def test_add_seam_allowance_non_positive_distance_raises(square_part: PatternPart):
     """distance ≤ 0 raises ValueError (line 457)."""
-    part = _square_part()
+    part = square_part
     with pytest.raises(ValueError, match="positive"):
         add_seam_allowance(part, -5.0)
 
 
-def test_add_seam_allowance_zero_distance_raises():
+def test_add_seam_allowance_zero_distance_raises(square_part: PatternPart):
     """distance == 0 raises ValueError."""
-    part = _square_part()
+    part = square_part
     with pytest.raises(ValueError, match="positive"):
         add_seam_allowance(part, 0.0)
 
 
-def test_add_seam_allowance_empty_outline_elements_returns_empty():
+def test_add_seam_allowance_empty_outline_elements_returns_empty(square_part: PatternPart):
     """Explicit empty outline_elements list returns [] (line 464)."""
-    part = _square_part()
+    part = square_part
     result = add_seam_allowance(part, 10.0, outline_elements=[])
     assert result == []
 

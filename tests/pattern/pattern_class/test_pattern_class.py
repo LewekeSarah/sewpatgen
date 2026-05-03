@@ -1,11 +1,3 @@
-"""Tests for the Pattern class (container, add_part, get_part, reference square).
-
-Covers:
-  - Pattern creation defaults and custom anchor
-  - add_part / get_part
-  - add_reference_square (size, style, auto-placement)
-"""
-
 from typing import cast
 
 import pytest
@@ -14,8 +6,6 @@ from sewpat.geometry import Point, Rect, Segment
 from sewpat.pattern import Pattern, PatternPart
 from sewpat.style import StyleOptions
 from sewpat.units import CM
-
-from .conftest import _pattern_with_square_part
 
 # ---------------------------------------------------------------------------
 # Pattern -- creation and basic API
@@ -93,16 +83,20 @@ def test_pattern_add_reference_square_custom_style():
 # ---------------------------------------------------------------------------
 
 
-def test_reference_square_origin_inside_unchanged():
+def test_reference_square_origin_inside_unchanged(
+    pattern_with_square_part: tuple[Pattern, PatternPart],
+):
     """An origin already well inside the bbox is not moved."""
-    pat, _ = _pattern_with_square_part(200)
+    pat, _ = pattern_with_square_part
     edge = 3 * CM
     rect = cast(Rect, pat.add_reference_square(Point(10, 10), edge_length=edge).geometry)
     assert abs(rect.origin.x - 10.0) < 1e-3 and abs(rect.origin.y - 10.0) < 1e-3
 
 
-def test_reference_square_origin_outside_is_shifted_inside():
-    pat, _ = _pattern_with_square_part(200)
+def test_reference_square_origin_outside_is_shifted_inside(
+    pattern_with_square_part: tuple[Pattern, PatternPart],
+):
+    pat, _ = pattern_with_square_part
     edge = 3 * CM
     rect = cast(Rect, pat.add_reference_square(Point(-500, -500), edge_length=edge).geometry)
     assert rect.origin.x >= 0.0 and rect.origin.y >= 0.0

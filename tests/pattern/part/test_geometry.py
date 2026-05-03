@@ -30,8 +30,6 @@ from sewpat.pattern import PatternPart
 from sewpat.style import STYLE_GRAINLINE
 from sewpat.units import CM
 
-from .conftest import _rect_part, _square_part, _square_part_with_dart
-
 # ---------------------------------------------------------------------------
 # PatternPart -- centroid
 # ---------------------------------------------------------------------------
@@ -117,16 +115,16 @@ def test_bounding_box_returns_none_without_outline_flag():
     assert part.bounding_box() is None
 
 
-def test_bounding_box_axis_aligned_square():
+def test_bounding_box_axis_aligned_square(_rect_part: PatternPart):
     """10 x 10 mm square at origin => bbox (0,0)-(10,10)."""
-    bb = _rect_part(0, 0, 10, 10).bounding_box()
+    bb = _rect_part(0.0, 0.0, 100.0, 100.0).bounding_box()
     assert bb is not None
     mn, mx = bb
     assert abs(mn.x) < 1e-6 and abs(mn.y) < 1e-6
-    assert abs(mx.x - 10.0) < 1e-6 and abs(mx.y - 10.0) < 1e-6
+    assert abs(mx.x - 100.0) < 1e-6 and abs(mx.y - 100.0) < 1e-6
 
 
-def test_bounding_box_offset_rectangle():
+def test_bounding_box_offset_rectangle(_rect_part: PatternPart):
     bb = _rect_part(5, 15, 45, 70).bounding_box()
     assert bb is not None
     mn, mx = bb
@@ -134,13 +132,13 @@ def test_bounding_box_offset_rectangle():
     assert abs(mx.x - 45.0) < 1e-6 and abs(mx.y - 70.0) < 1e-6
 
 
-def test_bounding_box_width_and_height():
+def test_bounding_box_width_and_height(_rect_part: PatternPart):
     mn, mx = _rect_part(0, 0, 60, 40).bounding_box()
     assert abs(mx.x - mn.x - 60.0) < 1e-6
     assert abs(mx.y - mn.y - 40.0) < 1e-6
 
 
-def test_bounding_box_non_outline_elements_ignored():
+def test_bounding_box_non_outline_elements_ignored(_rect_part: PatternPart):
     part = _rect_part(0, 0, 20, 20)
     part.append(Segment(Point(100, 100), Point(200, 200)))  # not is_outline
     mn, mx = part.bounding_box()
@@ -214,24 +212,24 @@ def test_contains_point_returns_false_without_outline():
     assert not PatternPart(name="Empty").contains_point(Point(5, 5))
 
 
-def test_contains_point_centre_is_inside():
-    assert _square_part(100).contains_point(Point(50, 50))
+def test_contains_point_centre_is_inside(square_part: PatternPart):
+    assert square_part.contains_point(Point(50, 50))
 
 
-def test_contains_point_corner_is_outside():
-    assert not _square_part(100).contains_point(Point(0, 0))
+def test_contains_point_corner_is_outside(square_part: PatternPart):
+    assert not square_part.contains_point(Point(0, 0))
 
 
-def test_contains_point_outside_is_false():
-    assert not _square_part(100).contains_point(Point(200, 200))
+def test_contains_point_outside_is_false(square_part: PatternPart):
+    assert not square_part.contains_point(Point(200, 200))
 
 
-def test_contains_point_near_edge_inside():
-    assert _square_part(100).contains_point(Point(1, 50))
+def test_contains_point_near_edge_inside(square_part: PatternPart):
+    assert square_part.contains_point(Point(1, 50))
 
 
-def test_contains_point_near_edge_outside():
-    assert not _square_part(100).contains_point(Point(-1, 50))
+def test_contains_point_near_edge_outside(square_part: PatternPart):
+    assert not square_part.contains_point(Point(-1, 50))
 
 
 # ---------------------------------------------------------------------------
@@ -239,27 +237,27 @@ def test_contains_point_near_edge_outside():
 # ---------------------------------------------------------------------------
 
 
-def test_grainline_fully_inside_unchanged():
-    seg = cast(Segment, _square_part(100).add_grainline(Point(20, 50), Point(80, 50)).geometry)
+def test_grainline_fully_inside_unchanged(square_part: PatternPart):
+    seg = cast(Segment, square_part.add_grainline(Point(20, 50), Point(80, 50)).geometry)
     assert abs(seg.p1.x - 20.0) < 1e-3 and abs(seg.p2.x - 80.0) < 1e-3
 
 
-def test_grainline_start_outside_is_nudged_inward():
-    seg = cast(Segment, _square_part(100).add_grainline(Point(-20, 50), Point(80, 50)).geometry)
+def test_grainline_start_outside_is_nudged_inward(square_part: PatternPart):
+    seg = cast(Segment, square_part.add_grainline(Point(-20, 50), Point(80, 50)).geometry)
     assert 0.0 <= seg.p1.x < 5.0
     assert abs(seg.p1.y - 50.0) < 1e-3
     assert abs(seg.p2.x - 80.0) < 1e-3
 
 
-def test_grainline_end_outside_is_nudged_inward():
-    seg = cast(Segment, _square_part(100).add_grainline(Point(20, 50), Point(150, 50)).geometry)
+def test_grainline_end_outside_is_nudged_inward(square_part: PatternPart):
+    seg = cast(Segment, square_part.add_grainline(Point(20, 50), Point(150, 50)).geometry)
     assert abs(seg.p1.x - 20.0) < 1e-3
     assert 95.0 < seg.p2.x <= 100.0
     assert abs(seg.p2.y - 50.0) < 1e-3
 
 
-def test_grainline_both_outside_nudged_inward():
-    seg = cast(Segment, _square_part(100).add_grainline(Point(50, -20), Point(50, 120)).geometry)
+def test_grainline_both_outside_nudged_inward(square_part: PatternPart):
+    seg = cast(Segment, square_part.add_grainline(Point(50, -20), Point(50, 120)).geometry)
     assert 0.0 <= seg.p1.y < 5.0
     assert 95.0 < seg.p2.y <= 100.0
 
@@ -271,9 +269,9 @@ def test_grainline_no_outline_no_crash():
     assert abs(seg.p1.x - (-10.0)) < 1e-9 and abs(seg.p2.x - 200.0) < 1e-9
 
 
-def test_grainline_endpoint_on_boundary_not_nudged():
+def test_grainline_endpoint_on_boundary_not_nudged(square_part: PatternPart):
     """Endpoint exactly on the outline boundary must NOT be nudged (regression)."""
-    seg = cast(Segment, _square_part(100).add_grainline(Point(50, 20), Point(50, 100)).geometry)
+    seg = cast(Segment, square_part.add_grainline(Point(50, 20), Point(50, 100)).geometry)
     assert abs(seg.p1.x - 50.0) < 1e-6 and abs(seg.p2.x - 50.0) < 1e-6
     assert abs(seg.p2.y - 100.0) < 1e-6 and abs(seg.p1.y - 20.0) < 1e-6
 
@@ -414,9 +412,9 @@ def test_add_info_box_returns_none_without_outline() -> None:
     assert part.add_info_box(header="Title") is None
 
 
-def test_add_info_box_default_offset_is_30mm_below_centroid() -> None:
+def test_add_info_box_default_offset_is_30mm_below_centroid(square_part: PatternPart) -> None:
     """Default offset places the box 30 mm below the centroid."""
-    part = _square_part(100)  # centroid at (50, 50)
+    part = square_part  # centroid at (50, 50)
     elem = part.add_info_box(header="H")
     assert elem is not None
     box = elem.geometry
@@ -425,35 +423,35 @@ def test_add_info_box_default_offset_is_30mm_below_centroid() -> None:
     assert abs(box.position.y - (50.0 + 30.0)) < 1e-6
 
 
-def test_add_info_box_positive_offset_moves_box_down() -> None:
+def test_add_info_box_positive_offset_moves_box_down(square_part: PatternPart) -> None:
     """A positive dy offset moves the info box further below the centroid."""
-    part = _square_part(100)  # centroid at (50, 50)
+    part = square_part  # centroid at (50, 50)
     elem = part.add_info_box(header="H", offset=(0, 55 * CM / 10))
     assert elem is not None
     box = elem.geometry
     assert box.position.y > 50.0 + 30.0
 
 
-def test_add_info_box_negative_offset_moves_box_up() -> None:
+def test_add_info_box_negative_offset_moves_box_up(square_part: PatternPart) -> None:
     """A negative dy offset moves the info box above the default position."""
-    part = _square_part(100)  # centroid at (50, 50)
+    part = square_part  # centroid at (50, 50)
     elem_default = part.add_info_box(header="H")
     elem_up = part.add_info_box(header="H", offset=(0, -20.0))
     assert elem_default is not None and elem_up is not None
     assert elem_up.geometry.position.y < elem_default.geometry.position.y
 
 
-def test_add_info_box_dx_offset_shifts_box_horizontally() -> None:
+def test_add_info_box_dx_offset_shifts_box_horizontally(square_part: PatternPart) -> None:
     """A non-zero dx offsets the box horizontally from the centroid."""
-    part = _square_part(100)  # centroid at (50, 50)
+    part = square_part  # centroid at (50, 50)
     elem = part.add_info_box(header="H", offset=(15.0, 30.0))
     assert elem is not None
     assert abs(elem.geometry.position.x - 65.0) < 1e-6
 
 
-def test_add_info_box_header_and_notes_stored() -> None:
+def test_add_info_box_header_and_notes_stored(square_part: PatternPart) -> None:
     """Header and notes are passed through to the InfoBox geometry."""
-    part = _square_part(100)
+    part = square_part
     elem = part.add_info_box(header="Title", notes=["note 1", "note 2"])
     assert elem is not None
     box = elem.geometry
@@ -461,9 +459,9 @@ def test_add_info_box_header_and_notes_stored() -> None:
     assert box.notes == ["note 1", "note 2"]
 
 
-def test_add_info_box_default_header_is_part_name() -> None:
+def test_add_info_box_default_header_is_part_name(square_part: PatternPart) -> None:
     """When header is omitted, the part name is used."""
-    part = _square_part(100)
+    part = square_part
     part.name = "Bodice Front"
     elem = part.add_info_box()
     assert elem is not None
@@ -511,9 +509,11 @@ def test_extend_stamps_construction_flag() -> None:
     assert elem.is_construction is True
 
 
-def test_extend_with_dart_element_dispatches_to_add_dart() -> None:
+def test_extend_with_dart_element_dispatches_to_add_dart(
+    square_part_with_dart: PatternPart,
+) -> None:
     """extend() with a PatternElement wrapping a Dart calls add_dart."""
-    part = _square_part_with_dart()
+    part = square_part_with_dart
     dart = Dart.from_tip_center_width(
         tip=Point(50, 20),
         center=Point(50, 0),

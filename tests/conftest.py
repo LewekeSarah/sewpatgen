@@ -20,7 +20,7 @@ from sewpat.fitclass import FitClass
 from sewpat.geometry import Point, Rect, Segment
 from sewpat.grids import GridConfig, TopGrid, WideSleeveGrid
 from sewpat.measurements import BlouseMeasurements, GarmentConfig
-from sewpat.pattern import Pattern, PatternPart
+from sewpat.pattern import OverlayPart, Pattern, PatternPart
 from sewpat.person import BalancedPerson, Person, PersonAnalyser
 from sewpat.pleat import PleatConfig
 from sewpat.render import _build_svg
@@ -266,6 +266,22 @@ def make_simple_pattern(name: str = "My Pattern") -> Pattern:
     p2.append(Rect(Point(20, 0), width=5, height=8))
     pat.add_part(p2)
     return pat
+
+
+@pytest.fixture
+def pocket_overlay() -> tuple[Pattern, OverlayPart]:
+    """30x30 mm pocket overlay on a front piece.
+
+    If *pattern* is supplied, its first part is used as the front baseline.
+    Otherwise the legacy helper ``_front_part()`` is used.
+    """
+    front = make_simple_pattern()
+    pocket = OverlayPart(name="Tasche", parent=front)
+    pocket.append(Segment(Point(10, 10), Point(40, 10)), is_outline=True)
+    pocket.append(Segment(Point(40, 10), Point(40, 40)), is_outline=True)
+    pocket.append(Segment(Point(40, 40), Point(10, 40)), is_outline=True)
+    pocket.append(Segment(Point(10, 40), Point(10, 10)), is_outline=True)
+    return front, pocket
 
 
 def build_svg_for_part(part: PatternPart, **extra: Any) -> str:

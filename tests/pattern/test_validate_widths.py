@@ -34,8 +34,6 @@ from sewpat.measurements import BlouseMeasurements, GarmentConfig
 from sewpat.pattern import Pattern, PatternPart, WidthCheckResult, WidthValidationResult
 from sewpat.units import CM
 
-from .conftest import _rect_part
-
 # ---------------------------------------------------------------------------
 # Local helpers
 # ---------------------------------------------------------------------------
@@ -101,7 +99,7 @@ def _spec(back, front, label="Bust", y=100.0, expected=100.0, tol=None):
 # ---------------------------------------------------------------------------
 
 
-def test_width_at_y_simple_rectangle():
+def test_width_at_y_simple_rectangle(_rect_part: PatternPart):
     part = _rect_part(0, 0, 50, 200)
     part.name = "Back"
     min_x, max_x = part.width_at_y(100)
@@ -109,7 +107,7 @@ def test_width_at_y_simple_rectangle():
     assert abs(max_x - 50) < 1e-6
 
 
-def test_width_at_y_returns_correct_width():
+def test_width_at_y_returns_correct_width(_rect_part: PatternPart):
     part = _rect_part(0, 0, 70, 300)
     part.name = "Back"
     min_x, max_x = part.width_at_y(150)
@@ -122,7 +120,7 @@ def test_width_at_y_no_outline_raises_value_error():
         part.width_at_y(100)
 
 
-def test_width_at_y_outside_polygon_raises_value_error():
+def test_width_at_y_outside_polygon_raises_value_error(_rect_part: PatternPart):
     part = _rect_part(0, 0, 50, 200)
     part.name = "Back"
     with pytest.raises(ValueError, match="does not intersect"):

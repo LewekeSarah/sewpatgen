@@ -17,8 +17,6 @@ from sewpat.pattern import PatternPart
 from sewpat.style import StyleOptions
 from sewpat.units import CM, MM
 
-from .conftest import _square_part, _square_part_with_dart, _square_part_with_sa
-
 # ---------------------------------------------------------------------------
 # PatternPart -- add_info_box
 # ---------------------------------------------------------------------------
@@ -159,9 +157,9 @@ def test_notch_custom_length_and_width():
 # ------------------------------------------------------------------
 
 
-def test_with_sa_produces_two_notch_triangles():
+def test_with_sa_produces_two_notch_triangles(square_part_with_sa: PatternPart):
     """After add_seam_allowance, add_notches produces two triangles per point."""
-    part = _square_part_with_sa(10.0)
+    part = square_part_with_sa
     n_before = len(part.elements)
     part.add_notches(Point(50, 0), seam_edge=Segment(Point(0, 0), Point(100, 0)))
     triangles = [e for e in part.elements[n_before:] if isinstance(e.geometry, Triangle)]
@@ -182,8 +180,8 @@ def test_without_sa_produces_one_notch_triangle():
     assert len(triangles) == 1 and not triangles[0].is_seam_allowance
 
 
-def test_seam_line_notch_sits_on_seam():
-    part = _square_part_with_sa(10.0)
+def test_seam_line_notch_sits_on_seam(square_part_with_sa: PatternPart):
+    part = square_part_with_sa
     n_before = len(part.elements)
     part.add_notches(Point(50, 0), seam_edge=Segment(Point(0, 0), Point(100, 0)))
     seam_tri = next(
@@ -194,9 +192,9 @@ def test_seam_line_notch_sits_on_seam():
     assert abs((seam_tri.geometry.p1.y + seam_tri.geometry.p2.y) / 2) <= 0.5
 
 
-def test_sa_notch_sits_on_sa_edge():
+def test_sa_notch_sits_on_sa_edge(square_part_with_sa: PatternPart):
     sa_dist = 10.0
-    part = _square_part_with_sa(sa_dist)
+    part = square_part_with_sa
     n_before = len(part.elements)
     part.add_notches(Point(50, 0), seam_edge=Segment(Point(0, 0), Point(100, 0)))
     sa_tri = next(
@@ -207,8 +205,8 @@ def test_sa_notch_sits_on_sa_edge():
     assert abs((sa_tri.geometry.p1.y + sa_tri.geometry.p2.y) / 2 - (-sa_dist)) <= 0.5
 
 
-def test_sa_notch_tip_points_inward():
-    part = _square_part_with_sa(10.0)
+def test_sa_notch_tip_points_inward(square_part_with_sa: PatternPart):
+    part = square_part_with_sa
     n_before = len(part.elements)
     part.add_notches(Point(50, 0), seam_edge=Segment(Point(0, 0), Point(100, 0)))
     sa_tri = next(
@@ -220,8 +218,8 @@ def test_sa_notch_tip_points_inward():
     assert sa_tri.geometry.p3.y > base_y
 
 
-def test_sa_notch_x_position_preserved():
-    part = _square_part_with_sa(10.0)
+def test_sa_notch_x_position_preserved(square_part_with_sa: PatternPart):
+    part = square_part_with_sa
     n_before = len(part.elements)
     part.add_notches(Point(50, 0), seam_edge=Segment(Point(0, 0), Point(100, 0)))
     sa_tri = next(
@@ -237,8 +235,8 @@ def test_sa_notch_x_position_preserved():
 # ---------------------------------------------------------------------------
 
 
-def test_dart_leg_notches_projected_after_sa():
-    part = _square_part_with_dart()
+def test_dart_leg_notches_projected_after_sa(square_part_with_dart: PatternPart):
+    part = square_part_with_dart
     part.add_seam_allowance(10.0)
     sa_dart_notches = [
         e
@@ -248,8 +246,8 @@ def test_dart_leg_notches_projected_after_sa():
     assert len(sa_dart_notches) >= 2
 
 
-def test_seam_line_notches_become_is_seam_notch():
-    part = _square_part_with_dart()
+def test_seam_line_notches_become_is_seam_notch(square_part_with_dart: PatternPart):
+    part = square_part_with_dart
     part.add_seam_allowance(10.0)
     seam_notches = [
         e
@@ -260,8 +258,8 @@ def test_seam_line_notches_become_is_seam_notch():
         assert e.is_seam_notch
 
 
-def test_dart_sa_notch_sits_on_sa_edge():
-    part = _square_part_with_dart()
+def test_dart_sa_notch_sits_on_sa_edge(square_part_with_dart: PatternPart):
+    part = square_part_with_dart
     sa_dist = 10.0
     part.add_seam_allowance(sa_dist)
     for e in [
@@ -272,8 +270,8 @@ def test_dart_sa_notch_sits_on_sa_edge():
         assert abs((e.geometry.p1.y + e.geometry.p2.y) / 2 - (-sa_dist)) <= 1.5
 
 
-def test_no_duplicate_projection_on_second_sa_call():
-    part = _square_part_with_dart()
+def test_no_duplicate_projection_on_second_sa_call(square_part_with_dart: PatternPart):
+    part = square_part_with_dart
     part.add_seam_allowance(10.0)
     count_first = len([e for e in part.elements if e.role == "dart_notch" and e.is_seam_allowance])
     part.add_seam_allowance(10.0)
@@ -343,33 +341,33 @@ def test_reversed_waistband_gets_correct_sa():
 # ---------------------------------------------------------------------------
 
 
-def test_sa_corner_join_default_is_miter():
-    sa_elems = _square_part().add_seam_allowance(10.0)
+def test_sa_corner_join_default_is_miter(square_part: PatternPart):
+    sa_elems = square_part.add_seam_allowance(10.0)
     assert len(sa_elems) > 0 and all(e.is_seam_allowance for e in sa_elems)
 
 
-def test_sa_corner_join_miter_explicit():
-    assert len(_square_part().add_seam_allowance(10.0, corner_join="miter")) > 0
+def test_sa_corner_join_miter_explicit(square_part: PatternPart):
+    assert len(square_part.add_seam_allowance(10.0, corner_join="miter")) > 0
 
 
-def test_sa_corner_join_round():
-    sa_elems = _square_part().add_seam_allowance(10.0, corner_join="round")
+def test_sa_corner_join_round(square_part: PatternPart):
+    sa_elems = square_part.add_seam_allowance(10.0, corner_join="round")
     assert len(sa_elems) > 0 and all(e.is_seam_allowance for e in sa_elems)
 
 
-def test_sa_corner_join_bevel():
-    sa_elems = _square_part().add_seam_allowance(10.0, corner_join="bevel")
+def test_sa_corner_join_bevel(square_part: PatternPart):
+    sa_elems = square_part.add_seam_allowance(10.0, corner_join="bevel")
     assert len(sa_elems) > 0 and all(e.is_seam_allowance for e in sa_elems)
 
 
-def test_sa_invalid_corner_join_raises():
+def test_sa_invalid_corner_join_raises(square_part: PatternPart):
     with pytest.raises(ValueError):
-        _square_part().add_seam_allowance(10.0, corner_join="zigzag")
+        square_part.add_seam_allowance(10.0, corner_join="zigzag")
 
 
-def test_sa_round_more_segments_than_bevel_on_square():
-    n_round = len(_square_part().add_seam_allowance(10.0, corner_join="round"))
-    n_bevel = len(_square_part().add_seam_allowance(10.0, corner_join="bevel"))
+def test_sa_round_more_segments_than_bevel_on_square(square_part: PatternPart):
+    n_round = len(square_part.add_seam_allowance(10.0, corner_join="round"))
+    n_bevel = len(square_part.add_seam_allowance(10.0, corner_join="bevel"))
     assert n_round > n_bevel, f"Round ({n_round}) should exceed bevel ({n_bevel})"
 
 
