@@ -649,3 +649,11 @@ def test_cubic_bezier_repr_equals_str() -> None:
     """repr() returns the same string as str() for CubicBezier."""
     b = CubicBezier(Point(1, 2), Point(3, 4), Point(5, 6), Point(7, 8), name="test")
     assert repr(b) == str(b)
+
+
+def test_cubic_bezier_rep_point_is_parametric_midpoint() -> None:
+    # straight Bézier from (0,0) to (10,0) — point_at_t(0.5) == (5, 0)
+    b = CubicBezier(Point(0, 0), Point(0, 0), Point(10, 0), Point(10, 0))
+    rep = b.rep_point()
+    assert rep.x == pytest.approx(5.0)
+    assert rep.y == pytest.approx(0.0)

@@ -14,6 +14,7 @@ from ._algorithms import (
     miter_corner,
     offset_adaptive,
     outline_polygon,
+    point_in_sector,
     project_onto_edge,
     round_corner,
     seam_length,
@@ -106,4 +107,5 @@ __all__ = [
     "seam_length",
     "project_onto_edge",
     "offset_adaptive",
+    "point_in_sector",
 ]

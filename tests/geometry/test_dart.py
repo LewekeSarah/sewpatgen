@@ -921,3 +921,10 @@ class TestDartRepr:
         r = repr(d)
         assert "Dart(" in r
         assert "None" in r
+
+
+def test_dart_rep_point_is_mouth_centre() -> None:
+    d = Dart.from_tip_center_width(tip=Point(0, 50), center=Point(0, 0), width=20.0)
+    rep = d.rep_point()
+    assert rep.x == pytest.approx(d.center.x)
+    assert rep.y == pytest.approx(d.center.y)

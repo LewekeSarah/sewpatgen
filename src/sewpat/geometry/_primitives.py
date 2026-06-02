@@ -173,6 +173,10 @@ class Point:
         rot = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
         return Point(*(rot @ (self.coords - center.coords) + center.coords))
 
+    def rep_point(self) -> Point:
+        """Return the representative point — a :class:`Point` is its own anchor."""
+        return self
+
 
 class _LinearGeom(ABC):
     """Abstract base for all linear geometries.
@@ -442,6 +446,10 @@ class Segment(_LinearGeom):
         """Midpoint of the segment."""
         return self.point_at_t(0.5)
 
+    def rep_point(self) -> Point:
+        """Return the representative point — the midpoint of the segment."""
+        return self.midpoint
+
     def point_at_t(self, t: float) -> Point:
         """Return the point at parameter *t* ∈ [0, 1] (0 = p1, 1 = p2)."""
         if not (0.0 <= t <= 1.0):
@@ -669,6 +677,10 @@ class Rect:
         """Perimeter of the rectangle: ``2 * (width + height)``."""
         return 2 * (self.width + self.height)
 
+    def rep_point(self) -> Point:
+        """Return the representative point — the centre of the rectangle."""
+        return Point(self.origin.x + self.width / 2.0, self.origin.y + self.height / 2.0)
+
 
 class Triangle:
     """A triangle defined by three points."""
@@ -718,6 +730,13 @@ class Triangle:
             + self.p3.distance_to(self.p1)
         )
 
+    def rep_point(self) -> Point:
+        """Return the representative point — the centroid of the three vertices."""
+        return Point(
+            (self.p1.x + self.p2.x + self.p3.x) / 3.0,
+            (self.p1.y + self.p2.y + self.p3.y) / 3.0,
+        )
+
 
 class InfoBox:
     """A text info box displayed at a given position."""
@@ -747,6 +766,10 @@ class InfoBox:
         moved = InfoBox(self.position.translate(dx, dy), self.header, list(self.notes))
         moved.name = self.name
         return moved
+
+    def rep_point(self) -> Point:
+        """Return the representative point — the display position of the info box."""
+        return self.position
 
 
 class Circle:
@@ -809,6 +832,10 @@ class Circle:
         """Set the name of this circle and return ``self`` for fluent chaining."""
         self.name = name
         return self
+
+    def rep_point(self) -> Point:
+        """Return the representative point — the centre of the circle."""
+        return self.center
 
     @property
     def length(self) -> float:

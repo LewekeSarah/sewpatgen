@@ -25,6 +25,7 @@ Notes:
 """
 
 import math
+from collections.abc import Sequence
 
 import numpy as np
 import shapely.geometry as _sg
@@ -752,3 +753,53 @@ def angle_between(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> float:
         return float(np.degrees(math.atan2(cross_product, dot_product)))
 
     raise TypeError(f"Angle calculation not implemented for {type(a)} and {type(b)}")
+
+
+def _signed_angle(a: Sequence[float], b: Sequence[float]) -> float:
+    """Signed angle from direction *a* to direction *b* in radians, in (-π, π]."""
+    cross = float(a[0]) * float(b[1]) - float(a[1]) * float(b[0])
+    dot = float(a[0]) * float(b[0]) + float(a[1]) * float(b[1])
+    return math.atan2(cross, dot)
+
+
+def point_in_sector(
+    pivot: Point,
+    leg_direction: Sequence[float],
+    cut_direction: Sequence[float],
+    point: Point,
+) -> bool:
+    """Return ``True`` when *point* lies in the sector from *leg_direction* to *cut_direction*.
+
+    The sector spans the shorter arc (< π rad) swept from *leg_direction* to
+    *cut_direction*.  Points on either boundary are included.
+
+    Args:
+        pivot: The angular origin.
+        leg_direction: 2-D unit vector from *pivot* toward the sector's start edge.
+        cut_direction: 2-D unit vector from *pivot* toward the sector's end edge.
+        point: The point to test.
+
+    Returns:
+        ``True`` when *point* is inside (or on the boundary of) the sector.
+        ``False`` when *point* coincides with *pivot* (angular position is
+        indeterminate), or when the sector is degenerate (parallel or
+        anti-parallel directions).
+    """
+    dx = float(point.x - pivot.x)
+    dy = float(point.y - pivot.y)
+    dist = math.sqrt(dx * dx + dy * dy)
+    if dist < 1e-9:
+        return False
+
+    target_dir = (dx / dist, dy / dist)
+
+    sector = _signed_angle(leg_direction, cut_direction)
+    if abs(sector) < 1e-9 or abs(sector) >= math.pi - 1e-9:
+        return False
+
+    target = _signed_angle(leg_direction, target_dir)
+
+    if sector >= 0.0:
+        return 0.0 <= target <= sector
+    else:
+        return sector <= target <= 0.0

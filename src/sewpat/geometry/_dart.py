@@ -545,6 +545,10 @@ class Dart:
             stitch_curve_b=self._transform_curve(self.stitch_curve_b, mv),
         )
 
+    def rep_point(self) -> Point:
+        """Return the representative point — the mouth centre of the dart."""
+        return self.center
+
     def set_name(self, name: str) -> Dart:
         """Return a copy of this dart with *name* set.
 

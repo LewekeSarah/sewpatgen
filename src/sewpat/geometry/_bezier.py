@@ -275,6 +275,10 @@ class CubicBezier:
         self.name = name
         return self
 
+    def rep_point(self) -> Point:
+        """Return the representative point — the curve's parametric midpoint."""
+        return self.point_at_t(0.5)
+
     def point_at_t(self, t: float) -> Point:
         """Evaluate the curve at parameter *t* ∈ [0, 1].
 

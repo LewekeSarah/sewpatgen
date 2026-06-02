@@ -13,11 +13,16 @@ from sewpat.geometry import (
     Circle,
     CubicBezier,
     Dart,
+    InfoBox,
+    Line,
     Point,
     Ray,
+    Rect,
     Segment,
+    Triangle,
     intersect,
     miter_corner,
+    point_in_sector,
     round_corner,
 )
 
@@ -1217,3 +1222,134 @@ def test_linear_geom_point_perpendicular_via_segment():
     pt = seg.point_perpendicular(distance=20, arc_length=50)
     assert pt.x == pytest.approx(50)
     assert pt.y == pytest.approx(20)
+
+
+# =============================================================================
+# rep_point — one test per geometry type
+# =============================================================================
+
+
+def test_point_rep_point_is_self():
+    p = Point(3.0, 7.0)
+    assert p.rep_point() is p
+
+
+def test_segment_rep_point_is_midpoint():
+    seg = Segment(Point(0, 0), Point(10, 0))
+    rep = seg.rep_point()
+    assert rep.x == pytest.approx(5.0)
+    assert rep.y == pytest.approx(0.0)
+
+
+def test_rect_rep_point_is_centre():
+    r = Rect(origin=Point(0, 0), width=10.0, height=4.0)
+    rep = r.rep_point()
+    assert rep.x == pytest.approx(5.0)
+    assert rep.y == pytest.approx(2.0)
+
+
+def test_triangle_rep_point_is_centroid():
+    tri = Triangle(Point(0, 0), Point(6, 0), Point(0, 6))
+    rep = tri.rep_point()
+    assert rep.x == pytest.approx(2.0)
+    assert rep.y == pytest.approx(2.0)
+
+
+def test_infobox_rep_point_is_position():
+    box = InfoBox(position=Point(5.0, 8.0), header="Label")
+    rep = box.rep_point()
+    assert rep.x == pytest.approx(5.0)
+    assert rep.y == pytest.approx(8.0)
+
+
+def test_circle_rep_point_is_centre():
+    c = Circle(center=Point(3.0, -1.0), radius=2.0)
+    rep = c.rep_point()
+    assert rep.x == pytest.approx(3.0)
+    assert rep.y == pytest.approx(-1.0)
+
+
+def test_ray_has_no_rep_point():
+    r = Ray(Point(0, 0), np.array([1.0, 0.0]))
+    assert not hasattr(r, "rep_point")
+
+
+def test_line_has_no_rep_point():
+    ln = Line(Point(0, 0), np.array([1.0, 0.0]))
+    assert not hasattr(ln, "rep_point")
+
+
+# =============================================================================
+# point_in_sector Tests
+# =============================================================================
+
+# Fixed sector: CCW 90° sweeping from right (0°) to up (90°), i.e. first quadrant.
+_PIVOT = Point(0.0, 0.0)
+_LEG: tuple[float, float] = (1.0, 0.0)  # → 0°
+_CUT: tuple[float, float] = (0.0, 1.0)  # ↑ 90°
+
+
+def test_point_in_sector_interior():
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(3.0, 3.0)) is True
+
+
+def test_point_in_sector_on_leg_boundary():
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(5.0, 0.0)) is True
+
+
+def test_point_in_sector_on_cut_boundary():
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(0.0, 5.0)) is True
+
+
+def test_point_in_sector_below_leg():
+    # (1, -1) is at -45°, outside [0°, 90°]
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(5.0, -5.0)) is False
+
+
+def test_point_in_sector_behind_pivot():
+    # (-1, 0) is at 180°, outside [0°, 90°]
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(-5.0, 0.0)) is False
+
+
+def test_point_in_sector_third_quadrant():
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(-5.0, -5.0)) is False
+
+
+def test_point_in_sector_at_pivot_returns_false():
+    # Distance = 0 → angular position indeterminate
+    assert point_in_sector(_PIVOT, _LEG, _CUT, _PIVOT) is False
+
+
+def test_point_in_sector_parallel_directions_returns_false():
+    # Degenerate sector: leg == cut
+    assert point_in_sector(_PIVOT, _LEG, _LEG, Point(3.0, 3.0)) is False
+
+
+def test_point_in_sector_antiparallel_directions_returns_false():
+    # Degenerate sector: angle = π
+    anti: tuple[float, float] = (-1.0, 0.0)
+    assert point_in_sector(_PIVOT, _LEG, anti, Point(0.0, 5.0)) is False
+
+
+def test_point_in_sector_cw_sector_interior():
+    # CW 90°: from up (90°) to right (0°) — sector angle = -π/2
+    leg: tuple[float, float] = (0.0, 1.0)
+    cut: tuple[float, float] = (1.0, 0.0)
+    # (1, 1) at 45° is inside the CW first-quadrant sweep
+    assert point_in_sector(_PIVOT, leg, cut, Point(5.0, 5.0)) is True
+
+
+def test_point_in_sector_cw_sector_outside():
+    leg: tuple[float, float] = (0.0, 1.0)
+    cut: tuple[float, float] = (1.0, 0.0)
+    # (-1, 1) at 135° is outside the CW sweep from 90° to 0°
+    assert point_in_sector(_PIVOT, leg, cut, Point(-5.0, 5.0)) is False
+
+
+def test_point_in_sector_offset_pivot():
+    # Shift pivot to (10, 10) — same angular geometry
+    pivot = Point(10.0, 10.0)
+    # (15, 15) is 45° from pivot → inside
+    assert point_in_sector(pivot, _LEG, _CUT, Point(15.0, 15.0)) is True
+    # (5, 15) is 135° from pivot → outside
+    assert point_in_sector(pivot, _LEG, _CUT, Point(5.0, 15.0)) is False

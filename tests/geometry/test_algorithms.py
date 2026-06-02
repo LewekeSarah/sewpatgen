@@ -31,6 +31,7 @@ from sewpat.geometry._algorithms import (
     buffer_chain,
     geom_to_shapely,
     outline_polygon,
+    point_in_sector,
     round_corner,
 )
 from sewpat.units import CM
@@ -355,3 +356,79 @@ def test_angle_between_random_vectors_matches_formula() -> None:
         expected = float(np.degrees(np.arctan2(cross, dot)))
         got = angle_between(a, b)
         assert got == pytest.approx(expected, rel=1e-7, abs=1e-9)
+
+
+# =============================================================================
+# point_in_sector Tests
+# =============================================================================
+
+# Fixed sector: CCW 90° sweeping from right (0°) to up (90°), i.e. first quadrant.
+_PIVOT = Point(0.0, 0.0)
+_LEG: tuple[float, float] = (1.0, 0.0)  # → 0°
+_CUT: tuple[float, float] = (0.0, 1.0)  # ↑ 90°
+
+
+def test_point_in_sector_interior():
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(3.0, 3.0)) is True
+
+
+def test_point_in_sector_on_leg_boundary():
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(5.0, 0.0)) is True
+
+
+def test_point_in_sector_on_cut_boundary():
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(0.0, 5.0)) is True
+
+
+def test_point_in_sector_below_leg():
+    # (1, -1) is at -45°, outside [0°, 90°]
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(5.0, -5.0)) is False
+
+
+def test_point_in_sector_behind_pivot():
+    # (-1, 0) is at 180°, outside [0°, 90°]
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(-5.0, 0.0)) is False
+
+
+def test_point_in_sector_third_quadrant():
+    assert point_in_sector(_PIVOT, _LEG, _CUT, Point(-5.0, -5.0)) is False
+
+
+def test_point_in_sector_at_pivot_returns_false():
+    # Distance = 0 → angular position indeterminate
+    assert point_in_sector(_PIVOT, _LEG, _CUT, _PIVOT) is False
+
+
+def test_point_in_sector_parallel_directions_returns_false():
+    # Degenerate sector: leg == cut
+    assert point_in_sector(_PIVOT, _LEG, _LEG, Point(3.0, 3.0)) is False
+
+
+def test_point_in_sector_antiparallel_directions_returns_false():
+    # Degenerate sector: angle = π
+    anti: tuple[float, float] = (-1.0, 0.0)
+    assert point_in_sector(_PIVOT, _LEG, anti, Point(0.0, 5.0)) is False
+
+
+def test_point_in_sector_cw_sector_interior():
+    # CW 90°: from up (90°) to right (0°) — sector angle = -π/2
+    leg: tuple[float, float] = (0.0, 1.0)
+    cut: tuple[float, float] = (1.0, 0.0)
+    # (1, 1) at 45° is inside the CW first-quadrant sweep
+    assert point_in_sector(_PIVOT, leg, cut, Point(5.0, 5.0)) is True
+
+
+def test_point_in_sector_cw_sector_outside():
+    leg: tuple[float, float] = (0.0, 1.0)
+    cut: tuple[float, float] = (1.0, 0.0)
+    # (-1, 1) at 135° is outside the CW sweep from 90° to 0°
+    assert point_in_sector(_PIVOT, leg, cut, Point(-5.0, 5.0)) is False
+
+
+def test_point_in_sector_offset_pivot():
+    # Shift pivot to (10, 10) — same angular geometry
+    pivot = Point(10.0, 10.0)
+    # (15, 15) is 45° from pivot → inside
+    assert point_in_sector(pivot, _LEG, _CUT, Point(15.0, 15.0)) is True
+    # (5, 15) is 135° from pivot → outside
+    assert point_in_sector(pivot, _LEG, _CUT, Point(5.0, 15.0)) is False

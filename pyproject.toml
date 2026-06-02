@@ -67,6 +67,7 @@ select = ["E", "F", "I", "UP", "B", "D", "ANN"]
 
 ignore = [
     "B904",   # raise … from err — too noisy in existing exception chains
+    "D205",   # conflicts with Google convention when summary lines exceed line-length
 ]
 
 [tool.ruff.lint.pydocstyle]
