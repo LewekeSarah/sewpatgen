@@ -10,7 +10,7 @@ Both functions accept the part as their first argument and are wired back into
 """
 
 import copy
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 
@@ -38,8 +38,12 @@ if TYPE_CHECKING:
     from .part import PatternPart
 
 
-#: Shapely join-style codes for each corner-join name.
-_CJ: dict[str, int] = {"miter": 2, "round": 1, "bevel": 3}
+#: Shapely join-style strings for each corner-join name.
+_CJ: dict[str, Literal["round", "mitre", "bevel"]] = {
+    "miter": "mitre",
+    "round": "round",
+    "bevel": "bevel",
+}
 
 #: Valid corner-join names — used for input validation in two places.
 _VALID_CJ: frozenset[str] = frozenset(_CJ)

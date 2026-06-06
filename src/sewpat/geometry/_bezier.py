@@ -147,9 +147,10 @@ def fit_cubic_bezier(
 
     # ── X component: 2 unknowns — least-squares via numpy ────────────────────
     A = np.column_stack([b1x_col, b2x_col])
-    p1_x, p2_x = np.linalg.lstsq(A, rhs_x, rcond=None)[0]
+    sol_x = np.linalg.lstsq(A, rhs_x, rcond=None)[0]
+    p1_x, p2_x = float(sol_x[0]), float(sol_x[1])
 
-    return CubicBezier(start, Point(float(p1_x), p1_y), Point(float(p2_x), crown_y), end)
+    return CubicBezier(start, Point(p1_x, p1_y), Point(p2_x, crown_y), end)
 
 
 def fit_cubic_bezier_free(
@@ -190,13 +191,15 @@ def fit_cubic_bezier_free(
         b2_col.append(b2)
 
     A = np.column_stack([b1_col, b2_col])
-    p1_x, p2_x = np.linalg.lstsq(A, rhs_x, rcond=None)[0]
-    p1_y, p2_y = np.linalg.lstsq(A, rhs_y, rcond=None)[0]
+    sol_x = np.linalg.lstsq(A, rhs_x, rcond=None)[0]
+    sol_y = np.linalg.lstsq(A, rhs_y, rcond=None)[0]
+    p1_x, p2_x = float(sol_x[0]), float(sol_x[1])
+    p1_y, p2_y = float(sol_y[0]), float(sol_y[1])
 
     return CubicBezier(
         start,
-        Point(float(p1_x), float(p1_y)),
-        Point(float(p2_x), float(p2_y)),
+        Point(p1_x, p1_y),
+        Point(p2_x, p2_y),
         end,
     )
 
@@ -308,7 +311,7 @@ class CubicBezier:
     @property
     def length(self) -> float:
         """Arc length in mm, computed via Gauss-Legendre quadrature (svgpathtools)."""
-        return float(self._svg().length())
+        return float(self._svg().length() or 0.0)
 
     def tangent_at_t(self, t: float) -> np.ndarray:
         """Return the (unnormalised) tangent vector B'(t) at parameter *t*.
@@ -374,7 +377,7 @@ class CubicBezier:
                 length (a 1 nm tolerance is allowed for floating-point noise).
         """
         svg = self._svg()
-        total = float(svg.length())
+        total = float(svg.length() or 0.0)
         if arc_length < 0 or arc_length > total + 1e-9:
             raise ValueError(f"arc_length {arc_length:.4f} is outside [0, {total:.4f}]")
         return self.point_at_t(svg.ilength(arc_length))
@@ -392,7 +395,7 @@ class CubicBezier:
         """
         svg = self._svg()
         t0 = _bezier_closest_t(svg, complex(point.x, point.y))
-        pos = float(svg.length(t1=t0))
+        pos = float(svg.split(t0)[0].length() or 0.0)
         return self.point_at_length(pos + arc_length)
 
     def arc_length_from_end(self, point: Point) -> float:
@@ -411,7 +414,7 @@ class CubicBezier:
         """
         svg = self._svg()
         t0 = _bezier_closest_t(svg, complex(point.x, point.y))
-        arc_from_start = float(svg.length(t1=t0))
+        arc_from_start = float(svg.split(t0)[0].length() or 0.0)
         return self.length - arc_from_start
 
     def split(self, t: float) -> tuple[CubicBezier, CubicBezier]:

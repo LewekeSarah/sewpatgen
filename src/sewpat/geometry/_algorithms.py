@@ -26,10 +26,12 @@ Notes:
 
 import math
 from collections.abc import Sequence
+from typing import Literal, cast
 
 import numpy as np
 import shapely.geometry as _sg
 import shapely.ops as _so
+from shapely.geometry.base import BaseGeometry as _BaseGeometry
 
 from ._bezier import CubicBezier, _bezier_closest_t, _bezier_shapely, _intersect_bezier_bezier
 from ._primitives import (
@@ -72,7 +74,7 @@ def _intersect_linear_linear(
     result = geom_to_shapely(a).intersection(geom_to_shapely(b))
     if result.is_empty or result.geom_type != "Point":
         return []
-    pt = Point(result.x, result.y)
+    pt = Point(cast(_sg.Point, result).x, cast(_sg.Point, result).y)
     if (check1 and not a.contains_point(pt)) or (
         check2 and not b.contains_point(pt)
     ):  # pragma: no cover
@@ -114,7 +116,7 @@ def geom_to_shapely(obj: _LinearGeom | CubicBezier, far: float = 1e9) -> _sg.Lin
     raise TypeError(f"geom_to_shapely: unsupported type {type(obj)}")
 
 
-def _shapely_to_points(result: _sg.base.BaseGeometry) -> list[Point]:
+def _shapely_to_points(result: _BaseGeometry) -> list[Point]:
     """Extract a list of Points from a Shapely intersection result.
 
     Args:
@@ -134,9 +136,15 @@ def _shapely_to_points(result: _sg.base.BaseGeometry) -> list[Point]:
     if result.is_empty:
         return []
     if result.geom_type == "Point":
-        return [Point(result.x, result.y)]
+        pt = cast(_sg.Point, result)
+        return [Point(pt.x, pt.y)]
     if result.geom_type in ("MultiPoint", "GeometryCollection"):
-        return [Point(g.x, g.y) for g in result.geoms if g.geom_type == "Point"]
+        coll = cast(_sg.GeometryCollection, result)
+        return [
+            Point(cast(_sg.Point, g).x, cast(_sg.Point, g).y)
+            for g in coll.geoms
+            if g.geom_type == "Point"
+        ]
     return []
 
 
@@ -463,8 +471,8 @@ def round_corner(
     k = (4.0 / 3.0) * math.tan(angle / 4.0)
     handle = k * r
 
-    cp1 = end_a + Point(*(handle * ta))
-    cp2 = start_b - Point(*(handle * tb))
+    cp1 = end_a + Point(float(handle * ta[0]), float(handle * ta[1]))
+    cp2 = start_b - Point(float(handle * tb[0]), float(handle * tb[1]))
 
     return CubicBezier(end_a, cp1, cp2, start_b)
 
@@ -472,9 +480,9 @@ def round_corner(
 def buffer_chain(
     geoms: list[Segment | CubicBezier],
     distance: float,
-    join_style: int = 2,
+    join_style: Literal["round", "mitre", "bevel"] = "mitre",
     mitre_limit: float = 4.0,
-) -> list[tuple[float, float]]:
+) -> list[tuple[float, ...]]:
     """Buffer a connected chain of Segments outward by *distance* using Shapely.
 
     Constructs a polygon from the start-points of *geoms*, expands it outward
@@ -486,11 +494,11 @@ def buffer_chain(
             :class:`CubicBezier` objects forming the outline to buffer.
         distance: Buffer distance in mm.  Positive values expand outward;
             negative values shrink the polygon.
-        join_style: Shapely join style for corners.  Use ``1`` for round,
-            ``2`` for mitre (default), or ``3`` for bevel joins.
+        join_style: Shapely join style for corners.  One of ``'round'``,
+            ``'mitre'`` (default), or ``'bevel'``.
         mitre_limit: Maximum mitre ratio before Shapely falls back to a bevel
             join.  Defaults to ``4.0``.  Only relevant when *join_style* is
-            ``2`` (mitre).
+            ``'mitre'``.
 
     Returns:
         A list of ``(x, y)`` coordinate tuples representing the exterior ring
@@ -507,10 +515,11 @@ def buffer_chain(
     ring_coords = [(g.start.x, g.start.y) for g in geoms]
     poly = _sg.Polygon(ring_coords)
     if not poly.is_valid:
-        poly = poly.buffer(0)
-    return list(
-        poly.buffer(distance, join_style=join_style, mitre_limit=mitre_limit).exterior.coords
+        poly = cast(_sg.Polygon, poly.buffer(0))
+    buffered = cast(
+        _sg.Polygon, poly.buffer(distance, join_style=join_style, mitre_limit=mitre_limit)
     )
+    return list(buffered.exterior.coords)
 
 
 def outline_polygon(
@@ -545,7 +554,7 @@ def outline_polygon(
     if not geoms:
         return None
     ordered = build_chain(geoms)
-    coords: list[tuple[float, float]] = []
+    coords: list[tuple[float, ...]] = []
     for g in ordered:
         coords.extend(list(geom_to_shapely(g).coords)[:-1])
     coords.append((ordered[-1].end.x, ordered[-1].end.y))
