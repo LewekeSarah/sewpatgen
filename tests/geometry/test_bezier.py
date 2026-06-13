@@ -14,6 +14,8 @@ sewpat.geometry._bezier, including tests for:
 - translate() - rigid translation of all control points
 """
 
+import math
+
 import numpy as np
 import pytest
 
@@ -612,6 +614,52 @@ def test_cubic_bezier_translate_zero_is_identity() -> None:
 
     assert shifted.p0 == b.p0
     assert shifted.p3 == b.p3
+
+
+# =============================================================================
+# Rotate Tests
+# =============================================================================
+
+
+def test_cubic_bezier_rotate_moves_all_control_points() -> None:
+    """rotate() rotates every control point about *center* and preserves the name."""
+    b = CubicBezier(
+        Point(1, 0),
+        Point(2, 0),
+        Point(2, 1),
+        Point(1, 1),
+        name="test_curve",
+    )
+    rotated = b.rotate(Point(0, 0), math.pi / 2)
+
+    assert rotated.p0.x == pytest.approx(0, abs=1e-10)
+    assert rotated.p0.y == pytest.approx(1, abs=1e-10)
+    assert rotated.p1.x == pytest.approx(0, abs=1e-10)
+    assert rotated.p1.y == pytest.approx(2, abs=1e-10)
+    assert rotated.p2.x == pytest.approx(-1, abs=1e-10)
+    assert rotated.p2.y == pytest.approx(2, abs=1e-10)
+    assert rotated.p3.x == pytest.approx(-1, abs=1e-10)
+    assert rotated.p3.y == pytest.approx(1, abs=1e-10)
+    assert rotated.name == "test_curve"
+
+
+def test_cubic_bezier_rotate_returns_new_object() -> None:
+    """rotate() returns a *new* CubicBezier, leaving the original unchanged."""
+    b = CubicBezier(Point(1, 0), Point(2, 0), Point(3, 0), Point(4, 0))
+    rotated = b.rotate(Point(0, 0), math.pi / 2)
+
+    assert b.p0 == Point(1, 0)
+    assert rotated.p0.x == pytest.approx(0, abs=1e-10)
+    assert rotated.p0.y == pytest.approx(1, abs=1e-10)
+
+
+def test_cubic_bezier_rotate_zero_angle_is_identity() -> None:
+    """rotate(center, 0) returns a curve with identical control points."""
+    b = CubicBezier(Point(1, 2), Point(3, 4), Point(5, 6), Point(7, 8))
+    rotated = b.rotate(Point(0, 0), 0.0)
+
+    assert rotated.p0 == b.p0
+    assert rotated.p3 == b.p3
 
 
 # =============================================================================

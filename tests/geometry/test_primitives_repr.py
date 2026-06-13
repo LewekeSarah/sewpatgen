@@ -3,6 +3,8 @@ methods in geometry primitives (Rect, Triangle, InfoBox, Circle, Ray, Line,
 Point, Segment).
 """
 
+import math
+
 import numpy as np
 import pytest
 
@@ -35,6 +37,17 @@ def test_segment_repr() -> None:
     """Segment.__repr__ returns same as __str__."""
     seg = Segment(Point(5, 5), Point(15, 15), name="repr_test")
     assert repr(seg) == str(seg)
+
+
+def test_segment_rotate() -> None:
+    """Segment.rotate rotates both endpoints and preserves the name."""
+    seg = Segment(Point(1, 0), Point(2, 0), name="test_seg")
+    rotated = seg.rotate(Point(0, 0), math.pi / 2)
+    assert rotated.p1.x == pytest.approx(0, abs=1e-10)
+    assert rotated.p1.y == pytest.approx(1, abs=1e-10)
+    assert rotated.p2.x == pytest.approx(0, abs=1e-10)
+    assert rotated.p2.y == pytest.approx(2, abs=1e-10)
+    assert rotated.name == "test_seg"
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +146,16 @@ def test_circle_translate() -> None:
     assert c2.radius == pytest.approx(5 * MM)
 
 
+def test_circle_rotate() -> None:
+    """Circle.rotate rotates the center and preserves radius and name."""
+    c = Circle(Point(1 * CM, 0), 5 * MM, name="bust_point")
+    rotated = c.rotate(Point(0, 0), math.pi / 2)
+    assert rotated.center.x == pytest.approx(0, abs=1e-10)
+    assert rotated.center.y == pytest.approx(1 * CM, abs=1e-10)
+    assert rotated.radius == pytest.approx(5 * MM)
+    assert rotated.name == "bust_point"
+
+
 def test_circle_set_name() -> None:
     """Circle.set_name returns self with updated name."""
     c = Circle(Point(0, 0), 5 * MM)
@@ -217,6 +240,19 @@ def test_triangle_translate() -> None:
     assert t2.p3.y == pytest.approx(6 * CM)
 
 
+def test_triangle_rotate() -> None:
+    """Triangle.rotate rotates all three vertices and preserves the name."""
+    t = Triangle(Point(1, 0), Point(2, 0), Point(1, 1), name="dart_notch")
+    rotated = t.rotate(Point(0, 0), math.pi / 2)
+    assert rotated.p1.x == pytest.approx(0, abs=1e-10)
+    assert rotated.p1.y == pytest.approx(1, abs=1e-10)
+    assert rotated.p2.x == pytest.approx(0, abs=1e-10)
+    assert rotated.p2.y == pytest.approx(2, abs=1e-10)
+    assert rotated.p3.x == pytest.approx(-1, abs=1e-10)
+    assert rotated.p3.y == pytest.approx(1, abs=1e-10)
+    assert rotated.name == "dart_notch"
+
+
 def test_triangle_set_name() -> None:
     """Triangle.set_name returns self with the updated name."""
     t = Triangle(Point(0, 0), Point(5 * CM, 0), Point(2.5 * CM, 4 * CM))
@@ -248,6 +284,18 @@ def test_infobox_translate() -> None:
     box2 = box.translate(5 * CM, 5 * CM)
     assert box2.position.x == pytest.approx(5 * CM)
     assert box2.position.y == pytest.approx(5 * CM)
+
+
+def test_infobox_rotate() -> None:
+    """InfoBox.rotate rotates the position and preserves header, notes, and name."""
+    box = InfoBox(Point(1 * CM, 0), "Back", ["S"])
+    box.name = "panel_info"
+    rotated = box.rotate(Point(0, 0), math.pi / 2)
+    assert rotated.position.x == pytest.approx(0, abs=1e-10)
+    assert rotated.position.y == pytest.approx(1 * CM, abs=1e-10)
+    assert rotated.header == "Back"
+    assert rotated.notes == ["S"]
+    assert rotated.name == "panel_info"
 
 
 # ---------------------------------------------------------------------------

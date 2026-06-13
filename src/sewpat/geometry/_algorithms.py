@@ -764,7 +764,7 @@ def angle_between(a: GEOMETRIC_TYPE, b: GEOMETRIC_TYPE) -> float:
     raise TypeError(f"Angle calculation not implemented for {type(a)} and {type(b)}")
 
 
-def _signed_angle(a: Sequence[float], b: Sequence[float]) -> float:
+def _signed_angle(a: Sequence[float] | np.ndarray, b: Sequence[float] | np.ndarray) -> float:
     """Signed angle from direction *a* to direction *b* in radians, in (-π, π]."""
     cross = float(a[0]) * float(b[1]) - float(a[1]) * float(b[0])
     dot = float(a[0]) * float(b[0]) + float(a[1]) * float(b[1])
@@ -773,8 +773,8 @@ def _signed_angle(a: Sequence[float], b: Sequence[float]) -> float:
 
 def point_in_sector(
     pivot: Point,
-    leg_direction: Sequence[float],
-    cut_direction: Sequence[float],
+    leg_direction: Sequence[float] | np.ndarray,
+    cut_direction: Sequence[float] | np.ndarray,
     point: Point,
 ) -> bool:
     """Return ``True`` when *point* lies in the sector from *leg_direction* to *cut_direction*.

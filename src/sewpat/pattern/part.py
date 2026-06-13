@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import cast
 
+import numpy as np
+
 from ..element import GeometryType, PatternElement, PrecisionPoint
 from ..geometry import (
     Circle,
@@ -583,6 +585,69 @@ class PatternPart(NamedAccessMixin):
             **kwargs,
         )
 
+    def transfer_dart(
+        self,
+        dart: Dart,
+        cut_line: Ray | Segment,
+        *,
+        sa_distance: float | None = None,
+        stitch_style: StyleOptions | None = None,
+        fold_style: StyleOptions = STYLE_DART_FOLD,
+        precision_style: StyleOptions = STYLE_PRECISION_POINT,
+        notches: bool = True,
+        precision_tip: bool = True,
+        notch_length: float | None = None,
+        notch_width: float | None = None,
+    ) -> Dart:
+        """Transfer *dart* to the position defined by *cut_line*.
+
+        Rotates the section of this part between the inner dart leg and
+        *cut_line* around ``dart.tip`` to close the dart at its current
+        position, opens a new dart along *cut_line*, and atomically replaces
+        the old dart's visual elements with the new dart's — this part has the
+        same number of darts before and after the call.
+
+        Delegates to :func:`sewpat.pattern._dart_transform.transfer_dart`;
+        see that function for full documentation.
+
+        Args:
+            dart: The dart to transfer.
+            cut_line: A :class:`~sewpat.geometry.Ray` or
+                :class:`~sewpat.geometry.Segment` through ``dart.tip``.
+            sa_distance: When provided and SA elements exist, remove them and
+                regenerate at this distance after the transfer.
+            stitch_style: Forwarded to :meth:`add_dart` for the new dart.
+            fold_style: Forwarded to :meth:`add_dart` for the new dart.
+            precision_style: Forwarded to :meth:`add_dart` for the new dart.
+            notches: Forwarded to :meth:`add_dart` for the new dart.
+            precision_tip: Forwarded to :meth:`add_dart` for the new dart.
+            notch_length: Forwarded to :meth:`add_dart` for the new dart.
+            notch_width: Forwarded to :meth:`add_dart` for the new dart.
+
+        Returns:
+            The new :class:`~sewpat.geometry.Dart` describing the transferred
+            dart.  Its visual elements have **already been added** to this
+            part — do not call :meth:`add_dart` on the result.
+
+        Raises:
+            ValueError: If *cut_line* does not pass within 1 mm of ``dart.tip``.
+        """
+        from . import _dart_transform
+
+        return _dart_transform.transfer_dart(
+            self,
+            dart,
+            cut_line,
+            sa_distance=sa_distance,
+            stitch_style=stitch_style,
+            fold_style=fold_style,
+            precision_style=precision_style,
+            notches=notches,
+            precision_tip=precision_tip,
+            notch_length=notch_length,
+            notch_width=notch_width,
+        )
+
     def add_grid_notches(
         self,
         grid_part: PatternPart,
@@ -718,8 +783,8 @@ class PatternPart(NamedAccessMixin):
     @staticmethod
     def _element_is_between(
         pivot: Point,
-        leg_direction: Sequence[float],
-        cut_direction: Sequence[float],
+        leg_direction: Sequence[float] | np.ndarray,
+        cut_direction: Sequence[float] | np.ndarray,
         elem: PatternElement | object,
     ) -> bool:
         """Return ``True`` when the representative point of *elem* lies in the angular
@@ -896,6 +961,46 @@ class PatternPart(NamedAccessMixin):
         tip = cast(Circle, tips[0].geometry).center if tips else None
         return legs, tip
 
+    def translated(self, offset: Point, name: str | None = None) -> PatternPart:
+        """Return a copy of this part with every element translated by *offset*.
+
+        Useful for placing a copy of a part elsewhere on the page — e.g. to
+        show a transformed version of a part next to the original instead of
+        on top of it.
+
+        Args:
+            offset: Translation applied to all geometry in the returned part.
+            name: Name for the returned part. Defaults to ``self.name``.
+
+        Returns:
+            A new plain :class:`PatternPart` with translated geometry.
+        """
+        dx, dy = offset.x, offset.y
+
+        new_part = PatternPart(name=name if name is not None else self.name)
+        for elem in self.elements:
+            new_geom = elem.geometry.translate(dx, dy)
+            new_elem = PatternElement(
+                geometry=new_geom,
+                style=copy.copy(elem.style),
+                name=elem.name,
+                role=elem.role,
+                is_outline=elem.is_outline,
+                is_seam_allowance=elem.is_seam_allowance,
+                is_construction=elem.is_construction,
+            )
+            new_elem.is_seam_notch = elem.is_seam_notch
+            new_elem._sa_center = (
+                elem._sa_center.translate(dx, dy) if isinstance(elem._sa_center, Point) else None
+            )
+            new_elem._dart_ref = None
+            new_elem._leg_pt = (
+                elem._leg_pt.translate(dx, dy) if isinstance(elem._leg_pt, Point) else None
+            )
+            new_part.elements.append(new_elem)
+
+        return new_part
+
 
 class Block(PatternPart):
     """A base-block pattern piece derived from balanced measurements.
@@ -960,31 +1065,7 @@ class OverlayPart(PatternPart):
         Returns:
             A new plain :class:`PatternPart` with translated geometry.
         """
-        dx, dy = offset.x, offset.y
-
-        exploded = PatternPart(name=name if name is not None else self.name)
-        for elem in self.elements:
-            new_geom = elem.geometry.translate(dx, dy)
-            new_elem = PatternElement(
-                geometry=new_geom,
-                style=copy.copy(elem.style),
-                name=elem.name,
-                role=elem.role,
-                is_outline=elem.is_outline,
-                is_seam_allowance=elem.is_seam_allowance,
-                is_construction=elem.is_construction,
-            )
-            new_elem.is_seam_notch = elem.is_seam_notch
-            new_elem._sa_center = (
-                elem._sa_center.translate(dx, dy) if isinstance(elem._sa_center, Point) else None
-            )
-            new_elem._dart_ref = None
-            new_elem._leg_pt = (
-                elem._leg_pt.translate(dx, dy) if isinstance(elem._leg_pt, Point) else None
-            )
-            exploded.elements.append(new_elem)
-
-        return exploded
+        return self.translated(offset, name=name)
 
 
 class Pattern:

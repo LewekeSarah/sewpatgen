@@ -273,6 +273,19 @@ class CubicBezier:
             name=self.name,
         )
 
+    def rotate(self, center: Point, angle_rad: float) -> CubicBezier:
+        """Return a copy rotated counter-clockwise by *angle_rad* around *center*.
+
+        All four control points are rotated; :attr:`name` is preserved.
+        """
+        return CubicBezier(
+            self.p0.rotate(center, angle_rad),
+            self.p1.rotate(center, angle_rad),
+            self.p2.rotate(center, angle_rad),
+            self.p3.rotate(center, angle_rad),
+            name=self.name,
+        )
+
     def set_name(self, name: str) -> CubicBezier:
         """Set :attr:`name` and return ``self`` for fluent chaining."""
         self.name = name

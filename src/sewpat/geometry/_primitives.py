@@ -404,6 +404,12 @@ class Segment(_LinearGeom):
         """Return a copy translated by (dx, dy)."""
         return Segment(self.p1.translate(dx, dy), self.p2.translate(dx, dy), name=self.name)
 
+    def rotate(self, center: Point, angle_rad: float) -> Segment:
+        """Return a copy rotated counter-clockwise by *angle_rad* around *center*."""
+        return Segment(
+            self.p1.rotate(center, angle_rad), self.p2.rotate(center, angle_rad), name=self.name
+        )
+
     @property
     def _origin(self) -> Point:
         """Axis origin — the segment start point ``p1``."""
@@ -711,6 +717,15 @@ class Triangle:
             name=self.name,
         )
 
+    def rotate(self, center: Point, angle_rad: float) -> Triangle:
+        """Return a copy rotated counter-clockwise by *angle_rad* around *center*."""
+        return Triangle(
+            self.p1.rotate(center, angle_rad),
+            self.p2.rotate(center, angle_rad),
+            self.p3.rotate(center, angle_rad),
+            name=self.name,
+        )
+
     def set_name(self, name: str) -> Triangle:
         """Set the name of this triangle and return ``self`` for fluent chaining."""
         self.name = name
@@ -764,6 +779,12 @@ class InfoBox:
     def translate(self, dx: float, dy: float) -> InfoBox:
         """Return a copy translated by (dx, dy)."""
         moved = InfoBox(self.position.translate(dx, dy), self.header, list(self.notes))
+        moved.name = self.name
+        return moved
+
+    def rotate(self, center: Point, angle_rad: float) -> InfoBox:
+        """Return a copy rotated counter-clockwise by *angle_rad* around *center*."""
+        moved = InfoBox(self.position.rotate(center, angle_rad), self.header, list(self.notes))
         moved.name = self.name
         return moved
 
@@ -827,6 +848,10 @@ class Circle:
     def translate(self, dx: float, dy: float) -> Circle:
         """Return a copy translated by (dx, dy)."""
         return Circle(self.center.translate(dx, dy), self.radius, name=self.name)
+
+    def rotate(self, center: Point, angle_rad: float) -> Circle:
+        """Return a copy rotated counter-clockwise by *angle_rad* around *center*."""
+        return Circle(self.center.rotate(center, angle_rad), self.radius, name=self.name)
 
     def set_name(self, name: str) -> Circle:
         """Set the name of this circle and return ``self`` for fluent chaining."""
