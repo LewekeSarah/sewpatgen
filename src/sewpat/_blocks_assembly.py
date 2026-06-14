@@ -60,9 +60,10 @@ def _assemble_back_part(
 ) -> None:
     """Add all elements to the back PatternPart in drawing order.
 
-    Note: ``back.armscye_back_lower`` and ``back.armscye_back_upper`` are **not**
-    appended here — they were already appended in :meth:`TopBlock.from_measurements`
-    before :func:`_build_darts` is called, so that :class:`~sewpat.geometry.Dart`
+    Note: ``back.armscye_back_lower``, ``back.armscye_back_upper_below_dart``
+    and ``back.armscye_back_upper_above_dart`` are **not** appended here —
+    they were already appended in :meth:`TopBlock.from_measurements` before
+    :func:`_build_darts` is called, so that :class:`~sewpat.geometry.Dart`
     can reference the live ``PatternElement`` for the in-place edge split.
     Appending them a second time would corrupt the outline polygon.
     """

@@ -304,7 +304,13 @@ class TopBlock:
             role="armscye",
         )
         armscye_back_elem = block_back.append(
-            back_geom.armscye_back_upper.set_name("Armscye Back Upper"),
+            back_geom.armscye_back_upper_below_dart.set_name("Armscye Back Upper"),
+            style=STYLE_STITCH,
+            is_outline=True,
+            role="armscye",
+        )
+        block_back.append(
+            back_geom.armscye_back_upper_above_dart.set_name("Armscye Back Upper"),
             style=STYLE_STITCH,
             is_outline=True,
             role="armscye",

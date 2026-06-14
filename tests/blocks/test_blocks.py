@@ -92,6 +92,12 @@ def test_top_block_back_shoulder_dart_is_dart(top_block: TopBlock):
     assert isinstance(top_block.back.shoulder_dart, Dart)
 
 
+def test_top_block_back_shoulder_dart_legs_equal_length(top_block: TopBlock) -> None:
+    dart = top_block.back.shoulder_dart
+    assert dart is not None
+    assert dart.stitch_line_a.length == pytest.approx(dart.stitch_line_b.length, abs=1e-3)
+
+
 def test_top_block_back_armscye_control_is_point(top_block: TopBlock):
     assert isinstance(top_block.back.armscye_control, Point)
 

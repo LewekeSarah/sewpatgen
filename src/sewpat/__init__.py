@@ -23,6 +23,7 @@ from .geometry import (
     Segment,
     Triangle,
     dart_from_edge_at_legs,
+    dart_from_edge_at_legs_normalized,
     dart_from_edge_at_point,
     dart_from_edge_at_t,
     dart_from_edge_free_tip,
@@ -125,6 +126,7 @@ __all__ = [
     # Dart factory free functions
     "dart_from_tip_center_width",
     "dart_from_edge_at_legs",
+    "dart_from_edge_at_legs_normalized",
     "dart_from_tip_and_legs",
     "dart_from_edge_at_t",
     "dart_from_edge_at_point",

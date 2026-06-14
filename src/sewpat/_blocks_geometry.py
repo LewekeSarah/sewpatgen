@@ -18,7 +18,9 @@ from .geometry import (
     Segment,
     intersect,
     seam_length,
+    with_endpoints,
 )
+from .geometry._algorithms import _signed_angle
 from .grids import TopGrid
 from .measurements import (
     BlouseMeasurements,
@@ -62,13 +64,16 @@ class _BackGeometry:
     armscye_back_shoulder_dropped: Point
     neck_back_shoulder: Point
     shoulder_back_neckline: Point
-    shoulder_dart_notch: Point
+    shoulder_dart_notch: Point  # shoulder dart leg_a, on armscye_back_upper
+    shoulder_dart_leg_b: Point  # shoulder dart leg_b, rotated off armscye_back_upper
     shoulder_blade_dart_tip: Point
     armscye_control: Point  # armscye notch (pt_hÄP)
 
     # Curves and segments
     armscye_back_lower: CubicBezier  # side_chest → armscye_control, through dart_notch
-    armscye_back_upper: CubicBezier  # armscye_control → shoulder.p2
+    armscye_back_upper: CubicBezier  # armscye_control → shoulder.p2 (full curve, pre-dart)
+    armscye_back_upper_below_dart: CubicBezier  # armscye_control → shoulder_dart_notch
+    armscye_back_upper_above_dart: CubicBezier  # shoulder_dart_leg_b → shoulder.p2
     neckline_back: CubicBezier
     shoulder_back: Segment
     shoulder_back_orig: Segment
@@ -210,6 +215,39 @@ def _build_back_geometry(
         name="Armscye Back Upper",
     )
 
+    # Snap the dart mouth onto armscye_upper -- dart_notch (used above for the
+    # curve's own control points and for shoulder_blade) sits a couple of mm
+    # off the curve, so project it onto armscye_upper to get the point that
+    # the shoulder dart's leg_a will actually be cut from.
+    shoulder_dart_notch = armscye_upper.point_along_from(dart_notch, 0.0)
+
+    # Split armscye_upper into the piece below the dart (kept as the outline
+    # edge the dart is cut from) and the piece above it (from the dart up to
+    # the shoulder).  leg_b_hint is where leg_b would land if it simply
+    # followed the curve -- since the curve bends away from blade_dart_tip,
+    # that point is farther from the tip than leg_a, giving mismatched dart
+    # legs.  Instead, rotate leg_a around blade_dart_tip towards leg_b_hint's
+    # direction: this keeps leg_a/tip fixed and places leg_b at the same
+    # distance from tip as leg_a, so both dart legs end up equal length.  The
+    # above-dart piece is then re-anchored to start at this new leg_b, keeping
+    # its shoulder-end tangent (p1/p2/p3 untouched by with_endpoints).
+    leg_b_hint = armscye_upper.point_along_from(
+        shoulder_dart_notch, block_config.shoulder_dart_width
+    )
+    pieces = armscye_upper.split_at_points([shoulder_dart_notch, leg_b_hint])
+    armscye_upper_below_dart = pieces[0]
+    armscye_upper_above_dart_orig = pieces[-1]
+
+    angle = _signed_angle(
+        shoulder_dart_notch.coords - blade_dart_tip.coords,
+        leg_b_hint.coords - blade_dart_tip.coords,
+    )
+    shoulder_dart_leg_b = shoulder_dart_notch.rotate(blade_dart_tip, angle)
+
+    armscye_upper_above_dart = with_endpoints(
+        armscye_upper_above_dart_orig, shoulder_dart_leg_b, armscye_upper_above_dart_orig.p3
+    )
+
     # Neckline curve
     neckline = CubicBezier(
         anchor,
@@ -249,11 +287,14 @@ def _build_back_geometry(
         armscye_back_shoulder_dropped=armscye_shoulder_dropped,
         neck_back_shoulder=neck_shoulder,
         shoulder_back_neckline=shoulder_neckline,
-        shoulder_dart_notch=dart_notch,
+        shoulder_dart_notch=shoulder_dart_notch,
+        shoulder_dart_leg_b=shoulder_dart_leg_b,
         shoulder_blade_dart_tip=blade_dart_tip,
         armscye_control=armscye_control,
         armscye_back_lower=armscye_lower,
         armscye_back_upper=armscye_upper,
+        armscye_back_upper_below_dart=armscye_upper_below_dart,
+        armscye_back_upper_above_dart=armscye_upper_above_dart,
         neckline_back=neckline,
         shoulder_back=shoulder,
         shoulder_back_orig=shoulder_orig,
@@ -784,9 +825,7 @@ def _build_darts(
         shoulder_dart_back: Dart | None = Dart.from_edge_at_legs(
             armscye_back_elem,
             leg_a=back.shoulder_dart_notch,
-            leg_b=back.armscye_back_upper.point_along_from(
-                back.shoulder_dart_notch, block_config.shoulder_dart_width
-            ),
+            leg_b=back.shoulder_dart_leg_b,
             tip=back.shoulder_blade_dart_tip,
             name="Shoulder Dart Back",
         )

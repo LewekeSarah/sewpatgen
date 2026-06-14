@@ -334,6 +334,19 @@ class TestDartSecondTipWarning:
         assert d.second_tip is None
 
 
+class TestDartUnequalLegLengthsWarning:
+    """Dart emits a UserWarning when the stitch lines differ by more than 1 mm."""
+
+    def test_unequal_legs_warns(self) -> None:
+        with pytest.warns(UserWarning, match="unequal lengths"):
+            Dart(Point(40, 0), Point(70, 0), Point(55, 0), Point(50, 80))
+
+    def test_equal_legs_no_warning(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            Dart(Point(40, 0), Point(60, 0), Point(50, 0), Point(50, 80))
+
+
 class TestDartSplit:
     def test_split_equal(self) -> None:
         d = _simple_dart()
@@ -519,6 +532,30 @@ class TestDartFactories:
     def test_from_edge_rejects_unknown_type(self) -> None:
         with pytest.raises(TypeError):
             Dart.from_edge_at_t("not-an-edge", t=0.5, width=20.0, depth=50.0)
+
+    def test_from_edge_at_legs_normalized(self) -> None:
+        edge = Segment(Point(-50, 0), Point(50, 0))
+        leg_a, leg_b = Point(0, 0), Point(10, 4)
+        tip_line = Line(Point(0, 20), (1, 0))
+        d = Dart.from_edge_at_legs_normalized(edge, leg_a, leg_b, tip_line)
+        assert d.leg_a is leg_a
+        assert d.leg_b is leg_b
+        assert tip_line.contains_point(d.tip)
+        assert d.stitch_line_a.length == pytest.approx(d.stitch_line_b.length)
+
+    def test_from_edge_at_legs_normalized_inherits_edge_element(self) -> None:
+        elem = PatternElement(Segment(Point(-50, 0), Point(50, 0)))
+        leg_a, leg_b = Point(0, 0), Point(10, 4)
+        tip_line = Line(Point(0, 20), (1, 0))
+        d = Dart.from_edge_at_legs_normalized(elem, leg_a, leg_b, tip_line)
+        assert d._edge_element is elem
+
+    def test_from_edge_at_legs_normalized_parallel_tip_line_raises(self) -> None:
+        edge = Segment(Point(-50, 0), Point(50, 0))
+        leg_a, leg_b = Point(0, 0), Point(10, 0)
+        tip_line = Line(Point(20, 0), (0, 1))
+        with pytest.raises(ValueError, match="parallel"):
+            Dart.from_edge_at_legs_normalized(edge, leg_a, leg_b, tip_line)
 
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ from enum import StrEnum
 
 import numpy as np
 
-from ._algorithms import lengths_match
+from ._algorithms import intersect, lengths_match
 from ._bezier import CubicBezier
 from ._primitives import Line, Point, Ray, Segment, _LinearGeom
 
@@ -162,6 +162,33 @@ def dart_from_edge_at_legs(
     """
     _geom, edge_elem = _unwrap_edge(edge)
     center = Segment(leg_a, leg_b).midpoint
+    return _dart_from_points(leg_a, leg_b, center, tip, dart_type, name, edge_elem=edge_elem)
+
+
+def dart_from_edge_at_legs_normalized(
+    edge: object,
+    leg_a: Point,
+    leg_b: Point,
+    tip_line: _LinearGeom,
+    dart_type: DartType | str = "triangle",
+    name: str | None = None,
+) -> Dart:
+    """Place a dart on *edge* with explicit leg points and a balanced tip.
+
+    This is the free-function form of :meth:`Dart.from_edge_at_legs_normalized`.
+    """
+    _geom, edge_elem = _unwrap_edge(edge)
+    leg_seg = Segment(leg_a, leg_b)
+    center = leg_seg.midpoint
+    bisector = Line(center, leg_seg.unit_normal)
+    line = Line(tip_line.point_at_distance(0.0), tip_line.unit_direction)
+    hits = intersect(line, bisector)
+    if not hits:
+        raise ValueError(
+            "tip_line is parallel to the perpendicular bisector of leg_a/leg_b; "
+            "cannot place a balanced tip"
+        )
+    tip = hits[0]
     return _dart_from_points(leg_a, leg_b, center, tip, dart_type, name, edge_elem=edge_elem)
 
 
@@ -364,6 +391,29 @@ class Dart:
         Delegates to :func:`dart_from_edge_at_legs`.
         """
         return dart_from_edge_at_legs(edge, leg_a, leg_b, tip, dart_type, name)
+
+    @classmethod
+    def from_edge_at_legs_normalized(
+        cls,
+        edge: object,
+        leg_a: Point,
+        leg_b: Point,
+        tip_line: _LinearGeom,
+        dart_type: DartType | str = DartType.TRIANGLE,
+        name: str | None = None,
+    ) -> Dart:
+        """Place a dart on *edge* with explicit leg points and a balanced tip.
+
+        *leg_a* and *leg_b* stay fixed; the tip is placed on *tip_line* at the
+        point equidistant from both, so ``stitch_line_a`` and
+        ``stitch_line_b`` have equal length. Use this instead of
+        :meth:`from_edge_at_legs` when the legs sit on a curved edge, where an
+        arbitrarily chosen tip can otherwise yield two mismatched leg lengths
+        and an uneven seam once the dart is closed.
+
+        Delegates to :func:`dart_from_edge_at_legs_normalized`.
+        """
+        return dart_from_edge_at_legs_normalized(edge, leg_a, leg_b, tip_line, dart_type, name)
 
     @classmethod
     def from_edge_at_t(

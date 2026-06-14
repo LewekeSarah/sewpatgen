@@ -26,7 +26,7 @@ Notes:
 
 import math
 from collections.abc import Sequence
-from typing import Literal, cast
+from typing import Literal, cast, overload
 
 import numpy as np
 import shapely.geometry as _sg
@@ -242,6 +242,10 @@ def edge_tangent(g: _LinearGeom | CubicBezier, at_end: bool) -> np.ndarray:
     return g.unit_direction
 
 
+@overload
+def with_endpoints(g: Segment, new_start: Point, new_end: Point) -> Segment: ...
+@overload
+def with_endpoints(g: CubicBezier, new_start: Point, new_end: Point) -> CubicBezier: ...
 def with_endpoints(
     g: Segment | CubicBezier, new_start: Point, new_end: Point
 ) -> Segment | CubicBezier:
