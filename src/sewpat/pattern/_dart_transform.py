@@ -168,12 +168,24 @@ def transfer_dart(
     ]
 
     # --- 3d: Apply rotation -----------------------------------------------
+    # Capture the pre-rotation centroid as the fallback "inward" reference for
+    # seam-allowance offsetting.  Elements without an explicit ``_sa_center``
+    # normally fall back to ``part.centroid`` at SA-generation time, but a
+    # *fixed* global centroid is no longer a valid "inward" reference for
+    # elements that get rotated below: rotating around ``tip`` can flip which
+    # side of an element's tangent now faces the (unrotated) centroid, which
+    # flips the offset direction and makes the new SA cut across the stitch
+    # line.  Pinning each rotated element's ``_sa_center`` to this
+    # pre-rotation centroid — and rotating it along with the element — keeps
+    # the "inward" reference locally consistent through the rotation.
+    centroid = part.centroid
     for elem in elements_to_rotate:
         geom = elem.geometry
         if isinstance(geom, _ROTATABLE_GEOMETRY):
             elem.geometry = geom.rotate(tip, rotation_angle)
-        # Rotate any attached reference points
-        sa_center = elem._sa_center
+        # Rotate any attached reference points, defaulting to the
+        # pre-rotation centroid when no per-element override is set.
+        sa_center = elem._sa_center if isinstance(elem._sa_center, Point) else centroid
         if isinstance(sa_center, Point):
             elem._sa_center = sa_center.rotate(tip, rotation_angle)
         leg_pt = elem._leg_pt
