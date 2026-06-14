@@ -3,7 +3,7 @@
 
 from pathlib import Path
 
-from sewpat import GarmentPart, SeamValidationResult, WidthValidationResult
+from sewpat import GarmentPart, Ray, SeamValidationResult, WidthValidationResult
 from sewpat.blocks import BlockConfig, TopBlock
 from sewpat.fitclass import FitClass
 from sewpat.grids import GridConfig, TopGrid
@@ -74,6 +74,24 @@ def create_block(
     )
     pattern.add_part(block.back.part)
     pattern.add_part(block.front.part)
+
+    # Transfer the back shoulder-blade dart from the armscye to the shoulder
+    # seam.  The cut line runs from the dart tip (on the back dart
+    # construction line) straight up to where it crosses the back shoulder
+    # seam; transfer_dart closes the original armscye dart and opens a new
+    # dart on the shoulder in its place.
+    shoulder_dart_back = block.back.shoulder_dart
+    assert shoulder_dart_back is not None
+    shoulder_dart_cut = Ray(
+        shoulder_dart_back.tip,
+        -grid.dart_back.unit_direction,
+        name="Shoulder Dart Back Cut",
+    )
+    block.back.part.transfer_dart(
+        shoulder_dart_back,
+        shoulder_dart_cut,
+        sa_distance=config.seam_allowance,
+    )
 
     # Verify seam lengths. Side seams must match closely (±2 mm).
     # The shoulder seam mismatch (~12 mm) is expected — the back shoulder is
@@ -162,17 +180,17 @@ if __name__ == "__main__":
     pattern = create_block(person_balanced, fit_class, adjustments, config)
 
     pattern_parts = [Part.BLOCK_BACK, Part.BLOCK_FRONT]
-    grid_parts = []  # [Part.GRID]
+    grid_parts = [Part.GRID]
 
     # With construction grid visible (for building / drafting)
     export_pattern_svg_mm(
         pattern,
         width_mm=DinA0.width,
         height_mm=DinA0.height,
-        filename=str(Path(__file__).parent / "top_waisted_dart_grid.svg"),
+        filename=str(Path(__file__).parent / "top_waisted_dart_shoulder.svg"),
         parts=grid_parts + pattern_parts,
         show_bezier_control_points=False,
-        show_construction=False,
+        show_construction=True,
         show_seam_allowance=True,
         dark_mode=False,
     )

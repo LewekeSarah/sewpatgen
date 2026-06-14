@@ -584,6 +584,23 @@ def seam_length(geoms: list[Segment | CubicBezier | Circle | Rect | Triangle]) -
     return sum(g.length for g in geoms)
 
 
+def lengths_match(length_a: float, length_b: float, tolerance_mm: float) -> tuple[bool, float]:
+    """Compare two lengths within a tolerance.
+
+    Args:
+        length_a: First length in mm.
+        length_b: Second length in mm.
+        tolerance_mm: Maximum allowed absolute difference in mm.
+
+    Returns:
+        ``(ok, delta)`` where ``delta = length_a - length_b`` (signed,
+        positive when *length_a* is longer) and ``ok`` is ``True`` when
+        ``abs(delta) <= tolerance_mm``.
+    """
+    delta = length_a - length_b
+    return abs(delta) <= tolerance_mm, delta
+
+
 def _normalize_vector(v: np.ndarray) -> np.ndarray:
     """Normalize a vector to unit length, or return a default if near-zero."""
     norm = np.linalg.norm(v)

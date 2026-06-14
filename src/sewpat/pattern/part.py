@@ -335,7 +335,7 @@ class PatternPart(NamedAccessMixin):
 
     def seam_length(
         self,
-        elements: list[PatternElement | str],
+        elements: Sequence[PatternElement | str],
     ) -> float:
         """Return the total arc length in mm of the given pattern elements.
 
@@ -362,7 +362,7 @@ class PatternPart(NamedAccessMixin):
         :class:`~sewpat.geometry.Line`) are silently skipped.
 
         Args:
-            elements: A list of :class:`~sewpat.element.PatternElement`
+            elements: A sequence of :class:`~sewpat.element.PatternElement`
                 objects or element name strings.
 
         Returns:
@@ -1168,6 +1168,14 @@ class Pattern:
         (including :class:`GarmentPart` enum values).  The method sums all
         ``is_outline`` elements carrying the given ``role`` tag and reports the
         length difference.
+
+        If :meth:`~sewpat.pattern.PatternPart.transfer_dart` has opened an
+        in-seam dart on a role-tagged edge, the dart's mouth is split off into
+        a ``role="dart_edge_stub"`` element that keeps the original edge's
+        ``name``.  Such stubs are matched back to ``role_a`` / ``role_b`` by
+        name and included in the sum, so the reported length reflects the
+        sewn (dart-closed) seam rather than just the portion that retained the
+        role.
 
         Example::
 

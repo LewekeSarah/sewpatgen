@@ -19,7 +19,7 @@ import warnings
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..geometry import CubicBezier, Line, Point, Segment
+from ..geometry import CubicBezier, Line, Point, Segment, lengths_match
 from ..geometry import intersect as _geom_intersect
 
 if TYPE_CHECKING:
@@ -254,6 +254,27 @@ class WidthValidationResult:
 # ---------------------------------------------------------------------------
 
 
+def _seam_role_elements(part: PatternPart, role: str) -> list[PatternElement]:
+    """Return ``is_outline`` elements tagged *role*, plus matching dart-mouth stubs.
+
+    When :meth:`~sewpat.pattern.PatternPart.transfer_dart` opens an in-seam
+    dart on a role-tagged edge, the portion of that edge that becomes the new
+    dart's mouth is split off into a separate element with
+    ``role="dart_edge_stub"`` (see :mod:`sewpat.pattern._dart_integration`),
+    while keeping the original edge's ``name``. Such stubs are matched back to
+    *role* by name and included here, so the reported seam length reflects the
+    sewn (dart-closed) edge rather than just the portion that retained *role*.
+    """
+    primary = [e for e in part.elements if e.role == role and e.is_outline]
+    names = {e.get_name() for e in primary}
+    stubs = [
+        e
+        for e in part.elements
+        if e.role == "dart_edge_stub" and e.is_outline and e.get_name() in names
+    ]
+    return primary + stubs
+
+
 def _intersect_grid_with_role(
     part: PatternPart,
     role: str,
@@ -345,12 +366,8 @@ def validate_seam_pairs(
         part_a = part_a_ref if isinstance(part_a_ref, PatternPart) else pattern.get_part(part_a_ref)
         part_b = part_b_ref if isinstance(part_b_ref, PatternPart) else pattern.get_part(part_b_ref)
 
-        elems_a: list[PatternElement | str] = [
-            e for e in part_a.elements if e.role == role_a and e.is_outline
-        ]
-        elems_b: list[PatternElement | str] = [
-            e for e in part_b.elements if e.role == role_b and e.is_outline
-        ]
+        elems_a = _seam_role_elements(part_a, role_a)
+        elems_b = _seam_role_elements(part_b, role_b)
 
         if not elems_a:
             raise ValueError(
@@ -363,8 +380,8 @@ def validate_seam_pairs(
 
         len_a = part_a.seam_length(elems_a)
         len_b = part_b.seam_length(elems_b)
-        delta = len_a - len_b
-        ok = abs(delta) <= pair_tolerance and (pair_min_delta is None or delta >= pair_min_delta)
+        within_tolerance, delta = lengths_match(len_a, len_b, pair_tolerance)
+        ok = within_tolerance and (pair_min_delta is None or delta >= pair_min_delta)
 
         pair_result = SeamPairResult(
             part_a=part_a.name,

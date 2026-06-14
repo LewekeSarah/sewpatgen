@@ -13,6 +13,7 @@ import copy
 from pathlib import Path
 
 from sewpat import (
+    CM,
     MM,
     Dart,
     DartType,
@@ -33,7 +34,8 @@ PIECE_W = 120 * MM
 PIECE_H = 180 * MM
 BUST_Y = 65 * MM
 BUST_X = 45 * MM
-ANCHOR = Point(15 * MM, 15 * MM)
+ANCHOR = Point(25 * MM, 25 * MM)
+SEAM_ALLOWANCE = 1 * CM
 
 
 def build_rectangle_with_dart():
@@ -70,6 +72,7 @@ def build_rectangle_with_dart():
         name="Toy Dart",
     )
     part.add_dart(dart)
+    part.add_seam_allowance(distance=SEAM_ALLOWANCE)
     return pattern, part, pts, dart
 
 
@@ -91,7 +94,7 @@ def transfer_dart_example(
     print(f"Original dart: tip={dart.tip}, leg_a={dart.leg_a}, leg_b={dart.leg_b}")
     print(f"Original intake angle: {dart.intake_angle_deg:.2f}°")
 
-    new_dart = part.transfer_dart(dart, cut_ray)
+    new_dart = part.transfer_dart(dart, cut_ray, sa_distance=SEAM_ALLOWANCE)
 
     print(f"New dart:      tip={new_dart.tip}, leg_a={new_dart.leg_a}, leg_b={new_dart.leg_b}")
     print(f"New intake angle: {new_dart.intake_angle_deg:.2f}°")
@@ -110,7 +113,7 @@ if __name__ == "__main__":
     # A part has either the original dart and outline, or the transferred
     # ones, never both -- place the transferred part next to the original
     # instead of on top of it so the two outlines don't overlap in the SVG.
-    gap = 15 * MM
+    gap = 25 * MM
     orig_min, orig_max = part.bounding_box()
     new_part = new_part.translated(Point(orig_max.x - orig_min.x + gap, 0))
 
@@ -121,5 +124,6 @@ if __name__ == "__main__":
         filename=str(OUT_DIR / "08_outer_dart_reference_point.svg"),
         width_mm=2 * _A4_W,
         height_mm=_A4_H,
+        show_seam_allowance=True,
         dark_mode=False,
     )

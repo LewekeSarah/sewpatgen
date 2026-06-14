@@ -1,11 +1,13 @@
 """Dart geometry: DartType and Dart."""
 
 import math
+import warnings
 from collections.abc import Callable
 from enum import StrEnum
 
 import numpy as np
 
+from ._algorithms import lengths_match
 from ._bezier import CubicBezier
 from ._primitives import Line, Point, Ray, Segment, _LinearGeom
 
@@ -293,8 +295,6 @@ class Dart:
         self.name = name
         self.second_tip: Point | None = second_tip
         if second_tip is not None and dart_type is not DartType.RHOMBUS:
-            import warnings
-
             warnings.warn(
                 f"second_tip is only used for rhombus darts, but dart_type is {dart_type!r}. "
                 "The second_tip will be ignored.",
@@ -304,6 +304,18 @@ class Dart:
         self.stitch_curve_a: Segment | CubicBezier | None = stitch_curve_a
         self.stitch_curve_b: Segment | CubicBezier | None = stitch_curve_b
         self._edge_element = _edge_element
+
+        leg_a_length = self.stitch_line_a.length
+        leg_b_length = self.stitch_line_b.length
+        ok, leg_diff = lengths_match(leg_a_length, leg_b_length, tolerance_mm=1.0)
+        if not ok:
+            warnings.warn(
+                f"Dart legs have unequal lengths: leg_a={leg_a_length:.2f} mm, "
+                f"leg_b={leg_b_length:.2f} mm (difference {abs(leg_diff):.2f} mm "
+                "exceeds 1 mm tolerance).",
+                UserWarning,
+                stacklevel=2,
+            )
 
     @classmethod
     def from_tip_center_width(

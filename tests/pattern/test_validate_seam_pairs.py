@@ -14,7 +14,7 @@ import pytest
 
 from sewpat.blocks import BlockConfig, TopBlock
 from sewpat.fitclass import FitClass
-from sewpat.geometry import Point, Segment
+from sewpat.geometry import Dart, DartType, Point, Segment
 from sewpat.grids import GridConfig, TopGrid
 from sewpat.measurements import BlouseMeasurements, GarmentConfig
 from sewpat.pattern import GarmentPart, Pattern, PatternPart, SeamPairResult, SeamValidationResult
@@ -281,6 +281,92 @@ def test_only_requested_role_counted():
     # hem segments are 50 mm; if accidentally summed, length would be 150 mm
     r = pat.validate_seam_pairs([(back, "side", front, "side")]).pairs[0]
     assert abs(r.length_a - 100.0) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# dart_edge_stub elements are matched back to the seam role by name
+# ---------------------------------------------------------------------------
+
+
+def _back_with_shoulder_dart() -> PatternPart:
+    """'Shoulder Back' as two role='shoulder' pieces (as if pre-split by
+    add_cutline), with a triangle dart opened on the second piece.
+
+    After :meth:`PatternPart.add_dart`, the 20 mm second piece is replaced by
+    two ``dart_edge_stub`` stubs (2 mm each) named "Shoulder Back", while the
+    80 mm first piece keeps ``role="shoulder"``.
+    """
+    back = PatternPart(name="Back")
+    back.append(
+        Segment(Point(0, 0), Point(80, 0), name="Shoulder Back"),
+        is_outline=True,
+        role="shoulder",
+    )
+    piece_b = back.append(
+        Segment(Point(80, 0), Point(100, 0), name="Shoulder Back"),
+        is_outline=True,
+        role="shoulder",
+    )
+    dart = Dart.from_edge_at_legs(
+        edge=piece_b,
+        leg_a=Point(82, 0),
+        leg_b=Point(98, 0),
+        tip=Point(90, -30),
+        dart_type=DartType.TRIANGLE,
+        name="Test Dart",
+    )
+    back.add_dart(dart)
+    return back
+
+
+def test_dart_edge_stub_included_in_seam_length():
+    """dart_edge_stub pieces sharing the seam edge's name are added to the total."""
+    back = _back_with_shoulder_dart()
+    front = PatternPart(name="Front")
+    front.append(
+        Segment(Point(0, 0), Point(84, 0), name="Shoulder Front"),
+        is_outline=True,
+        role="shoulder",
+    )
+
+    pat = Pattern(name="P")
+    pat.add_part(back)
+    pat.add_part(front)
+
+    r = pat.validate_seam_pairs([(back, "shoulder", front, "shoulder")], warn=False).pairs[0]
+
+    # 80 mm (untouched piece) + 2 mm + 2 mm (dart_edge_stub stubs of the split piece)
+    assert r.length_a == pytest.approx(84.0)
+
+
+def test_role_only_total_excludes_dart_edge_stub():
+    """Sanity check: role='shoulder' alone (no stubs) is just the untouched 80 mm piece."""
+    back = _back_with_shoulder_dart()
+    role_only = [e for e in back.elements if e.role == "shoulder" and e.is_outline]
+    assert back.seam_length(role_only) == pytest.approx(80.0)
+
+
+def test_dart_edge_stub_with_different_name_not_counted():
+    """dart_edge_stub pieces from an unrelated edge are not pulled into this seam."""
+    back = _back_with_shoulder_dart()
+    back.append(
+        Segment(Point(0, 100), Point(0, 110), name="Armscye Back"),
+        is_outline=True,
+        role="dart_edge_stub",
+    )
+    front = PatternPart(name="Front")
+    front.append(
+        Segment(Point(0, 0), Point(84, 0), name="Shoulder Front"),
+        is_outline=True,
+        role="shoulder",
+    )
+
+    pat = Pattern(name="P")
+    pat.add_part(back)
+    pat.add_part(front)
+
+    r = pat.validate_seam_pairs([(back, "shoulder", front, "shoulder")], warn=False).pairs[0]
+    assert r.length_a == pytest.approx(84.0)
 
 
 # ---------------------------------------------------------------------------
